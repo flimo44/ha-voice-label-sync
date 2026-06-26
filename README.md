@@ -64,6 +64,9 @@ Usage :
 
 2 ) Preview the generated configuration
 
+<img width="555" height="172" alt="Capture d&#39;écran 2026-06-26 203136" src="https://github.com/user-attachments/assets/66ea6d63-983b-467b-9870-198d64b027bd" />
+
+
 python3 /config/scripts/ga_label_sync.py --label "google_assistant" --dry-run
 
 ```
