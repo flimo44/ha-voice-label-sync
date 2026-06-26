@@ -18,6 +18,18 @@ Instead of manually maintaining a long YAML list of exposed entities, simply add
 - Dry-run mode before writing the file
 
 ## How it works
+
+Home Assistant
+        │
+        ▼
+     Labels
+        │
+        ▼
+Voice Assistant Sync
+        │
+ ┌──────┴───────┐
+ ▼              ▼
+Google      Amazon Alexa
 ```
 Home Assistant
         │
