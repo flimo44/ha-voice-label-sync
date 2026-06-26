@@ -96,6 +96,7 @@ switch.prise_pompe2:
 3 ) Generate the file:
 
 python3 /config/scripts/ga_label_sync.py --label "google_assistant"
+
 <img width="454" height="446" alt="Capture d&#39;écran 2026-06-26 200340" src="https://github.com/user-attachments/assets/6f0938ae-13e9-4856-9b4f-7db5e8290171" />
 
 4 ) Restart Home assistant
