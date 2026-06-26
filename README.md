@@ -17,7 +17,7 @@ Instead of manually maintaining a long YAML list of exposed entities, simply add
 - Ignore disabled or hidden entities
 - Dry-run mode before writing the file
 
-
+## How it works
 ```
 Home Assistant
         │
@@ -32,7 +32,7 @@ Voice Assistant Sync
 Google       Alexa
 ```
 
-## Example output
+## Example Home Assistant labels
 
 ```yaml
 switch.prise_pompe:
@@ -53,7 +53,9 @@ google_assistant:
   entity_config: !include google_assistant_entities.yaml
 ```
 
-Usage
+## Installation
+
+Usage :
 
 python3 /config/scripts/ga_label_sync.py --label "google_assistant" --dry-run
 ```
