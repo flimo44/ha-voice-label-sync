@@ -89,6 +89,9 @@ Generate the file:
 
 python3 /config/scripts/ga_label_sync.py --label "google_assistant"
 
+<img width="454" height="446" alt="Capture d&#39;écran 2026-06-26 200340" src="https://github.com/user-attachments/assets/6f0938ae-13e9-4856-9b4f-7db5e8290171" />
+
+
 <img width="1080" height="2400" alt="Screenshot_2026-06-26-19-44-33-60_2d2bd67b5e15ae98c151ac739cd6881e" src="https://github.com/user-attachments/assets/a03d1005-fde8-4186-b8ea-da2f426c5a84" />
 
 <img width="1080" height="2400" alt="Screenshot_2026-06-26-19-45-48-86_2d2bd67b5e15ae98c151ac739cd6881e" src="https://github.com/user-attachments/assets/5b4d96cc-9da9-4419-9d1f-f5eac4fbec8c" />
