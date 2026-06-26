@@ -25,12 +25,14 @@ switch.prise_pompe:
 
 Home Assistant configuration
 
+```yaml
 google_assistant:
   project_id: YOUR_PROJECT_ID
   service_account: !include google_key.json
   report_state: true
   expose_by_default: false
   entity_config: !include google_assistant_entities.yaml
+```
 
 Usage
 
