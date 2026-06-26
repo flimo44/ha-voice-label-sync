@@ -56,7 +56,35 @@ google_assistant:
 Usage
 
 python3 /config/scripts/ga_label_sync.py --label "google_assistant" --dry-run
+```
+# --- Couloir ---
+lock.serrure_maison:
+  expose: true
+  name: Serrure porte entrée
+  room: Couloir
 
+# --- Jardin ---
+switch.portail:
+  expose: true
+  name: Portail
+  room: Jardin
+
+# --- Piscine ---
+input_select.piscine_mode_gestion:
+  expose: true
+  name: "Piscine - Mode Gestion"
+  room: Piscine
+
+switch.piscine_chauffage:
+  expose: true
+  name: Pac Piscine
+  room: Piscine
+
+switch.prise_pompe2:
+  expose: true
+  name: Pompe piscine
+  room: Piscine
+```
 Generate the file:
 
 python3 /config/scripts/ga_label_sync.py --label "google_assistant"
