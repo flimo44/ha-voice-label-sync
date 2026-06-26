@@ -21,17 +21,17 @@ Instead of manually maintaining a long YAML list of exposed entities, simply add
 
 
 ```
-   Home Assistant
-        │
-        ▼
-      Labels
-        │
-        ▼
-Voice Assistant Sync
-        │
- ┌──────┴───────┐
- │              │
-Google       Alexa
+                           Home Assistant
+                                │
+                                ▼
+                              Labels
+                                │
+                                ▼
+                        Voice Assistant Sync
+                                │
+                         ┌──────┴───────┐
+                         │              │
+                        Google       Alexa
 ```
 
 ## Generated entity_config
