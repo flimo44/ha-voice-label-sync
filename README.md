@@ -13,7 +13,7 @@ This project lets Home Assistant labels become the single source of truth.
 >
 > Feedback and ideas are welcome.
 
-Generate Home Assistant Google Assistant `entity_config` from Home Assistant labels.
+Stop maintaining your Google Assistant YAML manually. Let Home Assistant labels do it for you.
 
 Instead of manually maintaining a long YAML list of exposed entities, simply add a label in Home Assistant, run the script, and it generates the Google Assistant configuration automatically.
 
