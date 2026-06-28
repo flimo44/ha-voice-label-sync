@@ -25,6 +25,7 @@ HA Voice Label Sync has been designed to support multiple voice assistants.
 
 Currently supported
 ✅ Google Assistant
+
 Planned
 Amazon Alexa
 Apple HomeKit
