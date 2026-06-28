@@ -80,6 +80,14 @@ Managing a voice assistant should become as simple as adding or removing a label
 
 ---
 
+## 6. Build on Solid Foundations
+
+Take time to design before implementing.
+
+Good architecture and documentation always come before new features.
+
+---
+
 # Target Users
 
 Current
