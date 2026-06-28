@@ -1,50 +1,36 @@
 # # HA Voice Label Sync
 
-### Automatically generate your Google Assistant configuration from Home Assistant labels.
-
-## Current Status
-
-The project has been designed to support multiple voice assistants.
-
-Currently supported:
-
-- Google Assistant
-
-Planned:
-
-- Amazon Alexa
-- Apple HomeKit
-
-## Why?
-
-Google Assistant is currently the first supported backend.
-
-The project has been designed to support additional voice assistants in the future, including Alexa and HomeKit.
-
-Managing Google Assistant entities manually quickly becomes difficult.
-
-HA Voice Label Sync automatically generates your Assistant configuration directly from Home Assistant labels.
-
-No duplicated configuration.
-
-No manual maintenance.
-
-Your Home Assistant labels become the single source of truth.
-
-Do you maintain dozens of Google Assistant entities manually?
-
-This project lets Home Assistant labels become the single source of truth.
-
+### Automatically generate your voice assistant configuration from Home Assistant labels.
 
 > 🚧 Early development project
 >
 > Feedback and ideas are welcome.
 
+## Why?
 
+Managing voice assistant configurations manually quickly becomes difficult.
 
-Stop maintaining your Google Assistant YAML manually. Let Home Assistant labels do it for you.
+HA Voice Label Sync automatically generates the required configuration from Home Assistant labels, making your labels the single source of truth.
 
-Instead of manually maintaining a long YAML list of exposed entities, simply add a label in Home Assistant, run the script, and it generates the Google Assistant configuration automatically.
+With the current release you can:
+
+Stop maintaining large YAML files manually.
+Avoid duplicated configuration.
+Keep Home Assistant as the only place where entities are managed.
+Generate your configuration in seconds.
+
+## Current Status
+
+HA Voice Label Sync has been designed to support multiple voice assistants.
+
+Currently supported
+✅ Google Assistant
+Planned
+Amazon Alexa
+Apple HomeKit
+
+Instead of maintaining a long list of exposed entities manually, simply assign a label in Home Assistant, run the script, and let HA Voice Label Sync generate the configuration for you.
+
 
 ## Features
 
@@ -106,20 +92,24 @@ Copy it to your Home Assistant scripts directory.
 
 Typical locations are:
 
+```text
 /config/scripts/
 
 or
 
 <home-assistant-config>/scripts/
+```
 
 depending on your Home Assistant installation.
 
 Option 2 – Clone the repository
+```bash
 git clone https://github.com/flimo44/ha-voice-label-sync.git
-
+```
 The script is located in:
-
+```text
 scripts/ga_label_sync.py
+```
 
 ```Tip
 
@@ -140,8 +130,9 @@ Usage :
 
 <img width="555" height="172" alt="Capture d&#39;écran 2026-06-26 203136" src="https://github.com/user-attachments/assets/66ea6d63-983b-467b-9870-198d64b027bd" />
 
-
+```bash
 python3 /config/scripts/ga_label_sync.py --label "google_assistant" --dry-run
+```
 
 ```
 # --- Couloir ---
@@ -175,9 +166,9 @@ switch.prise_pompe2:
 
 
 ### Step 3 — Generate the file
-
+```bash
 python3 /config/scripts/ga_label_sync.py --label "google_assistant"
-
+```
 <img width="454" height="446" alt="Capture d&#39;écran 2026-06-26 200340" src="https://github.com/user-attachments/assets/6f0938ae-13e9-4856-9b4f-7db5e8290171" />
 
 
