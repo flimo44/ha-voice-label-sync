@@ -1,6 +1,5 @@
-# # HA Voice Label Sync
 <img width="1024" height="559" alt="image" src="https://github.com/user-attachments/assets/6918c5ae-b95b-4d81-9108-7b2cd8acd0fd" />
-
+# # HA Voice Label Sync
 ### Automatically generate your voice assistant configuration from Home Assistant labels.
 
 > 🚧 Early development project
