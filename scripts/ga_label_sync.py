@@ -72,9 +72,31 @@ def yaml_escape(value):
 
 
 def slugify(value):
+    """
+    Convert a label into a normalized identifier.
+
+    The generated identifier:
+    - is lowercase,
+    - contains only letters, numbers and underscores,
+    - removes unsupported characters,
+    - collapses multiple underscores into one.
+
+    Args:
+        value: Original label name.
+
+    Returns:
+        A normalized identifier suitable for internal use.
+    """
+    # Normalize the input before processing.
     value = (value or "").strip().lower()
-    value = re.sub(r"[^a-z0-9_ -]", "", value)
+
+    # Use underscores as word separators.
     value = value.replace(" ", "_").replace("-", "_")
+
+    # Remove unsupported characters.
+    value = re.sub(r"[^a-z0-9_]", "", value)
+
+    # Collapse consecutive underscores.
     return re.sub(r"_+", "_", value)
 
 
