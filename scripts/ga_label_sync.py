@@ -101,22 +101,71 @@ def slugify(value):
 
 
 def resolve_label_ids(label_name):
-    wanted = {label_name, slugify(label_name)}
+    """
+    Resolve every identifier associated with a Home Assistant label.
+
+    The function accepts either the label name or its normalized form
+    and returns every matching label identifier found in the registry.
+
+    Args:
+        label_name: Label name provided by the user.
+
+    Returns:
+        A set containing all matching label identifiers.
+    """
+    wanted_slug = slugify(label_name)
+    wanted = {label_name, wanted_slug}
     data = load_json(LABEL_REGISTRY)
     for label in data.get("data", {}).get("labels", []):
         name = label.get("name", "")
         label_id = label.get("label_id", "")
-        if label_id == label_name or name == label_name or slugify(name) == slugify(label_name):
+        normalized_name = slugify(name)
+        if (
+            label_id == label_name
+            or name == label_name
+            or normalized_name == wanted_slug
+        ):
             wanted.add(label_id)
+        
     return wanted
 
 
 def main():
+    """
+        Generate a voice assistant configuration from Home Assistant labels.
+
+        Parse command-line arguments, load Home Assistant registries,
+        generate the configuration and either display or write the result.
+    """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--label", default="google_assistant")
-    parser.add_argument("--output", default=str(OUTPUT_FILE))
-    parser.add_argument("--domains", nargs="*", default=sorted(DEFAULT_DOMAINS))
-    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--label",
+        default="google_assistant",
+        help="Home Assistant label used to select exposed entities.",
+    )
+
+    parser.add_argument(
+        "--output",
+        default=str(OUTPUT_FILE),
+        help="Path of the generated YAML file.",
+    )
+    
+    parser.add_argument(
+        "--domains",
+        nargs="*",
+        default=sorted(DEFAULT_DOMAINS),
+        help="Home Assistant domains to include.",
+    )
+     
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the generated YAML without writing the output file.",
+    )
+    
+    """
+    Construction du dictionnaire des zones
+    """
     args = parser.parse_args()
 
     label_ids = resolve_label_ids(args.label)
@@ -138,29 +187,50 @@ def main():
             continue
         areas[area_id] = a.get("name") or area_id
 
+    """
+    Préparation de la sélection
+    """
     selected = []
 
     for ent in entity_data.get("data", {}).get("entities", []):
         entity_id = ent.get("entity_id")
         if not entity_id or "." not in entity_id:
             continue
-
+        """
+        Extraction et filtrage du domaine
+        """
         domain = entity_id.split(".", 1)[0]
         if domain not in allowed_domains:
             continue
 
+        """
+        Exclusion des entités désactivées ou cachées
+        """
         if ent.get("disabled_by") or ent.get("hidden_by"):
             continue
 
+        """
+        Exclusion des entités techniques
+        """
         if ent.get("entity_category") in {"diagnostic", "config"}:
             continue
 
+        """
+        Vérification des labels
+        """
         labels = set(ent.get("labels") or [])
         if not labels.intersection(label_ids):
             continue
 
-        device = devices.get(ent.get("device_id")) if ent.get("device_id") else None
+        """
+        Recherche de l’appareil parent
+        """
+        device_id = ent.get("device_id")
+        device = devices.get(device_id) if device_id else None
 
+        """
+        Define du nom
+        """
         name = (
             ent.get("name")
             or ent.get("original_name")
@@ -170,14 +240,23 @@ def main():
         area_id = ent.get("area_id") or (device or {}).get("area_id")
         room = areas.get(area_id) if area_id else None
 
-        selected.append({
-            "entity_id": entity_id,
-            "domain": domain,
-            "name": name,
-            "room": room,
-        })
+        selected.append(
+            {
+                "entity_id": entity_id,
+                "domain": domain,
+                "name": name,
+                "room": room,
+            }
+        )
 
-    selected.sort(key=lambda x: (x["room"] or "", x["domain"], x["name"], x["entity_id"]))
+    selected.sort(
+        key=lambda x: (
+            x["room"] or "",
+            x["domain"],
+            x["name"],
+            x["entity_id"],
+            )
+    )
 
     lines = [
         "# Fichier généré automatiquement.",
@@ -186,7 +265,7 @@ def main():
         "",
     ]
 
-    current_room = None
+    current_room = object()
     for item in selected:
         if item["room"] != current_room:
             current_room = item["room"]
@@ -195,11 +274,13 @@ def main():
         lines.append(f"{item['entity_id']}:")
         lines.append("  expose: true")
         lines.append(f"  name: {yaml_escape(item['name'])}")
+
         if item["room"]:
             lines.append(f"  room: {yaml_escape(item['room'])}")
+        
         lines.append("")
 
-    content = "\n".join(lines)
+    content = "\n".join(lines).rstrip() + "\n"
 
     if args.dry_run:
         print(content)
