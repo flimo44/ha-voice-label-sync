@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  syntax-check:
-    name: Python syntax check
+  python-checks:
+    name: Python checks
     runs-on: ubuntu-latest
 
     steps:
@@ -26,5 +26,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Compile Python script
+      - name: Check Python syntax
         run: python -m py_compile scripts/ga_label_sync.py
+
+      - name: Run Ruff
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: check .

@@ -2,6 +2,9 @@
 
 ### Automatically generate your voice assistant configuration from Home Assistant labels.
 
+[![Python checks](https://github.com/flimo44/ha-voice-label-sync/actions/workflows/python-check.yml/badge.svg?branch=main)](https://github.com/flimo44/ha-voice-label-sync/actions/workflows/python-check.yml)
+
+
 > 🚧 Early development project
 >
 > Feedback and ideas are welcome.
