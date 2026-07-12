@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by Keep a Changelog.
 
+# Changelog
+
+## [0.1.2] - 2026-07-12
+
+### Fixed
+
+- Quote YAML reserved words.
+- Quote numeric-looking values.
+- Transliterate accented characters.
+- Better JSON loading errors.
+- Warn when label does not exist.
+- Automatically create output directory.
+
+## [0.1.0]
+
+### Added
+
+- Initial public release.
+- Home Assistant label filtering.
+- Google Assistant entity generation.
+
 ## [0.1.0] - 2026-06-27
 
 ### Added
