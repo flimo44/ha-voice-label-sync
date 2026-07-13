@@ -108,3 +108,217 @@ Before closing an issue or considering a change released, verify:
 
 ---
 > Never skip a checklist item because “it is only a small change”.
+
+
+# Architecture
+
+## Vision
+
+HA Voice Label Sync (HVLS) is designed to become the simplest way to manage
+voice assistant exposure from Home Assistant labels.
+
+The primary goal is not only to generate a YAML file but to provide a complete
+native Home Assistant experience while keeping the underlying generation engine
+independent and reusable.
+
+The user should only need to:
+
+1. Install the integration (HACS or manual).
+2. Add a single include line in `configuration.yaml`.
+3. Configure HVLS from the Home Assistant UI.
+4. Generate the configuration with one click.
+
+No SSH access or manual Python execution should be required.
+
+---
+
+# Design principles
+
+HVLS follows a few simple principles.
+
+## Simplicity
+
+Installation and daily usage should be as simple as possible.
+
+Configuration should be performed from the Home Assistant interface whenever
+possible.
+
+## Safety
+
+HVLS must never overwrite configuration without protection.
+
+Every generation should:
+
+- validate the generated configuration
+- create a backup
+- write atomically
+- allow restoration
+
+## Transparency
+
+The user should always know what HVLS is about to generate before writing the
+configuration.
+
+A Dry Run mode should always be available.
+
+## Modularity
+
+The generation engine must remain independent from the Home Assistant
+integration.
+
+This allows:
+
+- command line execution
+- Home Assistant integration
+- future API
+- future multiple backends
+
+without duplicating code.
+
+---
+
+# High level architecture
+
+```
+                   Home Assistant UI
+                           │
+                           ▼
+                HA Voice Label Sync
+                           │
+        ┌──────────────────┴──────────────────┐
+        │                                     │
+        ▼                                     ▼
+ Configuration                     Generation Engine
+        │                                     │
+        ▼                                     ▼
+ Config Flow                   Registry Reader
+ Options Flow                  Label Resolver
+ Buttons                       YAML Generator
+ Services                      Validation
+ Sensors                       Backup Manager
+```
+
+The Home Assistant integration should only orchestrate the engine.
+
+Business logic must stay inside the generation engine.
+
+---
+
+# User workflow
+
+The expected workflow is:
+
+```
+Install
+
+↓
+
+Configuration
+
+↓
+
+Dry Run
+
+↓
+
+Preview
+
+↓
+
+Generate
+
+↓
+
+Backup
+
+↓
+
+Done
+```
+
+---
+
+# Planned Home Assistant features
+
+## Configuration
+
+The integration should allow configuring:
+
+- label name
+- output file
+- supported domains
+- backup retention
+
+without editing Python code.
+
+---
+
+## Dry Run
+
+Generate the configuration in memory.
+
+Display:
+
+- entity count
+- ignored entities
+- warnings
+- generated YAML preview
+
+without writing anything.
+
+---
+
+## Generate
+
+Generate the YAML configuration.
+
+Before writing:
+
+1. Validate
+2. Backup
+3. Atomic write
+4. Report result
+
+---
+
+## Backup
+
+Automatically create a backup before every generation.
+
+Allow restoring previous versions.
+
+---
+
+## Restore
+
+Restore a previous generated configuration directly from Home Assistant.
+
+---
+
+## Services
+
+The integration should expose services such as:
+
+- Generate configuration
+- Dry Run
+- Backup
+- Restore
+
+These services should be usable inside Home Assistant automations.
+
+---
+
+# Long-term objective
+
+The current Google Assistant backend is only the first implementation.
+
+The architecture should allow supporting additional voice assistants without
+rewriting the generation engine.
+
+Possible future backends:
+
+- Google Assistant
+- Alexa
+- HomeKit
+- Matter
+```
