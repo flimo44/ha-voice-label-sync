@@ -70,3 +70,21 @@ class FileWriteResult:
     backup_path: Path | None
     bytes_written: int
     written_at: datetime
+
+@dataclass(frozen=True)
+class WorkflowResult:
+    """Structured result returned by an HVLS workflow execution."""
+
+    generation: GenerationResult
+    write_result: FileWriteResult | None
+    dry_run: bool
+
+    @property
+    def entity_count(self) -> int:
+        """Return the number of selected entities."""
+        return self.generation.entity_count
+
+    @property
+    def written(self) -> bool:
+        """Return whether generated content was written to disk."""
+        return self.write_result is not None
