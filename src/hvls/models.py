@@ -1,5 +1,6 @@
 """Internal data models used by the HVLS core engine."""
 
+from datetime import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -60,3 +61,12 @@ class GenerationResult:
     def success(self) -> bool:
         """Return whether generation produced at least one entity."""
         return self.entity_count > 0
+
+@dataclass(frozen=True)
+class FileWriteResult:
+    """Structured result returned after writing generated configuration."""
+
+    output_path: Path
+    backup_path: Path | None
+    bytes_written: int
+    written_at: datetime
