@@ -1,5 +1,6 @@
 """Reusable core package for HA Voice Label Sync."""
 
+from .orchestrator import WorkflowError, run_google_assistant_workflow
 from .backends import render_google_assistant, yaml_escape
 from .engine import resolve_label_ids, select_entities, slugify
 from .models import (
@@ -8,6 +9,7 @@ from .models import (
     GenerationResult,
     SelectedEntity,
     SelectionResult,
+    WorkflowResult,
 )
 from .writers import (
     FileWriterError,
@@ -37,4 +39,7 @@ __all__ = [
     "atomic_write",
     "create_backup",
     "write_with_backup",
+    "WorkflowError",
+    "WorkflowResult",
+    "run_google_assistant_workflow",
 ]
