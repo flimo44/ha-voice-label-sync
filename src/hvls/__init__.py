@@ -1,5 +1,6 @@
 """Reusable core package for HA Voice Label Sync."""
 
+from .backends import render_google_assistant, yaml_escape
 from .engine import resolve_label_ids, select_entities, slugify
 from .models import (
     GenerationRequest,
@@ -20,4 +21,6 @@ __all__ = [
     "resolve_label_ids",
     "select_entities",
     "slugify",
+    "render_google_assistant",
+    "yaml_escape",
 ]
