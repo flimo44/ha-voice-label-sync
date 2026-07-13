@@ -7,8 +7,6 @@ import argparse
 import sys
 from pathlib import Path
 
-
-
 from . import (  # noqa: E402
     FileWriterError,
     GenerationRequest,

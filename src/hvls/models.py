@@ -1,7 +1,7 @@
 """Internal data models used by the HVLS core engine."""
 
-from datetime import datetime
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 
