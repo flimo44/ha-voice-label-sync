@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ha-voice-label-sync"
+version = "0.2.0.dev0"
+description = "Generate voice assistant configuration from Home Assistant labels."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+  { name = "Philippe Le Bonhomme" }
+]
+keywords = [
+  "home-assistant",
+  "google-assistant",
+  "voice-assistant",
+  "automation",
+  "yaml"
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Home Automation"
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/flimo44/ha-voice-label-sync"
+Documentation = "https://github.com/flimo44/ha-voice-label-sync#readme"
+Issues = "https://github.com/flimo44/ha-voice-label-sync/issues"
+Source = "https://github.com/flimo44/ha-voice-label-sync"
+
+[project.scripts]
+hvls = "hvls.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
