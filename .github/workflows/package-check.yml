@@ -1,0 +1,50 @@
+name: Package checks
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-check:
+    name: Build and validate package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: python -m pip install --upgrade build twine
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Validate distributions
+        run: python -m twine check dist/*
+
+      - name: Install built wheel
+        run: python -m pip install dist/*.whl
+
+      - name: Test installed command
+        run: hvls --help
+
+      - name: Test installed package
+        run: |
+          python - <<'PY'
+          from hvls import run_google_assistant_workflow
+
+          print("HVLS installed package: OK")
+          PY
