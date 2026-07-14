@@ -12,15 +12,27 @@ It is not a strict schedule, but rather the current project direction.
 - [x] Version tags
 - [x] GitHub Actions (syntax check)
 - [x] Ruff linting
-- [ ] Resolve remaining Git line-ending issue
-- [ ] Improve documentation
+- [x] Resolve remaining Git line-ending issue
+- [x] Improve documentation
 
 ---
+## v0.2.0 - Home Assistant integration foundation
 
-## v0.2.0 - Easier installation
-
-- [ ] Configuration file support
-- [ ] Better CLI options
+- [x] Reusable Python core
+- [x] Registry reader
+- [x] Neutral entity selection engine
+- [x] Google Assistant backend
+- [x] Safe filesystem writer
+- [x] Workflow orchestrator
+- [x] Installable Python package
+- [x] Initial Home Assistant integration skeleton
+- [ ] Config flow with label and backup options
+- [ ] Dry-run action
+- [ ] Generate action
+- [ ] Backup and restore actions
+- [ ] Status sensors
+- [ ] HACS metadata and installation
+- [ ] Documentation update [ ] Better CLI options
 - [ ] Improve README examples
 - [ ] Installation guide
 
