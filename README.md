@@ -26,6 +26,31 @@ Generate your configuration in seconds.
 
 ## Current Status
 
+## Project status
+
+HVLS is currently under active development.
+
+Latest stable release: `v0.1.2`
+
+Current development version: `0.2.0.dev0`
+
+Current capabilities:
+
+- Standalone CLI
+- Reusable Python core
+- Google Assistant YAML generation
+- Dry-run support
+- Safe atomic file writing
+- Automatic backups and retention
+- Initial Home Assistant integration skeleton
+
+Not yet available:
+
+- Full Home Assistant configuration UI
+- Home Assistant actions and buttons
+- Backup restoration from the UI
+- HACS installation
+
 HA Voice Label Sync has been designed to support multiple voice assistants.
 
 - Currently supported :

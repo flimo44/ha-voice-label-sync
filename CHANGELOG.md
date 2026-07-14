@@ -6,6 +6,26 @@ The format is inspired by Keep a Changelog.
 
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Reusable HVLS core package.
+- Home Assistant registry reader.
+- Neutral entity selection engine.
+- Google Assistant YAML backend.
+- Safe atomic file writer with backups and retention.
+- Workflow orchestrator supporting dry-run and safe generation.
+- Installable Python package and `hvls` command.
+- Initial Home Assistant custom integration skeleton.
+
+### Changed
+
+- The historical `scripts/ga_label_sync.py` entry point now delegates to the
+  reusable HVLS core.
+- Project structure now separates the CLI, core engine, backends, writers and
+  Home Assistant integration.
+
 ## [0.1.2] - 2026-07-12
 
 ### Fixed
