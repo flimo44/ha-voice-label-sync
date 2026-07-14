@@ -9,3 +9,6 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+
+# Local build environment
+.venv-build/
