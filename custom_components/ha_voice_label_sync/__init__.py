@@ -6,6 +6,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
+from .services import async_register_services
 
 
 async def async_setup(
@@ -14,6 +15,9 @@ async def async_setup(
 ) -> bool:
     """Set up HVLS from YAML."""
     hass.data.setdefault(DOMAIN, {})
+
+    await async_register_services(hass)
+
     return True
 
 

@@ -1,0 +1,3 @@
+generate:
+  name: Generate configuration
+  description: Generate the voice assistant configuration.
