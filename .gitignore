@@ -12,3 +12,6 @@ dist/
 
 # Local build environment
 .venv-build/
+
+# Local release environment
+.venv-release/
