@@ -4,13 +4,23 @@
 
 [![Python checks](https://github.com/flimo44/ha-voice-label-sync/actions/workflows/python-check.yml/badge.svg?branch=main)](https://github.com/flimo44/ha-voice-label-sync/actions/workflows/python-check.yml)
 
+
+Native Home Assistant integration
+
+✓ PyPI package
+
+✓ Home Assistant Config Flow
+
+✓ Generate Service
+
+✓ CLI
+
+✓ Google Assistant backend
+
+
 ✨ Features
 
-✔ Generate Google Assistant YAML from labels
-✔ Home Assistant integration
-✔ CLI
 ✔ Automatic backups
-✔ PyPI package
 ✔ HACS support (coming soon)
 
 > 🚧 Early development project
@@ -38,9 +48,9 @@ Generate your configuration in seconds.
 
 HVLS is currently under active development.
 
-Latest stable release: `v0.1.2`
+Latest stable release: `v0.2.0`
 
-Current development version: `0.2.0.dev0`
+Current development version: `0.3.0`
 
 Current capabilities:
 
