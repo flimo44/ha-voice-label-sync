@@ -4,6 +4,14 @@
 
 [![Python checks](https://github.com/flimo44/ha-voice-label-sync/actions/workflows/python-check.yml/badge.svg?branch=main)](https://github.com/flimo44/ha-voice-label-sync/actions/workflows/python-check.yml)
 
+✨ Features
+
+✔ Generate Google Assistant YAML from labels
+✔ Home Assistant integration
+✔ CLI
+✔ Automatic backups
+✔ PyPI package
+✔ HACS support (coming soon)
 
 > 🚧 Early development project
 >
