@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ha-voice-label-sync"
-version = "0.2.0.dev0"
+version = "0.2.0"
 description = "Generate voice assistant configuration from Home Assistant labels."
 readme = "README.md"
 requires-python = ">=3.11"

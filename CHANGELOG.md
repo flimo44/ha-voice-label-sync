@@ -8,6 +8,8 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-15
+
 ### Added
 
 - Reusable HVLS core package.
@@ -17,7 +19,10 @@ The format is inspired by Keep a Changelog.
 - Safe atomic file writer with backups and retention.
 - Workflow orchestrator supporting dry-run and safe generation.
 - Installable Python package and `hvls` command.
-- Initial Home Assistant custom integration skeleton.
+- Home Assistant custom integration.
+- Configuration and options flows.
+- Home Assistant generate action.
+- PyPI and TestPyPI publishing workflows.
 
 ### Changed
 
