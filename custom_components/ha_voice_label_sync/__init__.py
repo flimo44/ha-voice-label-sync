@@ -28,6 +28,12 @@ async def async_setup_entry(
     """Set up HVLS from a config entry."""
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {}
+
+    await hass.config_entries.async_forward_entry_setups(
+        entry,
+        ["button"],
+    )
+
     return True
 
 
@@ -36,5 +42,12 @@ async def async_unload_entry(
     entry: ConfigEntry,
 ) -> bool:
     """Unload an HVLS config entry."""
-    hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
-    return True
+    unloaded = await hass.config_entries.async_unload_platforms(
+        entry,
+        ["button"],
+    )
+
+    if unloaded:
+        hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+
+    return unloaded
