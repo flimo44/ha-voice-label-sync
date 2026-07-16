@@ -30,6 +30,7 @@ jobs:
         run: python -m py_compile scripts/ga_label_sync.py
 
       - name: Run Ruff
-        uses: astral-sh/ruff-action@v3
+        uses: astral-sh/ruff-action@v4.1.0
         with:
-          args: check .
+          version: "0.15.22"
+          args: "check ."
