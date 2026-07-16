@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from functools import partial
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Context, HomeAssistant, ServiceCall
@@ -49,6 +50,162 @@ DEFAULT_DOMAINS = frozenset(
         "vacuum",
     }
 )
+
+def _write_preview_file(
+    preview_path: Path,
+    content: str,
+) -> None:
+    """Write preview content atomically."""
+    preview_path.parent.mkdir(parents=True, exist_ok=True)
+
+    temporary_path: Path | None = None
+
+    try:
+        with NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=preview_path.parent,
+            prefix=f".{preview_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            temporary_file.write(content)
+            temporary_path = Path(temporary_file.name)
+
+        temporary_path.replace(preview_path)
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
+
+async def async_run_workflow(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    *,
+    dry_run: bool,
+    context: Context | None = None,
+) -> WorkflowResult:
+    """Run the HVLS workflow for one config entry."""
+    settings = {
+        **entry.data,
+        **entry.options,
+    }
+
+    label = settings.get(CONF_LABEL, DEFAULT_LABEL)
+    output_value = settings.get(CONF_OUTPUT, DEFAULT_OUTPUT)
+    backup_retention = settings.get(
+        CONF_BACKUP_RETENTION,
+        DEFAULT_BACKUP_RETENTION,
+    )
+
+    output_path = Path(output_value)
+
+    if not output_path.is_absolute():
+        output_path = Path(hass.config.config_dir) / output_path
+
+    storage_path = Path(hass.config.config_dir) / ".storage"
+
+    request = GenerationRequest(
+        label=label,
+        domains=DEFAULT_DOMAINS,
+        output_path=output_path,
+        dry_run=dry_run,
+    )
+
+    workflow = partial(
+        run_google_assistant_workflow,
+        request=request,
+        storage_path=storage_path,
+        backup_retention=backup_retention,
+    )
+
+    try:
+        result = await hass.async_add_executor_job(workflow)
+    except (
+        FileWriterError,
+        RegistryError,
+        WorkflowError,
+        OSError,
+        ValueError,
+    ) as exc:
+        operation = "preview" if dry_run else "generation"
+        _LOGGER.exception("HVLS %s failed", operation)
+
+        raise HomeAssistantError(
+            f"HVLS {operation} failed: {exc}"
+        ) from exc
+
+    domain_counts = result.generation.domain_counts
+
+    domain_summary = "\n".join(
+        f"- {domain}: {count}"
+        for domain, count in sorted(domain_counts.items())
+    )
+
+    if not domain_summary:
+        domain_summary = "- No matching entity"
+
+    warnings = "\n".join(
+        f"- {warning}"
+        for warning in result.generation.warnings
+    )
+
+    if dry_run:
+        preview_path = Path(
+            hass.config.path(
+                ".hvls",
+                "preview.yaml",
+            )
+        )
+
+        await hass.async_add_executor_job(
+            _write_preview_file,
+            preview_path,
+            result.generation.content,
+        )
+
+        title = "HA Voice Label Sync — Preview"
+        message = (
+            f"Preview generated successfully.\n\n"
+            f"**Label:** `{label}`\n\n"
+            f"**Entities found:** {result.entity_count}\n\n"
+            f"**By domain:**\n{domain_summary}\n\n"
+            f"**Preview file:** `{preview_path}`\n\n"
+            f"Production file unchanged:\n"
+            f"`{output_path}`"
+        )
+        notification_id = "ha_voice_label_sync_preview"
+    else:
+        title = "HA Voice Label Sync"
+        message = (
+            f"Configuration generated successfully.\n\n"
+            f"**Entities:** {result.entity_count}\n\n"
+            f"**By domain:**\n{domain_summary}\n\n"
+            f"**Output:** `{output_path}`"
+        )
+        notification_id = "ha_voice_label_sync_generate"
+
+    if warnings:
+        message += f"\n\n**Warnings:**\n{warnings}"
+
+    await hass.services.async_call(
+        "persistent_notification",
+        "create",
+        {
+            "title": title,
+            "message": message,
+            "notification_id": notification_id,
+        },
+        blocking=True,
+        context=context,
+    )
+
+    _LOGGER.info(
+        "HVLS %s completed with %s entities",
+        "preview" if dry_run else "generation",
+        result.entity_count,
+    )
+
+    return result
 
 
 async def async_run_workflow(
