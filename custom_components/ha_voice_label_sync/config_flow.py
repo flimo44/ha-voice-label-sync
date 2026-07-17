@@ -9,6 +9,11 @@ from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+)
 
 from .const import (
     BACKEND_GOOGLE_ASSISTANT,
@@ -57,7 +62,15 @@ def build_schema(
                     CONF_BACKUP_RETENTION,
                     DEFAULT_BACKUP_RETENTION,
                 ),
-            ): vol.All(int, vol.Range(min=0, max=100)),
+            ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=0,
+                        max=100,
+                        step=1,
+                        mode=NumberSelectorMode.BOX,
+                    )
+                ),
+            
             vol.Required(
                 CONF_CREATE_BACKUP,
                 default=values.get(
