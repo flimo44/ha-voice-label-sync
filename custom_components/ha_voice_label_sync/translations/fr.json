@@ -1,0 +1,50 @@
+{
+  "title": "HA Voice Label Sync",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurer HA Voice Label Sync",
+        "description": "Configurez la sélection des entités Home Assistant et leur exportation.",
+        "data": {
+          "backend": "Assistant vocal",
+          "label": "Étiquette Home Assistant",
+          "output": "Fichier de sortie",
+          "backup_retention": "Sauvegardes à conserver",
+          "create_backup": "Créer une sauvegarde avant remplacement"
+        },
+        "data_description": {
+          "backend": "Sélectionnez la configuration d’assistant vocal à générer.",
+          "label": "Les entités portant cette étiquette Home Assistant seront incluses.",
+          "output": "Chemin du fichier YAML généré dans Home Assistant.",
+          "backup_retention": "Nombre maximal d’anciens fichiers générés à conserver. Utilisez 0 pour désactiver la rétention.",
+          "create_backup": "Sauvegarde le fichier de sortie actuel avant de le remplacer."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "HA Voice Label Sync est déjà configuré."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options de HA Voice Label Sync",
+        "description": "Modifiez la sélection des entités, le fichier de sortie et les sauvegardes.",
+        "data": {
+          "backend": "Assistant vocal",
+          "label": "Étiquette Home Assistant",
+          "output": "Fichier de sortie",
+          "backup_retention": "Sauvegardes à conserver",
+          "create_backup": "Créer une sauvegarde avant remplacement"
+        },
+        "data_description": {
+          "backend": "Sélectionnez la configuration d’assistant vocal à générer.",
+          "label": "Les entités portant cette étiquette Home Assistant seront incluses.",
+          "output": "Chemin du fichier YAML généré dans Home Assistant.",
+          "backup_retention": "Nombre maximal d’anciens fichiers générés à conserver. Utilisez 0 pour désactiver la rétention.",
+          "create_backup": "Sauvegarde le fichier de sortie actuel avant de le remplacer."
+        }
+      }
+    }
+  }
+}

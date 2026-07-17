@@ -1,0 +1,50 @@
+{
+  "title": "HA Voice Label Sync",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure HA Voice Label Sync",
+        "description": "Configure how Home Assistant entities are selected and exported.",
+        "data": {
+          "backend": "Voice assistant",
+          "label": "Home Assistant label",
+          "output": "Output file",
+          "backup_retention": "Backups to retain",
+          "create_backup": "Create a backup before overwriting"
+        },
+        "data_description": {
+          "backend": "Select the voice assistant configuration to generate.",
+          "label": "Entities carrying this Home Assistant label will be included.",
+          "output": "Path of the generated YAML file inside Home Assistant.",
+          "backup_retention": "Maximum number of previous generated files to retain. Use 0 to disable retention.",
+          "create_backup": "Create a backup of the current output file before replacing it."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "HA Voice Label Sync is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "HA Voice Label Sync options",
+        "description": "Adjust entity selection, output and backup settings.",
+        "data": {
+          "backend": "Voice assistant",
+          "label": "Home Assistant label",
+          "output": "Output file",
+          "backup_retention": "Backups to retain",
+          "create_backup": "Create a backup before overwriting"
+        },
+        "data_description": {
+          "backend": "Select the voice assistant configuration to generate.",
+          "label": "Entities carrying this Home Assistant label will be included.",
+          "output": "Path of the generated YAML file inside Home Assistant.",
+          "backup_retention": "Maximum number of previous generated files to retain. Use 0 to disable retention.",
+          "create_backup": "Create a backup of the current output file before replacing it."
+        }
+      }
+    }
+  }
+}
