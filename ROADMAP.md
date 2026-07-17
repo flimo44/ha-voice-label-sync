@@ -1,61 +1,132 @@
-# Roadmap
+# HA Voice Label Sync Roadmap
 
-This roadmap describes the planned evolution of **HA Voice Label Sync**.
-
-It is not a strict schedule, but rather the current project direction.
+> **Expose only the entities you choose, verify the result, then generate safely.**
 
 ---
 
-## v0.1.x - Project stabilization
+# Vision
 
-- [x] GitHub Releases
-- [x] Version tags
-- [x] GitHub Actions (syntax check)
-- [x] Ruff linting
-- [x] Resolve remaining Git line-ending issue
-- [x] Improve documentation
+HA Voice Label Sync aims to become the simplest and safest way to manage
+voice assistant exposure from Home Assistant labels.
+
+The project focuses on:
+
+- Native Home Assistant experience
+- Safe preview before generation
+- Simple configuration
+- Multi-backend architecture
+- Easy installation through HACS
+- Reliable automation-friendly workflows
 
 ---
-## v0.2.0 - Home Assistant integration foundation
 
-- [x] Reusable Python core
+# v0.2.x — Foundation
+
+## Core
+
+- [x] Reusable HVLS Python engine
 - [x] Registry reader
 - [x] Neutral entity selection engine
 - [x] Google Assistant backend
 - [x] Safe filesystem writer
-- [x] Workflow orchestrator
-- [x] Installable Python package
-- [x] Initial Home Assistant integration skeleton
-- [ ] Config flow with label and backup options
-- [ ] Dry-run action
-- [ ] Generate action
-- [ ] Backup and restore actions
-- [ ] Status sensors
-- [ ] HACS metadata and installation
-- [ ] Documentation update [ ] Better CLI options
-- [ ] Improve README examples
+- [x] Automatic backups
+- [x] PyPI package
+
+## Home Assistant
+
+- [x] Native integration
+- [x] Config Flow
+- [x] Options Flow
+- [x] Generate action
+- [x] Preview action
+- [x] Preview panel
+- [x] Authenticated WebSocket API
+- [x] Configuration translations
+
+## Remaining
+
+- [ ] Documentation refresh
 - [ ] Installation guide
+- [ ] HACS metadata
+- [ ] Logo & branding
 
 ---
 
-## v0.3.0 - Home Assistant integration
+# v0.3 — User Experience
 
-- [ ] Create a custom integration
-- [ ] Register a Home Assistant service
-- [ ] Generate configuration from Home Assistant
-- [ ] Automatic reload support
+Goal:
+Make HVLS enjoyable for everyday users.
+
+## Dashboard
+
+- [ ] Unified dashboard
+- [ ] Configuration summary
+- [ ] Status section
+- [ ] Action center
+
+## Preview
+
+- [ ] Optional sidebar panel
+- [ ] Better Preview navigation
+- [ ] Preview history
+- [ ] Diff against current configuration
+
+## Configuration
+
+- [ ] Simplified mode
+- [ ] Advanced mode
+- [ ] Better validation
+- [ ] Inline help
 
 ---
 
-## v0.4.0 - Multiple voice assistants
+# v0.4 — Voice Assistant Platform
 
-- [ ] Google Assistant
-- [ ] Alexa
-- [ ] HomeKit
-- [ ] Future Matter support
+Goal:
+Support additional assistants without changing the workflow.
+
+- [ ] Alexa backend
+- [ ] Future HomeKit backend
+- [ ] Generic backend architecture
+- [ ] Backend selector improvements
 
 ---
 
-## v1.0.0
+# v0.5 — Reliability
 
-Stable public release.
+- [ ] Status entities
+- [ ] Automatic reload
+- [ ] Diagnostics
+- [ ] Better notifications
+- [ ] Backup browser
+- [ ] Restore workflow
+
+---
+
+# v1.0 — Stable Release
+
+## Product
+
+- [ ] Published on HACS
+- [ ] Stable API
+- [ ] Complete documentation
+- [ ] Installation wizard
+- [ ] Visual identity
+- [ ] Screenshots
+- [ ] Examples
+
+## Quality
+
+- [ ] Full CI
+- [ ] Integration tests
+- [ ] Backward compatibility
+- [ ] Translation support
+
+## User Experience
+
+- [ ] Production-ready Dashboard
+- [ ] Preview workflow
+- [ ] Generate workflow
+- [ ] Restore workflow
+
+Ready for production.
