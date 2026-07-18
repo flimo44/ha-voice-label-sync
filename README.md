@@ -59,22 +59,22 @@ HA Voice Label Sync lets you manage everything directly from Home Assistant:
 ![Generated YAML](assets/screenshots/image3.png)
 - Google Home synchronization
 
----
+
 
 ## 🚀 Typical workflow
 
-
-🏷 Label
-      ↓
-👀 Preview
-      ↓
-✅ Review
-      ↓
-⚡ Generate
-      ↓
-🔄 Restart HA
-      ↓
-🎤 Sync Voice Assistant
+---
+                  🏷 Label
+                        ↓
+                  👀 Preview
+                        ↓
+                  ✅ Review
+                        ↓
+                  ⚡ Generate
+                        ↓
+                  🔄 Restart HA
+                        ↓
+                  🎤 Sync Voice Assistant
 
 
 ---
