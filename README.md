@@ -1,243 +1,195 @@
 <img width="1024" height="559" alt="image" src="https://github.com/user-attachments/assets/6918c5ae-b95b-4d81-9108-7b2cd8acd0fd" />
 
-### Automatically generate your voice assistant configuration from Home Assistant labels.
 
-[![Python checks](https://github.com/flimo44/ha-voice-label-sync/actions/workflows/python-check.yml/badge.svg?branch=main)](https://github.com/flimo44/ha-voice-label-sync/actions/workflows/python-check.yml)
+# HA Voice Label Sync
 
+> **Manage once in Home Assistant. Sync everywhere.**
 
-Native Home Assistant integration
+Automatically generate voice assistant configurations from **Home Assistant labels**.
 
-✓ PyPI package
+HVLS turns Home Assistant labels into the single source of truth for exposing entities to your voice assistants. Preview the generated configuration, verify it, then generate it safely.
 
-✓ Home Assistant Config Flow
+---
 
-✓ Generate Service
+## ✨ Why HA Voice Label Sync?
 
-✓ CLI
+Managing large `entity_config` files manually quickly becomes tedious and error-prone.
 
-✓ Google Assistant backend
+HA Voice Label Sync lets you manage everything directly from Home Assistant:
 
+- 🏷️ Choose which entities to expose using labels
+- 👀 Preview the generated configuration before writing anything
+- 💾 Create automatic backups
+- 🏠 Integrate natively with Home Assistant
+- ⚡ Generate configuration in seconds
+- 🔌 Designed to support multiple voice assistants
 
-✨ Features
+---
 
-✔ Automatic backups
-✔ HACS support (coming soon)
+## 📸 Screenshots
 
-> 🚧 Early development project
->
-> Feedback and ideas are welcome.
+> *(Screenshots will be updated with the latest UI.)*
 
-## Why?
+- Home Assistant Configuration
+![Generated YAML](assets/screenshots/image2.png)
+- Preview Panel
+![Generated YAML](assets/screenshots/image.png)
+- Generated YAML
+![Generated YAML](assets/screenshots/Capture d'écran 2026-07-18 015731.png)
+- Google Home synchronization
 
-Do you maintain dozens of Google Assistant entities manually?
+---
 
-Managing voice assistant configurations manually quickly becomes difficult.
+## 🚀 Typical workflow
 
-HA Voice Label Sync automatically generates the required configuration from Home Assistant labels, making your labels the single source of truth.
+```text
+Home Assistant
+      │
+      ▼
+Assign a Label
+      │
+      ▼
+Click Preview
+      │
+      ▼
+Review Generated YAML
+      │
+      ▼
+Click Generate
+      │
+      ▼
+Restart Home Assistant
+      │
+      ▼
+Synchronize Voice Assistant
+```
 
-With the current release you can:
+---
 
-Stop maintaining large YAML files manually.
-Avoid duplicated configuration.
-Keep Home Assistant as the only place where entities are managed.
-Generate your configuration in seconds.
+# Features
 
-## Current Status
+## 🏠 Home Assistant Integration
 
-## Project status
+- Native Config Flow
+- Options Flow
+- Preview Panel
+- Generate action
+- Preview action
+- Automatic backups
+- Secure WebSocket API
+- English & French translations
 
-HVLS is currently under active development.
+---
 
-Latest stable release: `v0.2.0`
+## 🐍 Python Engine
 
-Current development version: `0.3.0`
-
-Current capabilities:
-
+- Reusable Python package
 - Standalone CLI
-- Reusable Python core
-- Google Assistant YAML generation
+- Atomic file generation
 - Dry-run support
-- Safe atomic file writing
-- Automatic backups and retention
-- Initial Home Assistant integration skeleton
+- Automatic backup retention
+- Backend-independent architecture
 
-Not yet available:
+---
 
-- Full Home Assistant configuration UI
-- Home Assistant actions and buttons
-- Backup restoration from the UI
-- HACS installation
+## 🎤 Supported Voice Assistants
 
-HA Voice Label Sync has been designed to support multiple voice assistants.
+| Backend | Status |
+|----------|--------|
+| Google Assistant | ✅ Supported |
+| Amazon Alexa | 🚧 Planned |
+| Apple HomeKit | 📋 Planned |
 
-- Currently supported :
+---
 
-
-      ✅ Google Assistant
-
-- Planned :
-
-      Amazon Alexa
-      Apple HomeKit
-
-Instead of maintaining a long list of exposed entities manually, simply assign a label in Home Assistant, run the script, and let HA Voice Label Sync generate the configuration for you.
-
-
-## Features
-
-- Select entities using a Home Assistant label
-- Generate `entity_config` for Google Assistant
-- Use Home Assistant friendly names
-- Use Home Assistant areas as Google rooms
-- Ignore disabled or hidden entities
-- Dry-run mode before writing the file
-
-## How it works
-
-
-```
-                           Home Assistant
-                                │
-                                ▼
-                              Labels
-                                │
-                                ▼
-                        Voice Assistant Sync
-                                │
-                         ┌──────┴───────┐
-                         │              │
-               Google Assistant    Amazon Alexa
-       
-```
-
-## Generated entity_config
-
-```yaml
-switch.prise_pompe:
-  expose: true
-  name: Pompe piscine
-  room: Piscine
-```
-
-
-Home Assistant configuration
-
-```yaml
-google_assistant:
-  project_id: YOUR_PROJECT_ID
-  service_account: !include google_key.json
-  report_state: true
-  expose_by_default: false
-  entity_config: !include google_assistant_entities.yaml
-```
-
-## Quick start
-
-Installation
-
-Option 1 – Download the script
-
-Download the latest version of ga_label_sync.py from the repository.
-
-Copy it to your Home Assistant scripts directory.
-
-Typical locations are:
+# Architecture
 
 ```text
-/config/scripts/
-
-or
-
-<home-assistant-config>/scripts/
+                Home Assistant
+                       │
+                       ▼
+                    Labels
+                       │
+                       ▼
+             HA Voice Label Sync
+                       │
+         ┌─────────────┴─────────────┐
+         │                           │
+         ▼                           ▼
+ Google Assistant           Future Backends
+                               • Alexa
+                               • HomeKit
 ```
 
-depending on your Home Assistant installation.
+---
 
-Option 2 – Clone the repository
-```bash
-git clone https://github.com/flimo44/ha-voice-label-sync.git
-```
-The script is located in:
-```text
-scripts/ga_label_sync.py
-```
+# Installation
 
-```Tip
+## Home Assistant (HACS)
 
-If you simply want to use the script, downloading scripts/ga_label_sync.py is enough.
+🚧 Coming soon.
 
-Cloning the repository is recommended only if you plan to follow development or contribute to the project.
-```
+---
 
-Usage :
+## Home Assistant (Manual)
 
-### Step 1 — Add the label
+Documentation coming soon.
 
-<img width="455" height="375" alt="Capture d&#39;écran 2026-06-26 201643" src="https://github.com/user-attachments/assets/a262942a-5fb1-4a84-b88e-5db12eb67be8" />
+---
 
-
-### Step 2 — Preview the generated configuration
-
-
-<img width="555" height="172" alt="Capture d&#39;écran 2026-06-26 203136" src="https://github.com/user-attachments/assets/66ea6d63-983b-467b-9870-198d64b027bd" />
+## Python package
 
 ```bash
-python3 /config/scripts/ga_label_sync.py --label "google_assistant" --dry-run
+pip install ha-voice-label-sync
 ```
 
-```
-# --- Couloir ---
-lock.serrure_maison:
-  expose: true
-  name: Serrure porte entrée
-  room: Couloir
+---
 
-# --- Jardin ---
-switch.portail:
-  expose: true
-  name: Portail
-  room: Jardin
+# Quick Start
 
-# --- Piscine ---
-input_select.piscine_mode_gestion:
-  expose: true
-  name: "Piscine - Mode Gestion"
-  room: Piscine
+1. Create a label in Home Assistant.
+2. Assign this label to the entities you want to expose.
+3. Configure the integration.
+4. Click **Preview**.
+5. Review the generated configuration.
+6. Click **Generate**.
+7. Restart Home Assistant.
+8. Synchronize your voice assistant.
 
-switch.piscine_chauffage:
-  expose: true
-  name: Pac Piscine
-  room: Piscine
+---
 
-switch.prise_pompe2:
-  expose: true
-  name: Pompe piscine
-  room: Piscine
-```
+# CLI
 
+HVLS also provides a standalone CLI for advanced users and automation.
 
-### Step 3 — Generate the file
 ```bash
-python3 /config/scripts/ga_label_sync.py --label "google_assistant"
+hvls --help
 ```
-<img width="454" height="446" alt="Capture d&#39;écran 2026-06-26 200340" src="https://github.com/user-attachments/assets/6f0938ae-13e9-4856-9b4f-7db5e8290171" />
 
+---
 
-### Step 4 — Restart Home Assistant
+# Documentation
 
+Additional documentation will be available in the `docs/` directory.
 
+---
 
-### Step 5 — Synchronize Google Home
+# Roadmap
 
+See **[ROADMAP.md](ROADMAP.md)**.
 
-Google Home before synchronization
+---
 
-<img width="1080" height="2400" alt="Screenshot_2026-06-26-19-44-33-60_2d2bd67b5e15ae98c151ac739cd6881e" src="https://github.com/user-attachments/assets/a03d1005-fde8-4186-b8ea-da2f426c5a84" />
+# Contributing
 
-Google Home after synchronization
+Contributions are welcome!
 
-<img width="1080" height="2400" alt="Screenshot_2026-06-26-19-45-48-86_2d2bd67b5e15ae98c151ac739cd6881e" src="https://github.com/user-attachments/assets/5b4d96cc-9da9-4419-9d1f-f5eac4fbec8c" />
+Bug reports, feature requests and pull requests help improve the project.
 
-License
+If you have ideas, don't hesitate to open an issue or start a discussion.
+
+---
+
+# License
+
 MIT
