@@ -2,6 +2,7 @@
 
 
 # HA Voice Label Sync
+[![Python checks](https://github.com/flimo44/ha-voice-label-sync/actions/workflows/python-check.yml/badge.svg?branch=main)](https://github.com/flimo44/ha-voice-label-sync/actions/workflows/python-check.yml)
 
 > **Manage once in Home Assistant. Sync everywhere.**
 
