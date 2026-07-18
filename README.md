@@ -13,12 +13,6 @@ HVLS turns Home Assistant labels into the single source of truth for exposing en
 ---
 Native Home Assistant integration
 
-✓ PyPI package
-
-✓ Home Assistant Config Flow
-
-✓ Generate Service
-
 ✓ CLI
 
 ✓ Google Assistant backend
@@ -29,7 +23,7 @@ Native Home Assistant integration
 ✔ Automatic backups
 ✔ HACS support (coming soon)
 
-> 🚧 Early development project
+> 🚧 Actively developed — feedback and contributions are welcome.
 >
 > Feedback and ideas are welcome.
 ## ✨ Why HA Voice Label Sync?
@@ -51,13 +45,13 @@ HA Voice Label Sync lets you manage everything directly from Home Assistant:
 
 > *(Screenshots will be updated with the latest UI.)*
 
-- Home Assistant Configuration
+### Home Assistant Configuration
 ![Configuration](assets/screenshots/image2.png)
-- Preview Panel
+### Preview Panel
 ![Preview panel](assets/screenshots/image.png)
-- Generated YAML
+### Generated YAML
 ![Generated YAML](assets/screenshots/image3.png)
-- Google Home synchronization
+### Google Home synchronization
 
 
 
