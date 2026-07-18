@@ -1,0 +1,5 @@
+{
+  "name": "HA Voice Label Sync",
+  "render_readme": true,
+  "homeassistant": "2025.7.0"
+}
