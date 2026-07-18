@@ -10,7 +10,27 @@ Automatically generate voice assistant configurations from **Home Assistant labe
 HVLS turns Home Assistant labels into the single source of truth for exposing entities to your voice assistants. Preview the generated configuration, verify it, then generate it safely.
 
 ---
+Native Home Assistant integration
 
+✓ PyPI package
+
+✓ Home Assistant Config Flow
+
+✓ Generate Service
+
+✓ CLI
+
+✓ Google Assistant backend
+
+
+✨ Features
+
+✔ Automatic backups
+✔ HACS support (coming soon)
+
+> 🚧 Early development project
+>
+> Feedback and ideas are welcome.
 ## ✨ Why HA Voice Label Sync?
 
 Managing large `entity_config` files manually quickly becomes tedious and error-prone.
