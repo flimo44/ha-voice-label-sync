@@ -146,6 +146,8 @@ HA Voice Label Sync lets you manage everything directly from Home Assistant:
                       ▲
                       │
          Home Assistant Labels (managed by you)
+```
+        
 ---
 
 ## Installation
