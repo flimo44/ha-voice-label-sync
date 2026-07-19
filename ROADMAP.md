@@ -1,132 +1,191 @@
-# HA Voice Label Sync Roadmap
+# HA Voice Label Sync – Product Vision
 
-> **Expose only the entities you choose, verify the result, then generate safely.**
+## Mission
 
----
+Enable Home Assistant users to manage voice assistant exposure directly from Home Assistant labels.
 
-# Vision
+The project removes the need to manually maintain voice assistant configuration while keeping Home Assistant as the single source of truth.
 
-HA Voice Label Sync aims to become the simplest and safest way to manage
-voice assistant exposure from Home Assistant labels.
-
-The project focuses on:
-
-- Native Home Assistant experience
-- Safe preview before generation
-- Simple configuration
-- Multi-backend architecture
-- Easy installation through HACS
-- Reliable automation-friendly workflows
+> This document describes the long-term vision of the project.
+>
+> It intentionally evolves much more slowly than the implementation.
 
 ---
 
-# v0.2.x — Foundation
+# Problem Statement
 
-## Core
+Managing voice assistant exposure manually quickly becomes difficult on medium and large Home Assistant installations.
 
-- [x] Reusable HVLS Python engine
-- [x] Registry reader
-- [x] Neutral entity selection engine
-- [x] Google Assistant backend
-- [x] Safe filesystem writer
-- [x] Automatic backups
-- [x] PyPI package
+Users currently have to:
 
-## Home Assistant
+- manually edit configuration files
+- keep friendly names synchronized
+- maintain room assignments
+- remember every newly created entity
+- regenerate configuration after each change
 
-- [x] Native integration
-- [x] Config Flow
-- [x] Options Flow
-- [x] Generate action
-- [x] Preview action
-- [x] Preview panel
-- [x] Authenticated WebSocket API
-- [x] Configuration translations
-
-## Remaining
-
-- [ ] Documentation refresh
-- [ ] Installation guide
-- [ ] HACS metadata
-- [ ] Logo & branding
+This process is repetitive, error-prone and discourages users from maintaining a clean configuration.
 
 ---
 
-# v0.3 — User Experience
+# Solution
 
-Goal:
-Make HVLS enjoyable for everyday users.
+HA Voice Label Sync automatically generates the required configuration from Home Assistant labels.
 
-## Dashboard
+Users simply manage labels inside Home Assistant.
 
-- [ ] Unified dashboard
-- [ ] Configuration summary
-- [ ] Status section
-- [ ] Action center
-
-## Preview
-
-- [ ] Optional sidebar panel
-- [ ] Better Preview navigation
-- [ ] Preview history
-- [ ] Diff against current configuration
-
-## Configuration
-
-- [ ] Simplified mode
-- [ ] Advanced mode
-- [ ] Better validation
-- [ ] Inline help
+Everything else is generated automatically.
 
 ---
 
-# v0.4 — Voice Assistant Platform
+# Design Principles
 
-Goal:
-Support additional assistants without changing the workflow.
+## 1. Home Assistant remains the source of truth
 
-- [ ] Alexa backend
-- [ ] Future HomeKit backend
-- [ ] Generic backend architecture
-- [ ] Backend selector improvements
+The project never creates a second place where users must manage entities.
+
+Labels are the only selection mechanism.
 
 ---
 
-# v0.5 — Reliability
+## 2. Simplicity first
 
-- [ ] Status entities
-- [ ] Automatic reload
-- [ ] Diagnostics
-- [ ] Better notifications
-- [ ] Backup browser
-- [ ] Restore workflow
+The project should remain understandable by any Home Assistant user.
+
+Configuration must stay simple.
 
 ---
 
-# v1.0 — Stable Release
+## 3. Safety first
 
-## Product
+The project must never overwrite user data without protection.
 
-- [ ] Published on HACS
-- [ ] Stable API
-- [ ] Complete documentation
-- [ ] Installation wizard
-- [ ] Visual identity
-- [ ] Screenshots
-- [ ] Examples
+Whenever possible it should:
 
-## Quality
+- preview changes
+- create backups
+- explain modifications
 
-- [ ] Full CI
-- [ ] Integration tests
-- [ ] Backward compatibility
-- [ ] Translation support
+---
 
-## User Experience
+## 4. Follow Home Assistant philosophy
 
-- [ ] Production-ready Dashboard
-- [ ] Preview workflow
-- [ ] Generate workflow
-- [ ] Restore workflow
+The project complements Home Assistant.
 
-Ready for production.
+It does not replace existing features.
+
+---
+
+## 5. User experience matters
+
+Managing a voice assistant should become as simple as adding or removing a label.
+
+---
+
+## 6. Build on solid foundations
+
+Good architecture and documentation always come before new features.
+
+---
+
+# Non Goals
+
+HVLS is **not** intended to:
+
+- replace Home Assistant voice integrations
+- replace Home Assistant Areas
+- become a complete voice assistant manager
+- duplicate Home Assistant configuration
+- introduce another entity management system
+
+Its purpose is to synchronize voice assistant configuration from Home Assistant labels.
+
+---
+
+# Target Users
+
+### Today
+
+- Home Assistant users
+- Medium and large installations
+- Users managing Google Assistant
+
+### Tomorrow
+
+- Amazon Alexa users
+- Apple Home users
+- Future Home Assistant voice integrations
+
+---
+
+# Product Evolution
+
+## v0.1 Foundation ✅
+
+Initial public release.
+
+CLI-based configuration generation from Home Assistant labels.
+
+---
+
+## v0.2 User Experience ✅
+
+Focus on usability.
+
+- Preview
+- Backup
+- Diff
+- Better feedback
+
+---
+
+## v0.3 Home Assistant Integration ✅
+
+HVLS became a complete Home Assistant integration.
+
+Highlights:
+
+- Config Flow
+- Options Flow
+- Preview panel
+- Generate action
+- PyPI package
+- GitHub Actions
+- HACS compatibility
+
+---
+
+## v0.4 Multi Voice Assistant
+
+Expand the same workflow to additional voice assistants while preserving the same label-driven philosophy.
+
+Potential targets:
+
+- Amazon Alexa
+- Apple Home
+- Future Home Assistant integrations
+
+---
+
+## v0.5 Ecosystem
+
+Focus on reliability.
+
+- Documentation
+- Community feedback
+- Continuous improvements
+- Long-term maintenance
+
+---
+
+## v1.0 Stable
+
+A mature project providing a reliable and intuitive way to manage voice assistant exposure from Home Assistant labels.
+
+---
+
+# Long-Term Vision
+
+Home Assistant labels become the single source of truth for voice assistant exposure.
+
+Users should never need to manually maintain voice assistant configuration again.
