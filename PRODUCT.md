@@ -4,21 +4,25 @@
 
 Enable Home Assistant users to manage voice assistant exposure directly from Home Assistant labels.
 
-The project removes the need to manually maintain voice assistant configuration files while keeping Home Assistant as the single source of truth.
+The project removes the need to manually maintain voice assistant configuration while keeping Home Assistant as the single source of truth.
+
+> This document describes the long-term vision of the project.
+>
+> It intentionally evolves much more slowly than the implementation.
 
 ---
 
 # Problem Statement
 
-Managing Google Assistant entity exposure manually quickly becomes difficult on medium and large Home Assistant installations.
+Managing voice assistant exposure manually quickly becomes difficult on medium and large Home Assistant installations.
 
 Users currently have to:
 
-* manually edit YAML files
-* keep friendly names synchronized
-* maintain room assignments
-* remember every newly created entity
-* update the configuration after each change
+- manually edit configuration files
+- keep friendly names synchronized
+- maintain room assignments
+- remember every newly created entity
+- regenerate configuration after each change
 
 This process is repetitive, error-prone and discourages users from maintaining a clean configuration.
 
@@ -56,11 +60,11 @@ Configuration must stay simple.
 
 The project must never overwrite user data without protection.
 
-Whenever possible:
+Whenever possible it should:
 
-* preview changes
-* create backups
-* explain modifications
+- preview changes
+- create backups
+- explain modifications
 
 ---
 
@@ -74,66 +78,109 @@ It does not replace existing features.
 
 ## 5. User experience matters
 
-The tool should feel natural.
-
 Managing a voice assistant should become as simple as adding or removing a label.
 
 ---
 
-## 6. Build on Solid Foundations
-
-Take time to design before implementing.
+## 6. Build on solid foundations
 
 Good architecture and documentation always come before new features.
 
 ---
 
-# Target Users
+# Non Goals
 
-Current
+HVLS is **not** intended to:
 
-* Home Assistant users
-* Google Assistant users
-* Medium and large installations
+- replace Home Assistant voice integrations
+- replace Home Assistant Areas
+- become a complete voice assistant manager
+- duplicate Home Assistant configuration
+- introduce another entity management system
 
-Future
-
-* Amazon Alexa
-* Apple HomeKit
-* Other voice assistant integrations
+Its purpose is to synchronize voice assistant configuration from Home Assistant labels.
 
 ---
 
-# Roadmap
+# Target Users
 
-## v0.1 Foundation
+### Today
+
+- Home Assistant users
+- Medium and large installations
+- Users managing Google Assistant
+
+### Tomorrow
+
+- Amazon Alexa users
+- Apple Home users
+- Future Home Assistant voice integrations
+
+---
+
+# Product Evolution
+
+## v0.1 Foundation ✅
 
 Initial public release.
 
-## v0.2 User Experience
+CLI-based configuration generation from Home Assistant labels.
 
-Improve usability:
+---
 
-* Preview
-* Backup
-* Diff
-* Better feedback
+## v0.2 User Experience ✅
 
-## v0.3 Configuration
+Focus on usability.
 
-More customization while keeping simplicity.
+- Preview
+- Backup
+- Diff
+- Better feedback
 
-## v0.4 Home Assistant Integration
+---
 
-Research deeper integration into Home Assistant.
+## v0.3 Home Assistant Integration ✅
 
-## v0.5 HACS
+HVLS became a complete Home Assistant integration.
 
-Provide a complete HACS experience.
+Highlights:
+
+- Config Flow
+- Options Flow
+- Preview panel
+- Generate action
+- PyPI package
+- GitHub Actions
+- HACS compatibility
+
+---
+
+## v0.4 Multi Voice Assistant
+
+Expand the same workflow to additional voice assistants while preserving the same label-driven philosophy.
+
+Potential targets:
+
+- Amazon Alexa
+- Apple Home
+- Future Home Assistant integrations
+
+---
+
+## v0.5 Ecosystem
+
+Focus on reliability.
+
+- Documentation
+- Community feedback
+- Continuous improvements
+- Long-term maintenance
+
+---
 
 ## v1.0 Stable
 
-Production-ready project.
+A mature project providing a reliable and intuitive way to manage voice assistant exposure from Home Assistant labels.
 
 ---
 
@@ -141,4 +188,4 @@ Production-ready project.
 
 Home Assistant labels become the single source of truth for voice assistant exposure.
 
-Users should never need to manually maintain voice assistant entity configuration again.
+Users should never need to manually maintain voice assistant configuration again.
