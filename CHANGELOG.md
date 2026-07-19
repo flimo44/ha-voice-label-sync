@@ -8,6 +8,27 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [v0.3.0] - 2026-07-19
+
+This release turns HA Voice Label Sync into a HACS-ready Home Assistant integration with a complete preview and generation workflow.
+
+Highlights
+
+- Added an authenticated Preview panel
+- Added generated YAML preview
+- Added a Generate button entity
+- Improved the configuration interface
+- Stored preview output in a dedicated file
+- Added integration branding
+- Added HACS metadata and validation
+- Reworked the README and project roadmap
+- Updated the Python package to version 0.3.0
+
+Validation
+- HACS validation passed
+- Python checks passed
+- Package build and validation passed
+
 ## [0.2.0] - 2026-07-15
 
 ### Added
@@ -42,25 +63,20 @@ The format is inspired by Keep a Changelog.
 - Warn when label does not exist.
 - Automatically create output directory.
 
-## [0.1.0]
+[0.1.0] - 2026-06-27
 
-### Added
+Added
 
-- Initial public release.
-- Home Assistant label filtering.
-- Google Assistant entity generation.
 
-## [0.1.0] - 2026-06-27
-
-### Added
-
-- Generate Google Assistant `entity_config` from Home Assistant labels.
-- Friendly names support.
-- Area to Google Room mapping.
-- Support for `input_select`.
-- Support for `select`.
-- Hidden and disabled entity filtering.
-- Dry-run mode.
+Initial public release.
+Generate Google Assistant entity_config from Home Assistant labels.
+Home Assistant label filtering.
+Friendly names support.
+Area to Google Room mapping.
+Support for input_select.
+Support for select.
+Hidden and disabled entity filtering.
+Dry-run mode.
 
 ### Documentation
 
