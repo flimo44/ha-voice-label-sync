@@ -8,6 +8,21 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-21
+
+### Documentation
+
+- Improved README
+- Added installation guide
+- Added configuration.yaml examples
+- Clarified the role of HVLS
+- Updated PRODUCT.md
+- Updated ROADMAP.md
+
+### Notes
+
+No functional changes.
+
 ## [v0.3.0] - 2026-07-19
 
 This release turns HA Voice Label Sync into a HACS-ready Home Assistant integration with a complete preview and generation workflow.
