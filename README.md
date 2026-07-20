@@ -57,6 +57,8 @@ HA Voice Label Sync lets you manage everything directly from Home Assistant:
 ![Configuration](assets/screenshots/image2.png)
 ### Preview Panel
 ![Preview panel](assets/screenshots/image.png)
+<img width="380" height="367" alt="image" src="https://github.com/user-attachments/assets/fe6f447c-d318-45b3-ba2c-3767eb046063" />
+
 ### Generated YAML
 ![Generated YAML](assets/screenshots/image3.png)
 ### Google Home synchronization
