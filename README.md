@@ -29,7 +29,7 @@ Native Home Assistant integration
 ✨ Features
 
 ✔ Automatic backups
-✔ HACS support (coming soon)
+✔ HACS compatible
 
 > 🚧 Actively developed — feedback and contributions are welcome.
 >
@@ -239,6 +239,11 @@ HVLS also provides a standalone CLI for advanced users and automation.
 
 ```bash
 hvls --help
+
+hvls \
+  --storage /config/.storage \
+  --output /config/google_assistant_entities.yaml \
+  --label google_assistant
 ```
 
 ---

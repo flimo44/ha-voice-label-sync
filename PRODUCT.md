@@ -98,7 +98,7 @@ HVLS is **not** intended to:
 - duplicate Home Assistant configuration
 - introduce another entity management system
 
-Its purpose is to synchronize voice assistant configuration from Home Assistant labels.
+Its purpose is only to synchronize voice assistant configuration from Home Assistant labels.
 
 ---
 

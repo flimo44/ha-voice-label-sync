@@ -45,10 +45,10 @@ The project focuses on:
 
 ## Remaining
 
-- [ ] Documentation refresh
-- [ ] Installation guide
-- [ ] HACS metadata
-- [ ] Logo & branding
+- [x] Documentation refresh
+- [x] Installation guide
+- [x] HACS metadata
+- [x] Logo & branding
 
 ---
 
