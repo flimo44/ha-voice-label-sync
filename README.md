@@ -156,11 +156,16 @@ HA Voice Label Sync lets you manage everything directly from Home Assistant:
 
 ### Home Assistant (HACS)
 
-Requirements
-Home Assistant 2025.6.0 or later
-A Google Cloud Platform project with the Google Assistant API enabled
-A service account with correct permissions
-Follow the manual setup guide https://www.home-assistant.io/integrations/google_assistant/#manual-setup
+#### Requirements
+
+- Home Assistant 2025.6.0 or later
+
+- A Google Cloud Platform project with the Google Assistant API enabled
+
+- A service account with correct permissions
+
+- Follow the manual setup guide https://www.home-assistant.io/integrations/google_assistant/#manual-setup
+
 
 > **Official HACS listing:** Pending review.
 
