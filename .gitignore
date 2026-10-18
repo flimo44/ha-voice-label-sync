@@ -1,17 +1,30 @@
-__pycache__/
-*.pyc
-*.pyo
-*.swp
-.vscode/
-.idea/
+# Environnements Python
+.venv/
+venv/
+env/
 
-# Python packaging
+# Cache Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Packaging Python
 build/
 dist/
 *.egg-info/
 
-# Local build environment
-.venv-build/
+# Fichiers temporaires
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
 
-# Local release environment
+# IDE
+.vscode/
+.idea/
+
+# Environnements de build et publication
+.venv-build/
 .venv-release/

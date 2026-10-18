@@ -98,7 +98,7 @@ class HVLSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             return self.async_create_entry(
                 title=NAME,
-                data=user_input,
+                data={**user_input, CONF_BACKUP_RETENTION: int(user_input[CONF_BACKUP_RETENTION])},
             )
 
         return self.async_show_form(
@@ -126,7 +126,7 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(
                 title="",
-                data=user_input,
+                data={**user_input, CONF_BACKUP_RETENTION: int(user_input[CONF_BACKUP_RETENTION])},
             )
 
         current_values = {

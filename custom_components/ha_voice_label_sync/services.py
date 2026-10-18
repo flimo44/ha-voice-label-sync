@@ -22,9 +22,11 @@ from hvls import (
 
 from .const import (
     CONF_BACKUP_RETENTION,
+    CONF_CREATE_BACKUP,
     CONF_LABEL,
     CONF_OUTPUT,
     DEFAULT_BACKUP_RETENTION,
+    DEFAULT_CREATE_BACKUP,
     DEFAULT_LABEL,
     DEFAULT_OUTPUT,
     DOMAIN,
@@ -97,6 +99,11 @@ async def async_run_workflow(
         DEFAULT_BACKUP_RETENTION,
     )
 
+    backup_retention = int(backup_retention)
+    create_backup_enabled = settings.get(
+        CONF_CREATE_BACKUP, DEFAULT_CREATE_BACKUP
+    )
+
     output_path = Path(output_value)
 
     if not output_path.is_absolute():
@@ -116,6 +123,7 @@ async def async_run_workflow(
         request=request,
         storage_path=storage_path,
         backup_retention=backup_retention,
+        create_backup_enabled=create_backup_enabled,
     )
 
     try:

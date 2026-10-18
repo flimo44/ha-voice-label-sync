@@ -66,6 +66,10 @@ def apply_backup_retention(
 
     A retention value of zero removes all matching backups.
     """
+    if isinstance(retention, bool) or not isinstance(retention, (int, float)) or not float(retention).is_integer():
+        raise ValueError("Backup retention must be a whole number")
+    retention = int(retention)
+
     if retention < 0:
         raise ValueError("Backup retention cannot be negative")
 
@@ -147,6 +151,7 @@ def write_with_backup(
     content: str,
     backup_directory: Path,
     retention: int = 5,
+    create_backup_enabled: bool = True,
 ) -> FileWriteResult:
     """Back up the current file and atomically write new content.
 
@@ -155,13 +160,15 @@ def write_with_backup(
         content: Generated configuration.
         backup_directory: Backup storage directory.
         retention: Maximum number of backups to retain.
+        create_backup_enabled: Whether to create a backup before overwriting.
 
     Returns:
         Structured information about the completed operation.
     """
-    backup_path = create_backup(
-        output_path=output_path,
-        backup_directory=backup_directory,
+    backup_path = (
+        create_backup(output_path=output_path, backup_directory=backup_directory)
+        if create_backup_enabled
+        else None
     )
 
     bytes_written = atomic_write(
