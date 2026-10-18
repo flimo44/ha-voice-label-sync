@@ -20,6 +20,7 @@ def run_google_assistant_workflow(
     storage_path: Path,
     backup_directory: Path | None = None,
     backup_retention: int = 5,
+    create_backup_enabled: bool = True,
 ) -> WorkflowResult:
     """Run the complete Google Assistant generation workflow.
 
@@ -28,6 +29,7 @@ def run_google_assistant_workflow(
         storage_path: Home Assistant ``.storage`` directory.
         backup_directory: Optional directory used for backups.
         backup_retention: Maximum number of backups to retain.
+        create_backup_enabled: Whether to back up the current output.
 
     Returns:
         Structured workflow result.
@@ -35,18 +37,10 @@ def run_google_assistant_workflow(
     Raises:
         WorkflowError: If writing is requested but no entity matches.
     """
-    entity_registry = load_json(
-        storage_path / "core.entity_registry"
-    )
-    device_registry = load_json(
-        storage_path / "core.device_registry"
-    )
-    area_registry = load_json(
-        storage_path / "core.area_registry"
-    )
-    label_registry = load_json(
-        storage_path / "core.label_registry"
-    )
+    entity_registry = load_json(storage_path / "core.entity_registry")
+    device_registry = load_json(storage_path / "core.device_registry")
+    area_registry = load_json(storage_path / "core.area_registry")
+    label_registry = load_json(storage_path / "core.label_registry")
 
     selection = select_entities(
         request=request,
@@ -83,6 +77,7 @@ def run_google_assistant_workflow(
         content=generation.content,
         backup_directory=resolved_backup_directory,
         retention=backup_retention,
+        create_backup_enabled=create_backup_enabled,
     )
 
     return WorkflowResult(

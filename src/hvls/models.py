@@ -24,6 +24,7 @@ class GenerationRequest:
     output_path: Path
     dry_run: bool = False
 
+
 @dataclass(frozen=True)
 class SelectionResult:
     """Structured result returned by the entity selection engine."""
@@ -62,6 +63,7 @@ class GenerationResult:
         """Return whether generation produced at least one entity."""
         return self.entity_count > 0
 
+
 @dataclass(frozen=True)
 class FileWriteResult:
     """Structured result returned after writing generated configuration."""
@@ -70,6 +72,7 @@ class FileWriteResult:
     backup_path: Path | None
     bytes_written: int
     written_at: datetime
+
 
 @dataclass(frozen=True)
 class WorkflowResult:

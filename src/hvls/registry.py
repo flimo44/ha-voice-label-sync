@@ -34,18 +34,12 @@ def load_json(path: Path) -> dict[str, Any]:
         with path.open("r", encoding="utf-8") as file:
             data = json.load(file)
     except json.JSONDecodeError as exc:
-        raise RegistryError(
-            f"Registry contains invalid JSON: {path} ({exc})"
-        ) from exc
+        raise RegistryError(f"Registry contains invalid JSON: {path} ({exc})") from exc
     except (OSError, UnicodeError) as exc:
-        raise RegistryError(
-            f"Unable to read registry: {path} ({exc})"
-        ) from exc
+        raise RegistryError(f"Unable to read registry: {path} ({exc})") from exc
 
     if not isinstance(data, dict):
-        raise RegistryError(
-            f"Registry root must be a JSON object: {path}"
-        )
+        raise RegistryError(f"Registry root must be a JSON object: {path}")
 
     return data
 
@@ -79,9 +73,7 @@ def get_registry_items(
     items = data.get(collection_name, [])
 
     if not isinstance(items, list):
-        raise RegistryError(
-            f"Registry collection '{collection_name}' must be a list"
-        )
+        raise RegistryError(f"Registry collection '{collection_name}' must be a list")
 
     if not all(isinstance(item, dict) for item in items):
         raise RegistryError(

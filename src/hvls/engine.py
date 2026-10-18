@@ -41,11 +41,7 @@ def resolve_label_ids(
         name = str(label.get("name") or "")
         label_id = str(label.get("label_id") or "")
 
-        if (
-            label_id == label_name
-            or name == label_name
-            or slugify(name) == wanted_slug
-        ):
+        if label_id == label_name or name == label_name or slugify(name) == wanted_slug:
             if label_id:
                 identifiers.add(label_id)
             found = True
@@ -53,9 +49,7 @@ def resolve_label_ids(
     warnings: tuple[str, ...] = ()
 
     if not found:
-        warnings = (
-            f"No Home Assistant label matches '{label_name}'.",
-        )
+        warnings = (f"No Home Assistant label matches '{label_name}'.",)
 
     return frozenset(identifiers), warnings
 
@@ -93,9 +87,7 @@ def select_entities(
     )
 
     devices = {
-        str(device["id"]): device
-        for device in device_entries
-        if device.get("id")
+        str(device["id"]): device for device in device_entries if device.get("id")
     }
 
     areas: dict[str, str] = {}
@@ -167,9 +159,7 @@ def select_entities(
     )
 
     if not selected:
-        warnings += (
-            "No entity matched the requested label and domains.",
-        )
+        warnings += ("No entity matched the requested label and domains.",)
 
     return SelectionResult(
         entities=tuple(selected),

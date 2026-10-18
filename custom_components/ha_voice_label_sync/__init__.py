@@ -17,6 +17,7 @@ PANEL_URL_PATH = "hvls-preview"
 PANEL_TITLE = "HVLS Preview"
 PANEL_ICON = "mdi:file-search-outline"
 
+
 async def async_setup(
     hass: HomeAssistant,
     config: dict,

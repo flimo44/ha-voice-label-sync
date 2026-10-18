@@ -36,23 +36,17 @@ def create_backup(
         return None
 
     if not output_path.is_file():
-        raise FileWriterError(
-            f"Output path is not a regular file: {output_path}"
-        )
+        raise FileWriterError(f"Output path is not a regular file: {output_path}")
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     backup_directory.mkdir(parents=True, exist_ok=True)
 
-    backup_path = backup_directory / (
-        f"{output_path.name}.{timestamp}.bak"
-    )
+    backup_path = backup_directory / (f"{output_path.name}.{timestamp}.bak")
 
     try:
         shutil.copy2(output_path, backup_path)
     except OSError as exc:
-        raise FileWriterError(
-            f"Unable to create backup {backup_path}: {exc}"
-        ) from exc
+        raise FileWriterError(f"Unable to create backup {backup_path}: {exc}") from exc
 
     return backup_path
 
@@ -66,6 +60,14 @@ def apply_backup_retention(
 
     A retention value of zero removes all matching backups.
     """
+    if (
+        isinstance(retention, bool)
+        or not isinstance(retention, (int, float))
+        or not float(retention).is_integer()
+    ):
+        raise ValueError("Backup retention must be a whole number")
+    retention = int(retention)
+
     if retention < 0:
         raise ValueError("Backup retention cannot be negative")
 
@@ -84,9 +86,7 @@ def apply_backup_retention(
         for backup in backups[retention:]:
             backup.unlink()
     except OSError as exc:
-        raise FileWriterError(
-            f"Unable to apply backup retention: {exc}"
-        ) from exc
+        raise FileWriterError(f"Unable to apply backup retention: {exc}") from exc
 
 
 def atomic_write(
@@ -135,9 +135,7 @@ def atomic_write(
             except OSError:
                 pass
 
-        raise FileWriterError(
-            f"Unable to write {output_path}: {exc}"
-        ) from exc
+        raise FileWriterError(f"Unable to write {output_path}: {exc}") from exc
 
     return len(encoded_content)
 
@@ -147,6 +145,7 @@ def write_with_backup(
     content: str,
     backup_directory: Path,
     retention: int = 5,
+    create_backup_enabled: bool = True,
 ) -> FileWriteResult:
     """Back up the current file and atomically write new content.
 
@@ -155,13 +154,15 @@ def write_with_backup(
         content: Generated configuration.
         backup_directory: Backup storage directory.
         retention: Maximum number of backups to retain.
+        create_backup_enabled: Whether to create a backup before overwriting.
 
     Returns:
         Structured information about the completed operation.
     """
-    backup_path = create_backup(
-        output_path=output_path,
-        backup_directory=backup_directory,
+    backup_path = (
+        create_backup(output_path=output_path, backup_directory=backup_directory)
+        if create_backup_enabled
+        else None
     )
 
     bytes_written = atomic_write(
