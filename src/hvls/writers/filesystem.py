@@ -36,23 +36,17 @@ def create_backup(
         return None
 
     if not output_path.is_file():
-        raise FileWriterError(
-            f"Output path is not a regular file: {output_path}"
-        )
+        raise FileWriterError(f"Output path is not a regular file: {output_path}")
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     backup_directory.mkdir(parents=True, exist_ok=True)
 
-    backup_path = backup_directory / (
-        f"{output_path.name}.{timestamp}.bak"
-    )
+    backup_path = backup_directory / (f"{output_path.name}.{timestamp}.bak")
 
     try:
         shutil.copy2(output_path, backup_path)
     except OSError as exc:
-        raise FileWriterError(
-            f"Unable to create backup {backup_path}: {exc}"
-        ) from exc
+        raise FileWriterError(f"Unable to create backup {backup_path}: {exc}") from exc
 
     return backup_path
 
@@ -66,7 +60,11 @@ def apply_backup_retention(
 
     A retention value of zero removes all matching backups.
     """
-    if isinstance(retention, bool) or not isinstance(retention, (int, float)) or not float(retention).is_integer():
+    if (
+        isinstance(retention, bool)
+        or not isinstance(retention, (int, float))
+        or not float(retention).is_integer()
+    ):
         raise ValueError("Backup retention must be a whole number")
     retention = int(retention)
 
@@ -88,9 +86,7 @@ def apply_backup_retention(
         for backup in backups[retention:]:
             backup.unlink()
     except OSError as exc:
-        raise FileWriterError(
-            f"Unable to apply backup retention: {exc}"
-        ) from exc
+        raise FileWriterError(f"Unable to apply backup retention: {exc}") from exc
 
 
 def atomic_write(
@@ -139,9 +135,7 @@ def atomic_write(
             except OSError:
                 pass
 
-        raise FileWriterError(
-            f"Unable to write {output_path}: {exc}"
-        ) from exc
+        raise FileWriterError(f"Unable to write {output_path}: {exc}") from exc
 
     return len(encoded_content)
 

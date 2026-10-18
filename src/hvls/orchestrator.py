@@ -37,18 +37,10 @@ def run_google_assistant_workflow(
     Raises:
         WorkflowError: If writing is requested but no entity matches.
     """
-    entity_registry = load_json(
-        storage_path / "core.entity_registry"
-    )
-    device_registry = load_json(
-        storage_path / "core.device_registry"
-    )
-    area_registry = load_json(
-        storage_path / "core.area_registry"
-    )
-    label_registry = load_json(
-        storage_path / "core.label_registry"
-    )
+    entity_registry = load_json(storage_path / "core.entity_registry")
+    device_registry = load_json(storage_path / "core.device_registry")
+    area_registry = load_json(storage_path / "core.area_registry")
+    label_registry = load_json(storage_path / "core.label_registry")
 
     selection = select_entities(
         request=request,

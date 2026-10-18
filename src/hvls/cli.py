@@ -39,8 +39,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     """Build and return the command-line argument parser."""
     parser = argparse.ArgumentParser(
         description=(
-            "Generate Google Assistant entity configuration from "
-            "Home Assistant labels."
+            "Generate Google Assistant entity configuration from Home Assistant labels."
         )
     )
 

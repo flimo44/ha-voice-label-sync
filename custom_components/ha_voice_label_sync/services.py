@@ -53,6 +53,7 @@ DEFAULT_DOMAINS = frozenset(
     }
 )
 
+
 def _write_preview_file(
     preview_path: Path,
     content: str,
@@ -79,6 +80,7 @@ def _write_preview_file(
         if temporary_path is not None and temporary_path.exists():
             temporary_path.unlink()
 
+
 async def async_run_workflow(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -100,9 +102,7 @@ async def async_run_workflow(
     )
 
     backup_retention = int(backup_retention)
-    create_backup_enabled = settings.get(
-        CONF_CREATE_BACKUP, DEFAULT_CREATE_BACKUP
-    )
+    create_backup_enabled = settings.get(CONF_CREATE_BACKUP, DEFAULT_CREATE_BACKUP)
 
     output_path = Path(output_value)
 
@@ -138,24 +138,18 @@ async def async_run_workflow(
         operation = "preview" if dry_run else "generation"
         _LOGGER.exception("HVLS %s failed", operation)
 
-        raise HomeAssistantError(
-            f"HVLS {operation} failed: {exc}"
-        ) from exc
+        raise HomeAssistantError(f"HVLS {operation} failed: {exc}") from exc
 
     domain_counts = result.generation.domain_counts
 
     domain_summary = "\n".join(
-        f"- {domain}: {count}"
-        for domain, count in sorted(domain_counts.items())
+        f"- {domain}: {count}" for domain, count in sorted(domain_counts.items())
     )
 
     if not domain_summary:
         domain_summary = "- No matching entity"
 
-    warnings = "\n".join(
-        f"- {warning}"
-        for warning in result.generation.warnings
-    )
+    warnings = "\n".join(f"- {warning}" for warning in result.generation.warnings)
 
     if dry_run:
         preview_path = Path(
@@ -215,6 +209,7 @@ async def async_run_workflow(
 
     return result
 
+
 async def async_register_services(hass: HomeAssistant) -> None:
     """Register integration services."""
     if hass.services.has_service(DOMAIN, SERVICE_GENERATE):
@@ -225,9 +220,7 @@ async def async_register_services(hass: HomeAssistant) -> None:
         entries = hass.config_entries.async_entries(DOMAIN)
 
         if not entries:
-            raise HomeAssistantError(
-                "HA Voice Label Sync is not configured."
-            )
+            raise HomeAssistantError("HA Voice Label Sync is not configured.")
 
         await async_run_workflow(
             hass,
