@@ -80,6 +80,31 @@ Make HVLS enjoyable for everyday users.
 
 ---
 
+# v0.3.3 — Live Home Assistant Registries
+
+Goal:
+Avoid stale previews and generated configurations by using current Home Assistant registry data instead of delayed `.storage` writes.
+
+## Home Assistant integration
+
+- [ ] Read entity, device, area and label registries via `homeassistant.helpers` in memory.
+- [ ] Pass a consistent snapshot of those registries to the HVLS library for preview and generation.
+- [ ] Ensure newly assigned or removed labels are reflected immediately, without waiting for `.storage` persistence.
+
+## Library and CLI compatibility
+
+- [ ] Introduce a Home Assistant-independent registry input/adapter for the selection engine.
+- [ ] Preserve `.storage` file loading for standalone CLI use and existing callers.
+- [ ] Normalize in-memory registry structures to the format expected by the core engine.
+
+## Quality and validation
+
+- [ ] Add regression tests for immediate label changes and preview/generation consistency.
+- [ ] Test all four registries, missing or invalid data, and CLI backward compatibility.
+- [ ] Run Ruff, package checks, HACS validation and Hassfest before release.
+
+---
+
 # v0.4 — Voice Assistant Platform
 
 Goal:
