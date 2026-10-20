@@ -223,14 +223,15 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
             )
 
         if status in ("ok", "file_missing", "path_mismatch"):
-            lines.append(
-                "- Fichier : "
-                + ("✅ Présent" if check["file_exists"] else "❌ Absent")
-            )
-            lines.append(
-                "- Correspondance HVLS : "
-                + ("✅ OK" if check["paths_match"] else "⚠️ Différente")
-            )
+            lines.extend([
+                "",
+                "#### Vérifications détaillées",
+                "",
+                "- Fichier Google Assistant : "
+                + ("✅ Présent" if check["file_exists"] else "❌ Absent"),
+                "- Correspondance avec HVLS : "
+                + ("✅ Identique" if check["paths_match"] else "⚠️ Différente"),
+            ])
 
         if google.get("warnings"):
             lines.extend(["", "### Avertissements", ""])
