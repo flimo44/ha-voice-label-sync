@@ -31,6 +31,8 @@ from .const import (
     NAME,
 )
 
+from .google_config import read_google_config
+
 
 def build_schema(
     values: dict[str, Any] | None = None,
@@ -124,13 +126,28 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage HVLS options."""
+        """Display the HVLS configuration menu."""
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=[
+                "settings",
+                "google_config",
+            ],
+        )
+
+    async def async_step_settings(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage existing HVLS settings."""
         if user_input is not None:
             return self.async_create_entry(
                 title="",
                 data={
                     **user_input,
-                    CONF_BACKUP_RETENTION: int(user_input[CONF_BACKUP_RETENTION]),
+                    CONF_BACKUP_RETENTION: int(
+                        user_input[CONF_BACKUP_RETENTION]
+                    ),
                 },
             )
 
@@ -140,6 +157,55 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
         }
 
         return self.async_show_form(
-            step_id="init",
+            step_id="settings",
             data_schema=build_schema(current_values),
+        )
+
+    async def async_step_google_config(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Display Google Assistant configuration (read-only)."""
+        if user_input is not None:
+            return self.async_show_menu(
+                step_id="init",
+                menu_options=["settings", "google_config"],
+            )
+
+        path = self.hass.config.path("configuration.yaml")
+
+        result = await self.hass.async_add_executor_job(
+            read_google_config,
+            path,
+        )
+
+        settings = result.get("settings", {})
+        warnings = result.get("warnings", [])
+
+        lines = [
+            f"Status: {result['status']}",
+            "",
+        ]
+
+        for key, value in settings.items():
+            lines.append(f"{key}: {value}")
+
+        if warnings:
+            lines.append("")
+            lines.append("Warnings:")
+            lines.extend(f"- {warning}" for warning in warnings)
+
+        if result.get("other_keys"):
+            lines.append("")
+            lines.append(
+                "Other parameters: "
+                + ", ".join(result["other_keys"])
+            )
+
+        return self.async_show_form(
+            step_id="google_config",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "configuration": "\n\n".join(lines),
+            },
         )

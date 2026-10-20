@@ -28,7 +28,18 @@
   "options": {
     "step": {
       "init": {
-        "title": "HA Voice Label Sync options",
+        "title": "HA Voice Label Sync configuration",
+        "menu_options": {
+          "settings": "HVLS settings",
+          "google_config": "Google Assistant configuration"
+        },
+        "menu_option_descriptions": {
+          "settings": "Manage labels, output and backups.",
+          "google_config": "View the current Google Assistant YAML configuration."
+        }
+      },
+      "settings": {
+        "title": "HVLS settings",
         "description": "Adjust entity selection, output and backup settings.",
         "data": {
           "backend": "Voice assistant",
@@ -44,6 +55,10 @@
           "backup_retention": "Maximum number of previous generated files to retain. Use 0 to disable retention.",
           "create_backup": "Create a backup of the current output file before replacing it."
         }
+      },
+      "google_config": {
+        "title": "Google Assistant configuration (read-only)",
+        "description": "Values detected in configuration.yaml:\n\n{configuration}"
       }
     }
   }
