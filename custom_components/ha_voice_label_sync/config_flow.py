@@ -30,10 +30,8 @@ from .const import (
     DOMAIN,
     NAME,
 )
-
-from .google_config import read_google_config
-
 from .google_config import check_entity_config, read_google_config
+
 
 def build_schema(
     values: dict[str, Any] | None = None,
@@ -147,9 +145,7 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
         config_dir = self.hass.config.path()
         config_file = self.hass.config.path("configuration.yaml")
 
-        google = await self.hass.async_add_executor_job(
-            read_google_config, config_file
-        )
+        google = await self.hass.async_add_executor_job(read_google_config, config_file)
 
         current_values = {
             **self.config_entry.data,
@@ -190,23 +186,24 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
             lines.append("✅ **Configuration détectée**")
         else:
             lines.append(
-                "⚠️ **Configuration non disponible :** "
-                + safe(google["status"])
+                "⚠️ **Configuration non disponible :** " + safe(google["status"])
             )
 
-        lines.extend([
-            "",
-            "### Paramètres",
-            "",
-            f"- **Project ID :** {safe(settings.get('project_id', 'Non renseigné'))}",
-            f"- **Report State :** {enabled(settings.get('report_state'))}",
-            f"- **Exposition automatique :** {enabled(settings.get('expose_by_default'))}",
-            f"- **Compte de service :** {safe(settings.get('service_account', 'Non renseigné'))}",
-            f"- **Entity Config :** {safe(settings.get('entity_config', 'Non renseigné'))}",
-            "",
-            "### Contrôle du fichier YAML",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                "### Paramètres",
+                "",
+                f"- **Project ID :** {safe(settings.get('project_id', 'Non renseigné'))}",
+                f"- **Report State :** {enabled(settings.get('report_state'))}",
+                f"- **Exposition automatique :** {enabled(settings.get('expose_by_default'))}",
+                f"- **Compte de service :** {safe(settings.get('service_account', 'Non renseigné'))}",
+                f"- **Entity Config :** {safe(settings.get('entity_config', 'Non renseigné'))}",
+                "",
+                "### Contrôle du fichier YAML",
+                "",
+            ]
+        )
 
         status = check["status"]
         if status == "ok":
@@ -218,27 +215,24 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
         elif status == "entity_config_missing":
             lines.append("⚠️ **Paramètre entity_config absent**")
         else:
-            lines.append(
-                "⚠️ **Contrôle non validé :** " + safe(status)
-            )
+            lines.append("⚠️ **Contrôle non validé :** " + safe(status))
 
         if status in ("ok", "file_missing", "path_mismatch"):
-            lines.extend([
-                "",
-                "#### Vérifications détaillées",
-                "",
-                "- Fichier Google Assistant : "
-                + ("✅ Présent" if check["file_exists"] else "❌ Absent"),
-                "- Correspondance avec HVLS : "
-                + ("✅ Identique" if check["paths_match"] else "⚠️ Différente"),
-            ])
+            lines.extend(
+                [
+                    "",
+                    "#### Vérifications détaillées",
+                    "",
+                    "- Fichier Google Assistant : "
+                    + ("✅ Présent" if check["file_exists"] else "❌ Absent"),
+                    "- Correspondance avec HVLS : "
+                    + ("✅ Identique" if check["paths_match"] else "⚠️ Différente"),
+                ]
+            )
 
         if google.get("warnings"):
             lines.extend(["", "### Avertissements", ""])
-            lines.extend(
-                "- ⚠️ " + safe(warning)
-                for warning in google["warnings"]
-            )
+            lines.extend("- ⚠️ " + safe(warning) for warning in google["warnings"])
 
         return self.async_show_form(
             step_id="google_config",
