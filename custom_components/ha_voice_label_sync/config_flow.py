@@ -33,6 +33,7 @@ from .const import (
 
 from .google_config import read_google_config
 
+from .google_config import check_entity_config, read_google_config
 
 def build_schema(
     values: dict[str, Any] | None = None,
@@ -135,77 +136,113 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
             ],
         )
 
-    async def async_step_settings(
+    async def async_step_google_config(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Manage existing HVLS settings."""
+        """Display a read-only Google Assistant diagnostic."""
         if user_input is not None:
-            return self.async_create_entry(
-                title="",
-                data={
-                    **user_input,
-                    CONF_BACKUP_RETENTION: int(
-                        user_input[CONF_BACKUP_RETENTION]
-                    ),
-                },
-            )
+            return await self.async_step_init()
+
+        config_dir = self.hass.config.path()
+        config_file = self.hass.config.path("configuration.yaml")
+
+        google = await self.hass.async_add_executor_job(
+            read_google_config, config_file
+        )
 
         current_values = {
             **self.config_entry.data,
             **self.config_entry.options,
         }
 
-        return self.async_show_form(
-            step_id="settings",
-            data_schema=build_schema(current_values),
+        output = current_values.get(CONF_OUTPUT, DEFAULT_OUTPUT)
+
+        check = await self.hass.async_add_executor_job(
+            check_entity_config,
+            google,
+            output,
+            config_dir,
         )
 
-    async def async_step_google_config(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Display Google Assistant configuration (read-only)."""
-        if user_input is not None:
-            return self.async_show_menu(
-                step_id="init",
-                menu_options=["settings", "google_config"],
+        settings = google.get("settings", {})
+
+        def safe(value: Any) -> str:
+            """Escape Markdown and prevent multiline injection."""
+            value = str(value).replace("\r", " ").replace("\n", " ")
+            for char in ("\\", "`", "*", "_", "[", "]", "|", "<", ">"):
+                value = value.replace(char, "\\" + char)
+            return value
+
+        def enabled(value: Any) -> str:
+            if value is None:
+                return "Non renseigné"
+            text = str(value).lower()
+            if text == "true":
+                return "Activé"
+            if text == "false":
+                return "Désactivé"
+            return "Non déterminé"
+
+        lines = ["## Configuration Google Assistant", ""]
+
+        if google["status"] == "found":
+            lines.append("✅ **Configuration détectée**")
+        else:
+            lines.append(
+                "⚠️ **Configuration non disponible :** "
+                + safe(google["status"])
             )
 
-        path = self.hass.config.path("configuration.yaml")
-
-        result = await self.hass.async_add_executor_job(
-            read_google_config,
-            path,
-        )
-
-        settings = result.get("settings", {})
-        warnings = result.get("warnings", [])
-
-        lines = [
-            f"Status: {result['status']}",
+        lines.extend([
             "",
-        ]
+            "### Paramètres",
+            "",
+            f"- **Project ID :** {safe(settings.get('project_id', 'Non renseigné'))}",
+            f"- **Report State :** {enabled(settings.get('report_state'))}",
+            f"- **Exposition automatique :** {enabled(settings.get('expose_by_default'))}",
+            f"- **Compte de service :** {safe(settings.get('service_account', 'Non renseigné'))}",
+            f"- **Entity Config :** {safe(settings.get('entity_config', 'Non renseigné'))}",
+            "",
+            "### Contrôle du fichier YAML",
+            "",
+        ])
 
-        for key, value in settings.items():
-            lines.append(f"{key}: {value}")
-
-        if warnings:
-            lines.append("")
-            lines.append("Warnings:")
-            lines.extend(f"- {warning}" for warning in warnings)
-
-        if result.get("other_keys"):
-            lines.append("")
+        status = check["status"]
+        if status == "ok":
+            lines.append("✅ **Fichier présent et chemins identiques**")
+        elif status == "file_missing":
+            lines.append("❌ **Fichier Google Assistant introuvable**")
+        elif status == "path_mismatch":
+            lines.append("⚠️ **Chemin différent de la sortie HVLS**")
+        elif status == "entity_config_missing":
+            lines.append("⚠️ **Paramètre entity_config absent**")
+        else:
             lines.append(
-                "Other parameters: "
-                + ", ".join(result["other_keys"])
+                "⚠️ **Contrôle non validé :** " + safe(status)
+            )
+
+        if status in ("ok", "file_missing", "path_mismatch"):
+            lines.append(
+                "- Fichier : "
+                + ("✅ Présent" if check["file_exists"] else "❌ Absent")
+            )
+            lines.append(
+                "- Correspondance HVLS : "
+                + ("✅ OK" if check["paths_match"] else "⚠️ Différente")
+            )
+
+        if google.get("warnings"):
+            lines.extend(["", "### Avertissements", ""])
+            lines.extend(
+                "- ⚠️ " + safe(warning)
+                for warning in google["warnings"]
             )
 
         return self.async_show_form(
             step_id="google_config",
             data_schema=vol.Schema({}),
             description_placeholders={
-                "configuration": "\n\n".join(lines),
+                "configuration": "\n".join(lines),
             },
         )

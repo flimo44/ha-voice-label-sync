@@ -31,7 +31,7 @@
         "title": "HA Voice Label Sync configuration",
         "menu_options": {
           "settings": "HVLS settings",
-          "google_config": "Google Assistant configuration"
+          "google_config": "Check Google Assistant"
         },
         "menu_option_descriptions": {
           "settings": "Manage labels, output and backups.",
@@ -57,8 +57,8 @@
         }
       },
       "google_config": {
-        "title": "Google Assistant configuration (read-only)",
-        "description": "Values detected in configuration.yaml:\n\n{configuration}"
+        "title": "Check Google Assistant",
+        "description": "{configuration}"
       }
     }
   }

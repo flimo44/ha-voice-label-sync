@@ -138,3 +138,66 @@ def read_google_config(config_file: str | Path) -> dict[str, Any]:
             "Unable to read or parse configuration.yaml."
         )
         return result
+
+def check_entity_config(
+    google_result: dict[str, Any],
+    hvls_output: str,
+    config_dir: str | Path,
+) -> dict[str, Any]:
+    """Check Google Assistant entity_config against the HVLS output.
+
+    Only inspect paths and file existence. Never read the generated file.
+    """
+    base = Path(config_dir).resolve()
+    settings = google_result.get("settings", {})
+    configured = settings.get("entity_config")
+
+    result: dict[str, Any] = {
+        "status": "unknown",
+        "file_exists": False,
+        "paths_match": False,
+    }
+
+    if google_result.get("status") != "found":
+        result["status"] = "configuration_unavailable"
+        return result
+
+    if not configured:
+        result["status"] = "entity_config_missing"
+        return result
+
+    if not isinstance(configured, str) or not configured.startswith("!include "):
+        result["status"] = "unsupported_entity_config"
+        return result
+
+    include_path = configured[len("!include "):].strip()
+
+    if not include_path:
+        result["status"] = "unsupported_entity_config"
+        return result
+
+    def normalize(value: str) -> Path:
+        path = Path(value)
+        if not path.is_absolute():
+            path = base / path
+        return path.resolve()
+
+    google_path = normalize(include_path)
+    output_path = normalize(hvls_output)
+
+    # Do not inspect arbitrary paths outside the HA configuration directory.
+    if not google_path.is_relative_to(base):
+        result["status"] = "outside_config_directory"
+        return result
+
+    result["file_exists"] = google_path.is_file()
+    result["paths_match"] = google_path == output_path
+
+    if not result["file_exists"]:
+        result["status"] = "file_missing"
+    elif not result["paths_match"]:
+        result["status"] = "path_mismatch"
+    else:
+        result["status"] = "ok"
+
+    return result
