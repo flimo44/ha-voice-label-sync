@@ -134,10 +134,9 @@ def read_google_config(config_file: str | Path) -> dict[str, Any]:
 
     except (OSError, UnicodeError, yaml.YAMLError):
         result["status"] = "read_error"
-        result["warnings"].append(
-            "Unable to read or parse configuration.yaml."
-        )
+        result["warnings"].append("Unable to read or parse configuration.yaml.")
         return result
+
 
 def check_entity_config(
     google_result: dict[str, Any],
@@ -170,7 +169,7 @@ def check_entity_config(
         result["status"] = "unsupported_entity_config"
         return result
 
-    include_path = configured[len("!include "):].strip()
+    include_path = configured[len("!include ") :].strip()
 
     if not include_path:
         result["status"] = "unsupported_entity_config"
