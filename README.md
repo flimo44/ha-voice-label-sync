@@ -29,6 +29,7 @@ Maintaining large Google Assistant `entity_config` sections manually can become 
 - 💾 Create automatic backups with configurable retention
 - 🔍 Inspect your existing Google Assistant configuration (read-only)
 - 🏠 Use a native Home Assistant integration, available through HACS
+
 - 🔌 Extend the architecture with additional voice assistant backends in the future
 
 ## 📸 Screenshots
@@ -37,7 +38,13 @@ Maintaining large Google Assistant `entity_config` sections manually can become 
 
 ### Home Assistant configuration
 
-![HVLS configuration](assets/screenshots/image2.png)
+
+<img width="834" height="510" alt="Capture d&#39;écran 2026-10-21 163333" src="https://github.com/user-attachments/assets/30e733cc-24ac-45b5-a393-065e54cbce54" />
+
+<img width="467" height="546" alt="Capture d&#39;écran 2026-10-21 164834" src="https://github.com/user-attachments/assets/98ef67fd-787a-4e84-bc69-2de03160937b" />
+
+<img width="463" height="449" alt="Capture d&#39;écran 2026-10-21 163419" src="https://github.com/user-attachments/assets/54282313-2b09-4f0b-b556-913fcaef69db" />
+
 
 ### Preview panel
 
