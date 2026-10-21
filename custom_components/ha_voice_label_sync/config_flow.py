@@ -134,6 +134,30 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
             ],
         )
 
+    async def async_step_settings(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage HVLS options."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="",
+                data={
+                    **user_input,
+                    CONF_BACKUP_RETENTION: int(user_input[CONF_BACKUP_RETENTION]),
+                },
+            )
+
+        current_values = {
+            **self.config_entry.data,
+            **self.config_entry.options,
+        }
+
+        return self.async_show_form(
+            step_id="settings",
+            data_schema=build_schema(current_values),
+        )
+
     async def async_step_google_config(
         self,
         user_input: dict[str, Any] | None = None,
