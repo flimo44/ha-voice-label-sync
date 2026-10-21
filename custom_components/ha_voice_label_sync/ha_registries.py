@@ -61,7 +61,12 @@ def get_live_registries(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
                         "id": entry.id,
                         "area_id": entry.area_id,
                     }
-                    for entry in devices.devices
+                    for entry in (
+                        devices.async_get(item)
+                        if isinstance(item, str) else item
+                        for item in devices.devices
+                    )
+                    if entry is not None
                 ]
             }
         },

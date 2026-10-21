@@ -7,12 +7,15 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
+
 
 class Category(Enum):
     DIAGNOSTIC = "diagnostic"
 
 
-def test_native_registry_snapshot(monkeypatch):
+@pytest.mark.parametrize("legacy_devices", [False, True])
+def test_native_registry_snapshot(monkeypatch, legacy_devices):
     hass = object()
 
     entity = SimpleNamespace(
@@ -34,11 +37,17 @@ def test_native_registry_snapshot(monkeypatch):
         name="Google Assistant",
     )
 
+    device_entries = {"device_1": device} if legacy_devices else [device]
+    device_registry = SimpleNamespace(
+        devices=device_entries,
+        async_get=Mock(side_effect=lambda key: device_entries.get(key)),
+    ) if legacy_devices else SimpleNamespace(devices=device_entries)
+
     registries = {
         "entity_registry": SimpleNamespace(
             entities={"switch.test_lamp": entity}
         ),
-        "device_registry": SimpleNamespace(devices=[device]),
+        "device_registry": device_registry,
         "area_registry": SimpleNamespace(areas={"salon": area}),
         "label_registry": SimpleNamespace(
             labels={"google_assistant": label}
