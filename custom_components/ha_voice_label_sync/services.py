@@ -111,7 +111,13 @@ async def async_run_workflow(
         output_path = Path(hass.config.config_dir) / output_path
 
     # Snapshot native HA registries on the event-loop thread.
-    registries = get_live_registries(hass)
+    try:
+        registries = get_live_registries(hass)
+    except (KeyError, AttributeError, TypeError, ValueError) as exc:
+        _LOGGER.exception("HVLS registry snapshot failed")
+        raise HomeAssistantError(
+            f"HVLS registry snapshot failed: {exc}"
+        ) from exc
 
     request = GenerationRequest(
         label=label,
@@ -161,11 +167,17 @@ async def async_run_workflow(
             )
         )
 
-        await hass.async_add_executor_job(
-            _write_preview_file,
-            preview_path,
-            result.generation.content,
-        )
+        try:
+            await hass.async_add_executor_job(
+                _write_preview_file,
+                preview_path,
+                result.generation.content,
+            )
+        except OSError as exc:
+            _LOGGER.exception("HVLS preview file write failed")
+            raise HomeAssistantError(
+                f"HVLS preview file write failed: {exc}"
+            ) from exc
 
         title = "HA Voice Label Sync — Preview"
         message = (
