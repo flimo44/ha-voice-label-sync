@@ -31,6 +31,7 @@ from .const import (
     DEFAULT_OUTPUT,
     DOMAIN,
 )
+from .ha_registries import get_live_registries
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -109,7 +110,8 @@ async def async_run_workflow(
     if not output_path.is_absolute():
         output_path = Path(hass.config.config_dir) / output_path
 
-    storage_path = Path(hass.config.config_dir) / ".storage"
+    # Snapshot native HA registries on the event-loop thread.
+    registries = get_live_registries(hass)
 
     request = GenerationRequest(
         label=label,
@@ -121,7 +123,7 @@ async def async_run_workflow(
     workflow = partial(
         run_google_assistant_workflow,
         request=request,
-        storage_path=storage_path,
+        registries=registries,
         backup_retention=backup_retention,
         create_backup_enabled=create_backup_enabled,
     )
