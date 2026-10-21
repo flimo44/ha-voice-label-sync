@@ -16,6 +16,6 @@
   "requirements": [
     "ha-voice-label-sync==0.3.2"
   ],
-  "version": "0.3.3b2"
+  "version": "0.3.3"
 }
 

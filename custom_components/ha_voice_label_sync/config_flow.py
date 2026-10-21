@@ -194,22 +194,19 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
                 "",
                 "### Paramètres",
                 "",
-                            (
-                "- **Project ID :** "
-                f"{safe(settings.get('project_id', 'Non renseigné'))}"
-            ),
-            (
-                "- **Report State :** "
-                f"{enabled(settings.get('report_state'))}"
-            ),
-            (
-                "- **Exposition automatique :** "
-                f"{enabled(settings.get('expose_by_default'))}"
-            ),
-            (
-                "- **Compte de service :** "
-                f"{safe(settings.get('service_account', 'Non renseigné'))}"
-            ),
+                (
+                    "- **Project ID :** "
+                    f"{safe(settings.get('project_id', 'Non renseigné'))}"
+                ),
+                (f"- **Report State :** {enabled(settings.get('report_state'))}"),
+                (
+                    "- **Exposition automatique :** "
+                    f"{enabled(settings.get('expose_by_default'))}"
+                ),
+                (
+                    "- **Compte de service :** "
+                    f"{safe(settings.get('service_account', 'Non renseigné'))}"
+                ),
                 "",
                 "### Contrôle du fichier YAML",
                 "",
