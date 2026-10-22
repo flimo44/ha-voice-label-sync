@@ -50,10 +50,16 @@ Maintaining large Google Assistant `entity_config` sections manually can become 
 
 
 ### Preview panel
+<img width="985" height="877" alt="image" src="https://github.com/user-attachments/assets/712229c7-f3ce-4fa3-9b5d-00008801ac16" />
 
 ![HVLS preview panel](assets/screenshots/image.png)
 
+
+
 <img width="380" height="367" alt="HVLS preview" src="https://github.com/user-attachments/assets/fe6f447c-d318-45b3-ba2c-3767eb046063" />
+
+
+
 
 ### Generated YAML
 
