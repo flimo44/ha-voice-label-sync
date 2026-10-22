@@ -51,6 +51,7 @@ DEFAULT_DOMAINS = frozenset(
         "scene",
         "script",
         "select",
+        "sensor",
         "switch",
         "vacuum",
     }

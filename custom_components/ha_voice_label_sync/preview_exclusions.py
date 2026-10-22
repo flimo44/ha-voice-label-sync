@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from hvls.engine import resolve_label_ids, supported_device_class
+from hvls.engine import (
+    resolve_label_ids,
+    supported_device_class,
+    supported_sensor_class,
+)
 from hvls.registry import get_registry_items
 
 
@@ -39,6 +43,11 @@ def analyze_exclusions(
             reason = "unsupported_device_class"
             detail = (
                 f"Unsupported device class: {entity.get('device_class') or '(missing)'}"
+            )
+        elif domain == "sensor" and not supported_sensor_class(entity):
+            reason = "unsupported_device_class"
+            detail = (
+                f"Unsupported sensor class: {entity.get('device_class') or '(missing)'}"
             )
         elif entity.get("disabled_by"):
             reason = "disabled"

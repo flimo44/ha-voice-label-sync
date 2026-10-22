@@ -24,6 +24,26 @@ SUPPORTED_BINARY_SENSOR_CLASSES = frozenset(
 )
 
 
+SUPPORTED_SENSOR_CLASSES = frozenset(
+    {
+        "aqi",
+        "carbon_dioxide",
+        "carbon_monoxide",
+        "humidity",
+        "pm10",
+        "pm25",
+        "temperature",
+        "volatile_organic_compounds",
+    }
+)
+
+
+def supported_sensor_class(entity: dict[str, Any]) -> bool:
+    """Whether a numeric sensor class is supported by Google Assistant."""
+    value = entity.get("device_class")
+    return isinstance(value, str) and value in SUPPORTED_SENSOR_CLASSES
+
+
 def supported_device_class(entity: dict[str, Any]) -> bool:
     """Whether a binary sensor can be exposed to Google Assistant."""
     value = entity.get("device_class")
@@ -135,6 +155,8 @@ def select_entities(
             continue
 
         if domain == "binary_sensor" and not supported_device_class(entity):
+            continue
+        if domain == "sensor" and not supported_sensor_class(entity):
             continue
 
         if entity.get("disabled_by") or entity.get("hidden_by"):
