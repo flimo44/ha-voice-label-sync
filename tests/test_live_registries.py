@@ -26,14 +26,10 @@ def make_registries():
             }
         },
         "device_registry": {"data": {"devices": []}},
-        "area_registry": {
-            "data": {"areas": [{"area_id": "salon", "name": "Salon"}]}
-        },
+        "area_registry": {"data": {"areas": [{"area_id": "salon", "name": "Salon"}]}},
         "label_registry": {
             "data": {
-                "labels": [
-                    {"label_id": "google_assistant", "name": "Google Assistant"}
-                ]
+                "labels": [{"label_id": "google_assistant", "name": "Google Assistant"}]
             }
         },
     }
@@ -88,3 +84,63 @@ def test_live_and_storage_produce_same_output(tmp_path):
 def test_workflow_requires_registry_source(tmp_path):
     with pytest.raises(WorkflowError, match="Either storage_path or registries"):
         run_google_assistant_workflow(request=make_request(tmp_path))
+
+
+def test_binary_sensor_live_storage_parity(tmp_path):
+    """Live registries and .storage must produce identical sensor YAML."""
+    registries = make_registries()
+
+    registries["entity_registry"]["data"]["entities"].extend(
+        [
+            {
+                "entity_id": "binary_sensor.fenetre",
+                "name": "Fenêtre séjour",
+                "labels": ["google_assistant"],
+                "area_id": "salon",
+                "device_class": "opening",
+            },
+            {
+                "entity_id": "binary_sensor.mouvement",
+                "name": "Détecteur mouvement",
+                "labels": ["google_assistant"],
+                "area_id": "salon",
+                "device_class": "motion",
+            },
+        ]
+    )
+
+    request = GenerationRequest(
+        label="google_assistant",
+        domains=frozenset({"switch", "binary_sensor"}),
+        output_path=tmp_path / "generated.yaml",
+        dry_run=True,
+    )
+
+    storage = tmp_path / ".storage"
+    storage.mkdir()
+
+    for key, filename in {
+        "entity_registry": "core.entity_registry",
+        "device_registry": "core.device_registry",
+        "area_registry": "core.area_registry",
+        "label_registry": "core.label_registry",
+    }.items():
+        (storage / filename).write_text(
+            json.dumps(registries[key]),
+            encoding="utf-8",
+        )
+
+    live = run_google_assistant_workflow(
+        request=request,
+        registries=registries,
+    )
+    disk = run_google_assistant_workflow(
+        request=request,
+        storage_path=storage,
+    )
+
+    assert live.generation.content == disk.generation.content
+    assert live.entity_count == disk.entity_count == 2
+    assert "binary_sensor.fenetre:" in live.generation.content
+    assert "binary_sensor.mouvement:" not in live.generation.content
+    assert not request.output_path.exists()

@@ -25,6 +25,23 @@ def _value(value: Any) -> Any:
     return value.value if isinstance(value, Enum) else value
 
 
+def _device_class(hass: HomeAssistant, entry: Any) -> str | None:
+    """Get the effective device class, preferring the current HA state."""
+    states = getattr(hass, "states", None)
+    state = states.get(entry.entity_id) if states is not None else None
+
+    if state is not None:
+        value = state.attributes.get("device_class")
+        if value is not None:
+            return str(_value(value))
+
+    value = getattr(entry, "device_class", None)
+    if value is None:
+        value = getattr(entry, "original_device_class", None)
+
+    return str(_value(value)) if value is not None else None
+
+
 def get_live_registries(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
     """Snapshot the four native HA registries for the HVLS engine.
 
@@ -49,6 +66,7 @@ def get_live_registries(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
                         "disabled_by": _value(entry.disabled_by),
                         "hidden_by": _value(entry.hidden_by),
                         "entity_category": _value(entry.entity_category),
+                        "device_class": _device_class(hass, entry),
                     }
                     for entry in entities.entities.values()
                 ]
@@ -62,8 +80,7 @@ def get_live_registries(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
                         "area_id": entry.area_id,
                     }
                     for entry in (
-                        devices.async_get(item)
-                        if isinstance(item, str) else item
+                        devices.async_get(item) if isinstance(item, str) else item
                         for item in devices.devices
                     )
                     if entry is not None
