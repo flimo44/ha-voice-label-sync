@@ -4,6 +4,9 @@
 
 [![Python checks](https://github.com/flimo44/ha-voice-label-sync/actions/workflows/python-check.yml/badge.svg?branch=main)](https://github.com/flimo44/ha-voice-label-sync/actions/workflows/python-check.yml)
 [![Latest release](https://img.shields.io/github/v/release/flimo44/ha-voice-label-sync?label=release)](https://github.com/flimo44/ha-voice-label-sync/releases/latest)
+[![PyPI Downloads](https://static.pepy.tech/badge/ha-voice-label-sync)](https://pepy.tech/projects/ha-voice-label-sync)
+[![Downloads/month](https://api.pepy.tech/badge/ha-voice-label-sync/month)](https://pepy.tech/projects/ha-voice-label-sync)
+
 
 > **Manage once in Home Assistant. Sync everywhere.**
 
