@@ -28,7 +28,7 @@ from .preview_apply import apply_reviewed_preview
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_exclusions import analyze_exclusions
 from .preview_guard import PreviewChangedError, preview_digest
-from .services import DEFAULT_DOMAINS
+from .services import DEFAULT_DOMAINS, async_run_workflow
 from .workflow_lock import get_workflow_lock
 
 WS_TYPE_GET_PREVIEW = f"{DOMAIN}/get_preview"
@@ -234,7 +234,46 @@ async def websocket_apply_preview(
         )
 
 
+
+WS_TYPE_GENERATE_PREVIEW = f"{DOMAIN}/generate_preview"
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_TYPE_GENERATE_PREVIEW}
+)
+async def websocket_generate_preview(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Regenerate Preview without writing to production."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        connection.send_error(
+            msg["id"], "not_configured", "HVLS is not configured."
+        )
+        return
+
+    try:
+        result = await async_run_workflow(
+            hass, entries[0], dry_run=True
+        )
+    except Exception as exc:
+        connection.send_error(
+            msg["id"], "preview_failed", str(exc)
+        )
+        return
+
+    connection.send_result(
+        msg["id"],
+        {"generated": True, "entity_count": result.entity_count},
+    )
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register the HVLS WebSocket API."""
     websocket_api.async_register_command(hass, websocket_get_preview)
     websocket_api.async_register_command(hass, websocket_apply_preview)
+    websocket_api.async_register_command(hass, websocket_generate_preview)

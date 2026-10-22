@@ -89,6 +89,7 @@ def websocket_module(monkeypatch):
 
     services = ModuleType(f"{prefix}.services")
     services.DEFAULT_DOMAINS = frozenset({"switch"})
+    services.async_run_workflow = Mock()
 
     for name, module in (
         ("const", const),

@@ -42,6 +42,7 @@ function makePanel(callWS, confirm = () => true) {
   const controls = {
     apply: { disabled: true },
     refresh: { disabled: false },
+    generate: { disabled: false },
   };
 
   panel.querySelector = selector => controls[selector.slice(1)] || null;
@@ -163,4 +164,99 @@ test("Failed apply requires a fresh Preview review", async () => {
   assert.equal(controls.apply.disabled, true);
   assert.match(panel.status, /Application refusée/);
   assert.equal(calls.length, 2);
+});
+
+test("Generate Preview regenerates YAML and refreshes panel", async () => {
+  const calls = [];
+
+  const { panel, controls } = makePanel(async message => {
+    calls.push(message.type);
+
+    if (message.type === "ha_voice_label_sync/generate_preview") {
+      assert.equal(controls.apply.disabled, true);
+      assert.equal(controls.refresh.disabled, true);
+      return { generated: true, entity_count: 32 };
+    }
+
+    return preview(true);
+  });
+
+  await panel._loadPreview();
+  assert.equal(controls.apply.disabled, false);
+
+  await panel._generatePreview();
+
+  assert.deepEqual(calls, [
+    "ha_voice_label_sync/get_preview",
+    "ha_voice_label_sync/generate_preview",
+    "ha_voice_label_sync/get_preview",
+  ]);
+
+  assert.equal(controls.apply.disabled, false);
+  assert.equal(controls.refresh.disabled, false);
+  assert.equal(controls.generate.disabled, false);
+  assert.match(panel.status, /32 entités/);
+});
+
+test("Generate Preview prevents applying stale review", async () => {
+  const pending = deferred();
+  const calls = [];
+
+  const { panel, controls } = makePanel(async message => {
+    calls.push(message.type);
+
+    if (message.type === "ha_voice_label_sync/generate_preview") {
+      return pending.promise;
+    }
+
+    return preview(true);
+  });
+
+  await panel._loadPreview();
+
+  const generation = panel._generatePreview();
+
+  assert.equal(controls.apply.disabled, true);
+  assert.equal(controls.refresh.disabled, true);
+  assert.equal(controls.generate.disabled, true);
+
+  // An attempted application during generation must do nothing.
+  await panel._applyPreview();
+
+  assert.equal(
+    calls.includes("ha_voice_label_sync/apply_preview"),
+    false
+  );
+
+  pending.resolve({ generated: true, entity_count: 32 });
+  await generation;
+
+  assert.equal(controls.generate.disabled, false);
+});
+
+test("Failed generation invalidates previously approved Preview", async () => {
+  const calls = [];
+
+  const { panel, controls } = makePanel(async message => {
+    calls.push(message.type);
+
+    if (message.type === "ha_voice_label_sync/generate_preview") {
+      throw new Error("Generation failed");
+    }
+
+    return preview(true);
+  });
+
+  await panel._loadPreview();
+  assert.equal(controls.apply.disabled, false);
+
+  await panel._generatePreview();
+
+  assert.equal(controls.apply.disabled, true);
+  assert.equal(controls.generate.disabled, false);
+  assert.match(panel.status, /Échec de génération/);
+  assert.deepEqual(calls, [
+    "ha_voice_label_sync/get_preview",
+    "ha_voice_label_sync/generate_preview",
+  ]);
 });

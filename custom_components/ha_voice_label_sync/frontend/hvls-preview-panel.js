@@ -64,10 +64,43 @@ class HVLSPreviewPanel extends HTMLElement {
   _updateApplyButton() {
     const button = this.querySelector("#apply");
     if (button) {
-      button.disabled = !this._review || this._applying === true;
+      button.disabled = !this._review || this._applying === true || this._generating === true;
     }
     const refresh = this.querySelector("#refresh");
-    if (refresh) refresh.disabled = this._applying === true;
+    if (refresh) refresh.disabled =
+      this._applying === true || this._generating === true;
+    const generate = this.querySelector("#generate");
+    if (generate) generate.disabled =
+      this._applying === true || this._generating === true;
+  }
+
+  async _generatePreview() {
+    if (!this._hass || this._generating || this._applying) return;
+
+    this._generating = true;
+    this._loadId = (this._loadId || 0) + 1;
+    this._review = null;
+    this._updateApplyButton();
+    this._setStatus("Génération du Preview en cours…");
+
+    try {
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/generate_preview",
+      });
+      await this._loadPreview();
+      this._setStatus(
+        `Preview généré : ${result.entity_count} entités. ` +
+        "Vérifiez les différences avant application."
+      );
+    } catch (error) {
+      this._review = null;
+      this._setStatus(
+        `Échec de génération du Preview : ${error.message || String(error)}`
+      );
+    } finally {
+      this._generating = false;
+      this._updateApplyButton();
+    }
   }
 
   async _applyPreview() {
@@ -339,7 +372,8 @@ class HVLSPreviewPanel extends HTMLElement {
         <div class="header">
           <h1>HA Voice Label Sync — Preview</h1>
           <div class="actions">
-            <button id="refresh">Actualiser</button>
+            <button id="generate">Générer le Preview</button>
+            <button id="refresh" class="secondary">Actualiser</button>
             <button id="copy" class="secondary">Copier YAML</button>
             <button id="apply" disabled>Appliquer le Preview</button>
           </div>
@@ -356,6 +390,7 @@ class HVLSPreviewPanel extends HTMLElement {
         </details>
       </div>
     `;
+    this.querySelector("#generate").addEventListener("click", () => this._generatePreview());
     this.querySelector("#refresh").addEventListener("click", () => this._loadPreview());
     this.querySelector("#copy").addEventListener("click", () => this._copyPreview());
     this.querySelector("#apply").addEventListener("click", () => this._applyPreview());
