@@ -19,8 +19,8 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
-  async _loadPreview() {
-    if (!this._hass || this._applying) return;
+  async _loadPreview(afterApply = false) {
+    if (!this._hass || (this._applying && !afterApply)) return;
     const loadId = (this._loadId || 0) + 1;
     this._loadId = loadId;
     this._review = null;
@@ -30,7 +30,7 @@ class HVLSPreviewPanel extends HTMLElement {
       const result = await this._hass.callWS({
         type: "ha_voice_label_sync/get_preview",
       });
-      if (loadId !== this._loadId || this._applying) return;
+      if (loadId !== this._loadId || (this._applying && !afterApply)) return;
       this._previewPath = result.path;
       this._previewContent = result.content;
       this._review = result.can_apply && result.preview_sha256 &&
@@ -52,7 +52,7 @@ class HVLSPreviewPanel extends HTMLElement {
         this._setStatus(`Preview : ${result.path} — Production : ${result.production_path}`);
       }
     } catch (error) {
-      if (loadId !== this._loadId || this._applying) return;
+      if (loadId !== this._loadId || (this._applying && !afterApply)) return;
       this._review = null;
       this._updateApplyButton();
       this._setStatus(`Impossible de charger le Preview : ${error.message}`);
@@ -92,9 +92,8 @@ class HVLSPreviewPanel extends HTMLElement {
         type: "ha_voice_label_sync/apply_preview",
         ...review,
       });
-      // Reload only after the apply operation is no longer locked.
-      this._applying = false;
-      await this._loadPreview();
+      // Keep Apply locked throughout the post-apply refresh.
+      await this._loadPreview(true);
       this._setStatus(
         `Preview appliqué : ${result.output_path} — ` +
         `${result.bytes_written} octets écrits` +
