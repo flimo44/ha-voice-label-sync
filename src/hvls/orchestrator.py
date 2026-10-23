@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from .backends import render_google_assistant
 from .engine import select_entities
@@ -17,10 +18,12 @@ class WorkflowError(Exception):
 
 def run_google_assistant_workflow(
     request: GenerationRequest,
-    storage_path: Path,
+    storage_path: Path | None = None,
     backup_directory: Path | None = None,
     backup_retention: int = 5,
     create_backup_enabled: bool = True,
+    *,
+    registries: dict[str, dict[str, Any]] | None = None,
 ) -> WorkflowResult:
     """Run the complete Google Assistant generation workflow.
 
@@ -37,11 +40,21 @@ def run_google_assistant_workflow(
     Raises:
         WorkflowError: If writing is requested but no entity matches.
     """
-    entity_registry = load_json(storage_path / "core.entity_registry")
-    device_registry = load_json(storage_path / "core.device_registry")
-    area_registry = load_json(storage_path / "core.area_registry")
-    label_registry = load_json(storage_path / "core.label_registry")
+    if registries is None:
+        if storage_path is None:
+            raise WorkflowError(
+                "Either storage_path or registries must be provided."
+            )
 
+        entity_registry = load_json(storage_path / "core.entity_registry")
+        device_registry = load_json(storage_path / "core.device_registry")
+        area_registry = load_json(storage_path / "core.area_registry")
+        label_registry = load_json(storage_path / "core.label_registry")
+    else:
+        entity_registry = registries["entity_registry"]
+        device_registry = registries["device_registry"]
+        area_registry = registries["area_registry"]
+        label_registry = registries["label_registry"]
     selection = select_entities(
         request=request,
         entity_registry=entity_registry,

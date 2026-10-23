@@ -10,6 +10,45 @@ from typing import Any
 from .models import GenerationRequest, SelectedEntity, SelectionResult
 from .registry import get_registry_items
 
+SUPPORTED_BINARY_SENSOR_CLASSES = frozenset(
+    {
+        "carbon_monoxide",
+        "door",
+        "garage_door",
+        "lock",
+        "moisture",
+        "opening",
+        "smoke",
+        "window",
+    }
+)
+
+
+SUPPORTED_SENSOR_CLASSES = frozenset(
+    {
+        "aqi",
+        "carbon_dioxide",
+        "carbon_monoxide",
+        "humidity",
+        "pm10",
+        "pm25",
+        "temperature",
+        "volatile_organic_compounds",
+    }
+)
+
+
+def supported_sensor_class(entity: dict[str, Any]) -> bool:
+    """Whether a numeric sensor class is supported by Google Assistant."""
+    value = entity.get("device_class")
+    return isinstance(value, str) and value in SUPPORTED_SENSOR_CLASSES
+
+
+def supported_device_class(entity: dict[str, Any]) -> bool:
+    """Whether a binary sensor can be exposed to Google Assistant."""
+    value = entity.get("device_class")
+    return isinstance(value, str) and value in SUPPORTED_BINARY_SENSOR_CLASSES
+
 
 def slugify(value: str) -> str:
     """Normalize a Home Assistant label for comparison."""
@@ -113,6 +152,11 @@ def select_entities(
         domain, object_id = entity_id.split(".", 1)
 
         if domain not in request.domains:
+            continue
+
+        if domain == "binary_sensor" and not supported_device_class(entity):
+            continue
+        if domain == "sensor" and not supported_sensor_class(entity):
             continue
 
         if entity.get("disabled_by") or entity.get("hidden_by"):

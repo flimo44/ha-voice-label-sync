@@ -31,6 +31,8 @@ from .const import (
     DEFAULT_OUTPUT,
     DOMAIN,
 )
+from .ha_registries import get_live_registries
+from .workflow_lock import get_workflow_lock
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +40,7 @@ SERVICE_GENERATE = "generate"
 
 DEFAULT_DOMAINS = frozenset(
     {
+        "binary_sensor",
         "climate",
         "cover",
         "fan",
@@ -48,6 +51,7 @@ DEFAULT_DOMAINS = frozenset(
         "scene",
         "script",
         "select",
+        "sensor",
         "switch",
         "vacuum",
     }
@@ -81,7 +85,7 @@ def _write_preview_file(
             temporary_path.unlink()
 
 
-async def async_run_workflow(
+async def _async_run_workflow_unlocked(
     hass: HomeAssistant,
     entry: ConfigEntry,
     *,
@@ -109,7 +113,12 @@ async def async_run_workflow(
     if not output_path.is_absolute():
         output_path = Path(hass.config.config_dir) / output_path
 
-    storage_path = Path(hass.config.config_dir) / ".storage"
+    # Snapshot native HA registries on the event-loop thread.
+    try:
+        registries = get_live_registries(hass)
+    except (KeyError, AttributeError, TypeError, ValueError) as exc:
+        _LOGGER.exception("HVLS registry snapshot failed")
+        raise HomeAssistantError(f"HVLS registry snapshot failed: {exc}") from exc
 
     request = GenerationRequest(
         label=label,
@@ -121,7 +130,7 @@ async def async_run_workflow(
     workflow = partial(
         run_google_assistant_workflow,
         request=request,
-        storage_path=storage_path,
+        registries=registries,
         backup_retention=backup_retention,
         create_backup_enabled=create_backup_enabled,
     )
@@ -159,11 +168,15 @@ async def async_run_workflow(
             )
         )
 
-        await hass.async_add_executor_job(
-            _write_preview_file,
-            preview_path,
-            result.generation.content,
-        )
+        try:
+            await hass.async_add_executor_job(
+                _write_preview_file,
+                preview_path,
+                result.generation.content,
+            )
+        except OSError as exc:
+            _LOGGER.exception("HVLS preview file write failed")
+            raise HomeAssistantError(f"HVLS preview file write failed: {exc}") from exc
 
         title = "HA Voice Label Sync — Preview"
         message = (
@@ -208,6 +221,23 @@ async def async_run_workflow(
     )
 
     return result
+
+
+async def async_run_workflow(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    *,
+    dry_run: bool,
+    context: Context | None = None,
+) -> WorkflowResult:
+    """Run a standard HVLS workflow under the shared lock."""
+    async with get_workflow_lock(hass):
+        return await _async_run_workflow_unlocked(
+            hass,
+            entry,
+            dry_run=dry_run,
+            context=context,
+        )
 
 
 async def async_register_services(hass: HomeAssistant) -> None:
