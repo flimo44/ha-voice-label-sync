@@ -297,6 +297,54 @@ class HVLSPreviewPanel extends HTMLElement {
         row.append(label, total);
         section.appendChild(row);
       }
+      if (title === "Par domaine") {
+        const excluded = result.exclusions?.entities || [];
+        const unsupported = {};
+
+        for (const entity of excluded) {
+          if (entity.reason !== "domain_not_enabled") continue;
+          if (!entity.domain) continue;
+
+          unsupported[entity.domain] =
+            (unsupported[entity.domain] || 0) + 1;
+        }
+
+        const subtitle = document.createElement("h3");
+        subtitle.textContent = "Domaines non activés";
+        subtitle.style.marginTop = "20px";
+        section.appendChild(subtitle);
+
+        const entries = Object.entries(unsupported)
+          .sort(([a], [b]) => a.localeCompare(b));
+
+        if (entries.length === 0) {
+          const empty = document.createElement("p");
+          empty.className = "diagnostic-note";
+          empty.textContent = "Aucun domaine non activé détecté.";
+          section.appendChild(empty);
+        }
+
+        for (const [name, count] of entries) {
+          const row = document.createElement("div");
+          row.className = "breakdown-row";
+
+          const label = document.createElement("span");
+          label.textContent = name;
+
+          const total = document.createElement("strong");
+          total.textContent = String(count);
+
+          row.append(label, total);
+          section.appendChild(row);
+        }
+
+        const note = document.createElement("p");
+        note.className = "diagnostic-note";
+        note.textContent =
+          "Entités étiquetées HVLS uniquement.";
+        section.appendChild(note);
+      }
+
       breakdown.appendChild(section);
     }
     panel.appendChild(breakdown);
@@ -352,6 +400,9 @@ class HVLSPreviewPanel extends HTMLElement {
         .actions { display:flex; gap:8px; }
         button { border:0; border-radius:10px; padding:10px 16px; cursor:pointer; background:var(--primary-color); color:var(--text-primary-color); font:inherit; }
         button.secondary { background:var(--secondary-background-color); color:var(--primary-text-color); }
+        #generate { background:#1976d2; color:#ffffff; }
+        #apply { background:#238455; color:#ffffff; }
+
         button:disabled { opacity:0.45; cursor:not-allowed; }
         #status { margin-bottom:16px; color:var(--secondary-text-color); overflow-wrap:anywhere; }
         .metrics { display:flex; flex-wrap:wrap; gap:12px; margin:16px 0; }
@@ -370,12 +421,13 @@ class HVLSPreviewPanel extends HTMLElement {
       </style>
       <div class="container">
         <div class="header">
-          <h1>HA Voice Label Sync — Preview</h1>
+          <h1>HA Voice Label Sync</h1>
           <div class="actions">
             <button id="generate">Générer le Preview</button>
             <button id="refresh" class="secondary">Actualiser</button>
             <button id="copy" class="secondary">Copier YAML</button>
             <button id="apply" disabled>Appliquer le Preview</button>
+            <button id="settings" class="secondary">⚙ Paramètres</button>
           </div>
         </div>
         <div id="status">En attente de Home Assistant…</div>
@@ -394,6 +446,9 @@ class HVLSPreviewPanel extends HTMLElement {
     this.querySelector("#refresh").addEventListener("click", () => this._loadPreview());
     this.querySelector("#copy").addEventListener("click", () => this._copyPreview());
     this.querySelector("#apply").addEventListener("click", () => this._applyPreview());
+    this.querySelector("#settings").addEventListener("click", () => {
+      window.location.assign("/config/integrations/integration/ha_voice_label_sync");
+    });
   }
 
   _setStatus(message) {
