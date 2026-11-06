@@ -14,7 +14,7 @@ from .services import async_register_services
 from .websocket import async_register_websocket_api
 
 PANEL_URL_PATH = "hvls-preview"
-PANEL_TITLE = "HVLS Preview"
+PANEL_TITLE = "HA Voice Label Sync"
 PANEL_ICON = "mdi:file-search-outline"
 
 
