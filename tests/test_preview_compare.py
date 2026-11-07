@@ -73,6 +73,26 @@ select.c:
         "without_room": 1,
         "domains": {"light": 1, "select": 1, "switch": 1},
         "by_room": {"Bureau": 2, "Sans pièce": 1},
+        "entities": [
+            {
+                "entity_id": "light.b",
+                "domain": "light",
+                "name": "light.b",
+                "room": "Bureau",
+            },
+            {
+                "entity_id": "select.c",
+                "domain": "select",
+                "name": "select.c",
+                "room": "Sans pièce",
+            },
+            {
+                "entity_id": "switch.a",
+                "domain": "switch",
+                "name": "switch.a",
+                "room": "Bureau",
+            },
+        ],
     }
 
 

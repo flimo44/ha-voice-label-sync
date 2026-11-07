@@ -295,7 +295,43 @@ class HVLSPreviewPanel extends HTMLElement {
         const total = document.createElement("strong");
         total.textContent = String(count);
         row.append(label, total);
-        section.appendChild(row);
+        if (title === "Par domaine") {
+          const details = document.createElement("details");
+          details.className = "domain-details";
+
+          const summary = document.createElement("summary");
+          summary.className = "breakdown-row";
+          summary.append(label, total);
+          details.appendChild(summary);
+
+          const entities = (stats.entities || []).filter(
+            (entity) => entity.domain === name
+          );
+
+          const list = document.createElement("div");
+          list.className = "domain-entity-list";
+
+          for (const entity of entities) {
+            const item = document.createElement("div");
+            item.className = "domain-entity-item";
+
+            const friendlyName = document.createElement("strong");
+            friendlyName.textContent = entity.name || entity.entity_id;
+
+            const info = document.createElement("small");
+            info.textContent =
+              `${entity.entity_id} · ${entity.room || "Sans pièce"}`;
+
+            item.append(friendlyName, info);
+            list.appendChild(item);
+          }
+
+          details.appendChild(list);
+          section.appendChild(details);
+        } else {
+          row.append(label, total);
+          section.appendChild(row);
+        }
       }
       if (title === "Par domaine") {
         const excluded = result.exclusions?.entities || [];
@@ -412,6 +448,54 @@ class HVLSPreviewPanel extends HTMLElement {
         .breakdowns { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; }
         .breakdowns section { padding:12px 16px; background:var(--card-background-color); border-radius:12px; }
         .breakdown-row { display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px solid var(--divider-color); }
+
+        /* Expandable domain lists */
+        .domain-details > summary {
+          display: flex;
+          align-items: center;
+          cursor: pointer;
+          list-style: none;
+          gap: 10px;
+        }
+        .domain-details > summary::-webkit-details-marker {
+          display: none;
+        }
+        .domain-details > summary::before {
+          content: "▸";
+          color: var(--secondary-text-color);
+          transition: transform 0.15s ease;
+        }
+        .domain-details[open] > summary::before {
+          transform: rotate(90deg);
+        }
+        .domain-details > summary strong {
+          margin-left: auto;
+        }
+        .domain-entity-list {
+          padding: 8px 12px 10px 24px;
+          background: var(--secondary-background-color);
+          border-radius: 6px;
+          margin: 4px 0 8px;
+        }
+        .domain-entity-item {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          padding: 7px 0;
+          border-bottom: 1px solid var(--divider-color);
+          overflow-wrap: anywhere;
+        }
+        .domain-entity-item:last-child {
+          border-bottom: none;
+        }
+        .domain-entity-item strong {
+          font-size: 13px;
+        }
+        .domain-entity-item small {
+          color: var(--secondary-text-color);
+          font-size: 12px;
+        }
+
         .change-group { margin:12px 0; }
         .change-group li { overflow-wrap:anywhere; padding:4px 0; }
         .diagnostic-note { color:var(--secondary-text-color); font-size:13px; }

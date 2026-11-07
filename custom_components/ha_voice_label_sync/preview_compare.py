@@ -50,6 +50,15 @@ def analyze_preview(preview: str, production: str | None) -> dict[str, Any]:
         "without_room": room_counts.get("Sans pièce", 0),
         "domains": dict(sorted(domain_counts.items())),
         "by_room": dict(sorted(room_counts.items())),
+        "entities": [
+            {
+                "entity_id": entity_id,
+                "domain": entity_id.split(".", 1)[0],
+                "name": str(fields.get("name") or entity_id),
+                "room": str(fields.get("room") or "Sans pièce"),
+            }
+            for entity_id, fields in sorted(current.items())
+        ],
     }
     response: dict[str, Any] = {"summary": summary, "comparison": {"status": "missing"}}
     if production is None:
