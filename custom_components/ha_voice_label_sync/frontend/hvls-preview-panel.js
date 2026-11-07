@@ -1,11 +1,320 @@
+const HVLS_TRANSLATIONS = {
+  fr: {
+    generate: "Générer le Preview",
+    refresh: "Actualiser",
+    copy: "Copier YAML",
+    apply: "Appliquer le Preview",
+    settings: "Paramètres",
+    tabStats: "Statistiques",
+    tabExclusions: "Entités exclues",
+    tabEntities: "Gestion des entités HVLS",
+    tabPreview: "Preview",
+    refreshEntities: "Actualiser les entités",
+    loadingEntities: "Chargement des entités…",
+    searchPlaceholder: "Rechercher un nom, identifiant ou une pièce…",
+    searchLabel: "Rechercher une entité",
+    filterLabel: "Filtrer les entités",
+    filterAll: "Toutes les entités",
+    filterWith: "Avec HVLS",
+    filterWithout: "Sans HVLS",
+    actionAdd: "AJOUTER",
+    actionRemove: "RETIRER",
+    confirmLabel: "{action} l'étiquette HVLS ?",
+    otherLabelsPreserved: "Les autres étiquettes seront conservées.",
+    ineligibleWarning: "Attention : cette entité n'est actuellement pas éligible.",
+    updateFailed: "Modification HVLS refusée pour {entity} :",
+    reloadFailed: "Étiquette modifiée dans HA, mais le catalogue n'a pas pu être rechargé. Utilise « Actualiser les entités ».",
+    domainsSupported: "Domaines pris en charge par HVLS",
+    domainsUnsupported: "Domaines non pris en charge",
+    domainCount: "{count} domaines · {entities} entités",
+    entitiesCount: "{count} entités",
+    catalogStatus: "{matching} entités correspondant aux filtres · {labeled} étiquetées sur {total} · Étiquette : {label}",
+    noMatches: "Aucune entité correspondant aux filtres.",
+    noArea: "Sans pièce",
+    withoutHVLS: "— Sans HVLS",
+    unknownHVLS: "HVLS · statut inconnu",
+    notEligible: "Non éligible",
+    reasonDomain: "Domaine non autorisé",
+    reasonClass: "Classe de capteur non prise en charge",
+    reasonDisabled: "Entité désactivée",
+    reasonHidden: "Entité masquée",
+    reasonCategory: "Configuration ou diagnostic",
+    moreDomain: "Afficher 100 de plus ({shown}/{total})",
+    moreEntities: "Afficher 100 entités supplémentaires",
+    excludedTitle: "Entités exclues ({count})",
+    excludedExplanation: "Entités portant l’étiquette HVLS mais non retenues par les règles actuelles.",
+    excludedEmpty: "Aucune entité étiquetée exclue.",
+    excludedNote: "Diagnostic calculé sur les registres actuels. Le YAML affiché provient du dernier Preview généré.",
+    unknownReason: "Motif inconnu",
+    reasonCategoryFull: "Entité de configuration ou de diagnostic",
+    metricEntities: "Entités",
+    metricRooms: "Pièces",
+    byDomain: "Par domaine",
+    byArea: "Par pièce",
+    disabledDomains: "Domaines non activés",
+    noDisabledDomains: "Aucun domaine non activé détecté.",
+    labeledOnly: "Entités étiquetées HVLS uniquement.",
+    comparisonTitle: "Diff Preview / Production",
+    comparisonMissing: "Comparaison impossible : fichier de production absent.",
+    comparisonFailed: "Comparaison impossible ({status}) : {reason}",
+    unreadableFile: "fichier illisible",
+    added: "Ajoutées",
+    removed: "Supprimées",
+    modified: "Modifiées",
+    unchanged: "Inchangées",
+    identicalYaml: "✓ Aucune différence : YAML identique à la production.",
+    identicalEntities: "✓ Même configuration par entité (différences de présentation YAML uniquement).",
+    entitiesAdded: "Entités ajoutées",
+    entitiesRemoved: "Entités supprimées",
+    entitiesModified: "Entités modifiées",
+    previewLoading: "Chargement du Preview…",
+    previewMissing: "Aucun Preview disponible. Lancez d’abord une génération.",
+    previewReady: "Preview : {path} — Production : {production}",
+    previewLoadFailed: "Impossible de charger le Preview : {error}",
+    previewGenerating: "Génération du Preview en cours…",
+    previewGenerated: "Preview généré : {count} entités. Vérifiez les différences avant application.",
+    previewGenerateFailed: "Échec de génération du Preview : {error}",
+    applyConfirm: "Appliquer ce Preview à la configuration Google Assistant ?",
+    applyWarning: "Le fichier actuel sera sauvegardé si les sauvegardes sont activées. Toute modification détectée depuis l’examen entraînera un refus.",
+    previewApplying: "Vérification et application du Preview…",
+    previewApplied: "Preview appliqué : {path} — {bytes} octets écrits{backup}",
+    backupCreated: "Sauvegarde : {path}",
+    previewApplyFailed: "Application refusée : {error}. Actualisez le Preview avant de réessayer.",
+    noYaml: "Aucun YAML à copier.",
+    copyUnsupported: "La copie dans le navigateur a échoué.",
+    yamlCopied: "YAML copié — {path}",
+    copyFailed: "Impossible de copier : {error}",
+    registriesLoading: "Chargement des registres HA…",
+    entitiesLoadFailed: "Impossible de charger les entités : {error}",
+    inconsistentRegistry: "Réponse du registre HA incohérente",
+    waitingHA: "En attente de Home Assistant…",
+    tabsLabel: "Sections HVLS",
+    rawDiffSummary: "Diff YAML détaillé",
+    hvlsLabelAria: "Étiquette HVLS : {entity}",
+    catalogWarning: "Attention : {warnings}",
+    absentValue: "(absent)",
+    showPreviewYaml: "Afficher le YAML du Preview"
+  },
+  en: {
+    generate: "Generate Preview",
+    refresh: "Refresh",
+    copy: "Copy YAML",
+    apply: "Apply Preview",
+    settings: "Settings",
+    tabStats: "Statistics",
+    tabExclusions: "Excluded entities",
+    tabEntities: "HVLS Entity Management",
+    tabPreview: "Preview",
+    refreshEntities: "Refresh entities",
+    loadingEntities: "Loading entities…",
+    searchPlaceholder: "Search by name, entity ID or area…",
+    searchLabel: "Search entities",
+    filterLabel: "Filter entities",
+    filterAll: "All entities",
+    filterWith: "With HVLS",
+    filterWithout: "Without HVLS",
+    actionAdd: "ADD",
+    actionRemove: "REMOVE",
+    confirmLabel: "{action} the HVLS label?",
+    otherLabelsPreserved: "All other labels will be preserved.",
+    ineligibleWarning: "Warning: this entity is currently not eligible.",
+    updateFailed: "HVLS label update refused for {entity}:",
+    reloadFailed: "The label was updated in HA, but the entity catalog could not be refreshed. Use 'Refresh entities'.",
+    domainsSupported: "Domains supported by HVLS",
+    domainsUnsupported: "Unsupported domains",
+    domainCount: "{count} domains · {entities} entities",
+    entitiesCount: "{count} entities",
+    catalogStatus: "{matching} matching entities · {labeled} labeled out of {total} · Label: {label}",
+    noMatches: "No entities match the filters.",
+    noArea: "No area",
+    withoutHVLS: "— No HVLS label",
+    unknownHVLS: "HVLS · unknown status",
+    notEligible: "Not eligible",
+    reasonDomain: "Domain not allowed",
+    reasonClass: "Unsupported sensor class",
+    reasonDisabled: "Disabled entity",
+    reasonHidden: "Hidden entity",
+    reasonCategory: "Configuration or diagnostic",
+    moreDomain: "Show 100 more ({shown}/{total})",
+    moreEntities: "Show 100 more entities",
+    excludedTitle: "Excluded entities ({count})",
+    excludedExplanation: "Entities carrying the HVLS label that do not meet the current selection rules.",
+    excludedEmpty: "No labeled entities are excluded.",
+    excludedNote: "Diagnostics use the current registries. The displayed YAML comes from the last generated Preview.",
+    unknownReason: "Unknown reason",
+    reasonCategoryFull: "Configuration or diagnostic entity",
+    metricEntities: "Entities",
+    metricRooms: "Areas",
+    byDomain: "By domain",
+    byArea: "By area",
+    disabledDomains: "Domains not enabled",
+    noDisabledDomains: "No disabled domains detected.",
+    labeledOnly: "Only HVLS-labeled entities.",
+    comparisonTitle: "Preview / Production diff",
+    comparisonMissing: "Cannot compare: production file is missing.",
+    comparisonFailed: "Cannot compare ({status}): {reason}",
+    unreadableFile: "unreadable file",
+    added: "Added",
+    removed: "Removed",
+    modified: "Modified",
+    unchanged: "Unchanged",
+    identicalYaml: "✓ No differences: YAML matches production.",
+    identicalEntities: "✓ Same configuration per entity (YAML formatting differences only).",
+    entitiesAdded: "Added entities",
+    entitiesRemoved: "Removed entities",
+    entitiesModified: "Modified entities",
+    previewLoading: "Loading Preview…",
+    previewMissing: "No Preview available. Generate one first.",
+    previewReady: "Preview: {path} — Production: {production}",
+    previewLoadFailed: "Unable to load Preview: {error}",
+    previewGenerating: "Generating Preview…",
+    previewGenerated: "Preview generated: {count} entities. Review differences before applying.",
+    previewGenerateFailed: "Failed to generate Preview: {error}",
+    applyConfirm: "Apply this Preview to the Google Assistant configuration?",
+    applyWarning: "The current file will be backed up if backups are enabled. The operation will be rejected if changes are detected since your review.",
+    previewApplying: "Validating and applying Preview…",
+    previewApplied: "Preview applied: {path} — {bytes} bytes written{backup}",
+    backupCreated: "Backup: {path}",
+    previewApplyFailed: "Apply rejected: {error}. Refresh Preview before trying again.",
+    noYaml: "No YAML to copy.",
+    copyUnsupported: "Browser copy operation failed.",
+    yamlCopied: "YAML copied — {path}",
+    copyFailed: "Unable to copy: {error}",
+    registriesLoading: "Loading HA registries…",
+    entitiesLoadFailed: "Unable to load entities: {error}",
+    inconsistentRegistry: "Inconsistent response from the HA registry",
+    waitingHA: "Waiting for Home Assistant…",
+    tabsLabel: "HVLS sections",
+    rawDiffSummary: "Detailed YAML diff",
+    hvlsLabelAria: "HVLS label: {entity}",
+    catalogWarning: "Warning: {warnings}",
+    absentValue: "(absent)",
+    showPreviewYaml: "Show Preview YAML"
+  }
+};
+
 class HVLSPreviewPanel extends HTMLElement {
+  _t(key) {
+    const language = this._language || "en";
+    return HVLS_TRANSLATIONS[language]?.[key]
+      ?? HVLS_TRANSLATIONS.en[key]
+      ?? key;
+  }
+
+  _tf(key, values = {}) {
+    return this._t(key).replace(/\{(\w+)\}/g,
+      (match, name) => String(values[name] ?? match)
+    );
+  }
+
+  _setStatusKey(key, values = {}) {
+    const displayValues = key === "previewApplied" && values.backupPath
+      ? {...values, backup: ` — ${this._tf("backupCreated", {path: values.backupPath})}`}
+      : values;
+    this._setStatus(this._tf(key, displayValues));
+    this._statusKey = key;
+    this._statusValues = values;
+  }
+
+  _translateStatic() {
+    const texts = {
+      generate: "generate",
+      refresh: "refresh",
+      copy: "copy",
+      apply: "apply",
+      settings: "settings",
+      refreshEntities: "refreshEntities",
+      entityMore: "moreEntities"
+    };
+
+    for (const [id, key] of Object.entries(texts)) {
+      const element = this.querySelector(`#${id}`);
+      if (element) {
+        element.textContent = key === "settings"
+          ? `⚙ ${this._t(key)}`
+          : this._t(key);
+      }
+    }
+
+    const tabs = {
+      summary: ["1", "tabStats"],
+      exclusions: ["2", "tabExclusions"],
+      entities: ["3", "tabEntities"],
+      preview: ["4", "tabPreview"]
+    };
+
+    for (const [tab, [number, key]] of Object.entries(tabs)) {
+      const button = this.querySelector(
+        `.hvls-tab[data-tab="${tab}"]`
+      );
+      if (button) {
+        button.textContent = `${number} · ${this._t(key)}`;
+      }
+    }
+
+    const heading = this.querySelector(
+      "#entityManager .entity-manager-header h2"
+    );
+    if (heading) heading.textContent = this._t("tabEntities");
+
+    const search = this.querySelector("#entitySearch");
+    if (search) {
+      search.placeholder = this._t("searchPlaceholder");
+      search.setAttribute("aria-label", this._t("searchLabel"));
+    }
+
+    const filter = this.querySelector("#entityFilter");
+    if (filter) {
+      filter.setAttribute("aria-label", this._t("filterLabel"));
+
+      for (const [value, key] of [
+        ["all", "filterAll"],
+        ["yes", "filterWith"],
+        ["no", "filterWithout"]
+      ]) {
+        const option = filter.querySelector(
+          `option[value="${value}"]`
+        );
+        if (option) option.textContent = this._t(key);
+      }
+    }
+
+    const yamlSummary = this.querySelector("#tab-preview details:not(#rawDiffDetails) summary");
+    if (yamlSummary) yamlSummary.textContent = this._t("showPreviewYaml");
+    const diffSummary = this.querySelector("#rawDiffDetails summary");
+    if (diffSummary) diffSummary.textContent = this._t("rawDiffSummary");
+    const status = this.querySelector("#entityStatus");
+    if (status && !this._entityCatalog && !this._entityLoading && !this._entityLoadError) {
+      status.textContent = this._t("loadingEntities");
+    }
+    const nav = this.querySelector(".hvls-tabs");
+    if (nav) nav.setAttribute("aria-label", this._t("tabsLabel"));
+  }
+
   set hass(hass) {
     this._hass = hass;
+    const oldLanguage = this._language;
+    this._language = String(hass?.language || "en")
+      .toLowerCase()
+      .startsWith("fr") ? "fr" : "en";
     if (!this._initialized) {
       this._initialized = true;
       this._render();
       this._loadPreview();
       this._loadEntities();
+    }
+    this._loadBrandIcon();
+    this._translateStatic();
+    if (oldLanguage && oldLanguage !== this._language) {
+      if (this._lastAnalysis) this._renderAnalysis(this._lastAnalysis);
+      if (this._entityCatalog && !this._entityLoading && !this._entityWritePending) {
+        this._renderEntities();
+      }
+      if (this._statusKey) this._setStatusKey(this._statusKey, this._statusValues);
+      if (this._entityLoadError) {
+        const entityStatus = this.querySelector("#entityStatus");
+        if (entityStatus) entityStatus.textContent = this._tf("entitiesLoadFailed", {error: this._entityLoadError});
+      }
     }
   }
 
@@ -20,13 +329,41 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  async _loadBrandIcon() {
+    const icon = this.querySelector("#hvlsBrandIcon");
+    if (!this._hass || !icon || this._brandIconStarted) return;
+
+    this._brandIconStarted = true;
+
+    try {
+      const response = await this._hass.callWS({
+        type: "brands/access_token",
+      });
+      const token = typeof response === "string"
+        ? response
+        : response?.token || response?.access_token;
+
+      if (!token) throw new Error("Jeton de marque indisponible");
+
+      icon.onload = () => { icon.hidden = false; };
+      icon.onerror = () => { icon.hidden = true; };
+
+      icon.src =
+        "/api/brands/integration/ha_voice_label_sync/icon.png" +
+        "?placeholder=no&token=" + encodeURIComponent(token);
+    } catch (error) {
+      icon.hidden = true;
+      console.warn("HVLS : logo non disponible", error);
+    }
+  }
+
   async _loadPreview(afterApply = false) {
     if (!this._hass || (this._applying && !afterApply)) return;
     const loadId = (this._loadId || 0) + 1;
     this._loadId = loadId;
     this._review = null;
     this._updateApplyButton();
-    this._setStatus("Chargement du Preview…");
+    this._setStatusKey("previewLoading");
     try {
       const result = await this._hass.callWS({
         type: "ha_voice_label_sync/get_preview",
@@ -46,17 +383,17 @@ class HVLSPreviewPanel extends HTMLElement {
       this._setContent(result.content || "");
       this._renderAnalysis(result);
       if (!result.available) {
-        this._setStatus(result.error || "Aucun Preview disponible. Lancez Preview d'abord.");
+        this._setStatus(result.error || this._t("previewMissing"));
       } else if (result.error) {
         this._setStatus(result.error);
       } else {
-        this._setStatus(`Preview : ${result.path} — Production : ${result.production_path}`);
+        this._setStatusKey("previewReady", {path: result.path, production: result.production_path});
       }
     } catch (error) {
       if (loadId !== this._loadId || (this._applying && !afterApply)) return;
       this._review = null;
       this._updateApplyButton();
-      this._setStatus(`Impossible de charger le Preview : ${error.message}`);
+      this._setStatusKey("previewLoadFailed", {error: error.message || String(error)});
       this._setContent("");
       this._renderAnalysis({available: false});
     }
@@ -82,22 +419,17 @@ class HVLSPreviewPanel extends HTMLElement {
     this._loadId = (this._loadId || 0) + 1;
     this._review = null;
     this._updateApplyButton();
-    this._setStatus("Génération du Preview en cours…");
+    this._setStatusKey("previewGenerating");
 
     try {
       const result = await this._hass.callWS({
         type: "ha_voice_label_sync/generate_preview",
       });
       await this._loadPreview();
-      this._setStatus(
-        `Preview généré : ${result.entity_count} entités. ` +
-        "Vérifiez les différences avant application."
-      );
+      this._setStatusKey("previewGenerated", {count: result.entity_count});
     } catch (error) {
       this._review = null;
-      this._setStatus(
-        `Échec de génération du Preview : ${error.message || String(error)}`
-      );
+      this._setStatusKey("previewGenerateFailed", {error: error.message || String(error)});
     } finally {
       this._generating = false;
       this._updateApplyButton();
@@ -110,16 +442,14 @@ class HVLSPreviewPanel extends HTMLElement {
     const review = {...this._review};
 
     if (!window.confirm(
-      "Appliquer ce Preview à la configuration Google Assistant ?\\n\\n" +
-      "Le fichier actuel sera sauvegardé si les sauvegardes sont activées. " +
-      "Toute modification détectée depuis l'examen entraînera un refus."
+      this._t("applyConfirm") + "\n\n" + this._t("applyWarning")
     )) return;
 
     this._applying = true;
     this._loadId = (this._loadId || 0) + 1;
     this._review = null;
     this._updateApplyButton();
-    this._setStatus("Vérification et application du Preview…");
+    this._setStatusKey("previewApplying");
 
     try {
       const result = await this._hass.callWS({
@@ -128,16 +458,12 @@ class HVLSPreviewPanel extends HTMLElement {
       });
       // Keep Apply locked throughout the post-apply refresh.
       await this._loadPreview(true);
-      this._setStatus(
-        `Preview appliqué : ${result.output_path} — ` +
-        `${result.bytes_written} octets écrits` +
-        (result.backup_path ? ` — Sauvegarde : ${result.backup_path}` : "")
-      );
+      this._setStatusKey("previewApplied", {
+        path: result.output_path, bytes: result.bytes_written,
+        backupPath: result.backup_path || null, backup: ""
+      });
     } catch (error) {
-      this._setStatus(
-        `Application refusée : ${error.message || String(error)}. ` +
-        "Actualisez le Preview avant de réessayer."
-      );
+      this._setStatusKey("previewApplyFailed", {error: error.message || String(error)});
     } finally {
       this._applying = false;
       this._updateApplyButton();
@@ -146,7 +472,7 @@ class HVLSPreviewPanel extends HTMLElement {
 
   async _copyPreview() {
     if (!this._previewContent) {
-      this._setStatus("Aucun YAML à copier.");
+      this._setStatusKey("noYaml");
       return;
     }
     try {
@@ -162,11 +488,11 @@ class HVLSPreviewPanel extends HTMLElement {
         textarea.select();
         const copied = document.execCommand("copy");
         document.body.removeChild(textarea);
-        if (!copied) throw new Error("Browser copy command failed");
+        if (!copied) throw new Error(this._t("copyUnsupported"));
       }
-      this._setStatus(`YAML copié — ${this._previewPath}`);
+      this._setStatusKey("yamlCopied", {path: this._previewPath});
     } catch (error) {
-      this._setStatus(`Impossible de copier : ${error.message}`);
+      this._setStatusKey("copyFailed", {error: error.message || String(error)});
     }
   }
 
@@ -195,7 +521,7 @@ class HVLSPreviewPanel extends HTMLElement {
         li.textContent = item;
       } else {
         const lines = Object.entries(item.fields || {}).map(([field, values]) =>
-          `${field}: ${values.before === null ? "(absent)" : values.before} → ${values.after === null ? "(absent)" : values.after}`
+          `${field}: ${values.before === null ? this._t("absentValue") : values.before} → ${values.after === null ? this._t("absentValue") : values.after}`
         );
         li.textContent = `${item.entity_id}\n  ${lines.join("\n  ")}`;
         li.style.whiteSpace = "pre-wrap";
@@ -214,25 +540,25 @@ class HVLSPreviewPanel extends HTMLElement {
     section.className = "change-group";
 
     const heading = document.createElement("h2");
-    heading.textContent = `Entités exclues (${entities.length})`;
+    heading.textContent = this._tf("excludedTitle", {count: entities.length});
     section.appendChild(heading);
 
     const explanation = document.createElement("p");
     explanation.textContent =
-      "Entités portant l'étiquette HVLS mais non retenues par les règles actuelles.";
+      this._t("excludedExplanation");
     section.appendChild(explanation);
 
     if (entities.length === 0) {
       const success = document.createElement("p");
-      success.textContent = "Aucune entité étiquetée exclue.";
+      success.textContent = this._t("excludedEmpty");
       section.appendChild(success);
     } else {
       const reasons = {
-        domain_not_enabled: "Domaine non autorisé",
-        unsupported_device_class: "Classe de capteur non compatible",
-        disabled: "Entité désactivée",
-        hidden: "Entité masquée",
-        entity_category: "Entité de configuration ou de diagnostic",
+        domain_not_enabled: this._t("reasonDomain"),
+        unsupported_device_class: this._t("reasonClass"),
+        disabled: this._t("reasonDisabled"),
+        hidden: this._t("reasonHidden"),
+        entity_category: this._t("reasonCategoryFull"),
       };
 
       const list = document.createElement("ul");
@@ -247,7 +573,7 @@ class HVLSPreviewPanel extends HTMLElement {
 
         const reason = document.createElement("div");
         reason.textContent =
-          reasons[entity.reason] || entity.detail || "Motif inconnu";
+          reasons[entity.reason] || entity.detail || this._t("unknownReason");
 
         item.append(title, identifier, reason);
         list.appendChild(item);
@@ -259,8 +585,7 @@ class HVLSPreviewPanel extends HTMLElement {
     const note = document.createElement("p");
     note.className = "diagnostic-note";
     note.textContent =
-      "Diagnostic calculé sur les registres actuels. " +
-      "Le YAML affiché provient du dernier Preview généré.";
+      this._t("excludedNote");
     section.appendChild(note);
 
     parent.appendChild(section);
@@ -272,19 +597,20 @@ class HVLSPreviewPanel extends HTMLElement {
     this.querySelector("#exclusions").replaceChildren();
     this.querySelector("#unifiedDiff").textContent = "";
     this.querySelector("#rawDiffDetails").hidden = true;
+    this._lastAnalysis = result;
     if (!result.available || !result.summary) return;
 
     const stats = result.summary;
     const metrics = document.createElement("div");
     metrics.className = "metrics";
-    this._addMetric(metrics, "Entités", stats.total);
-    this._addMetric(metrics, "Pièces", stats.rooms);
-    this._addMetric(metrics, "Sans pièce", stats.without_room);
+    this._addMetric(metrics, this._t("metricEntities"), stats.total);
+    this._addMetric(metrics, this._t("metricRooms"), stats.rooms);
+    this._addMetric(metrics, this._t("noArea"), stats.without_room);
     panel.appendChild(metrics);
 
     const breakdown = document.createElement("div");
     breakdown.className = "breakdowns";
-    for (const [title, values] of [["Par domaine", stats.domains], ["Par pièce", stats.by_room]]) {
+    for (const [type, title, values] of [["domain", this._t("byDomain"), stats.domains], ["area", this._t("byArea"), stats.by_room]]) {
       const section = document.createElement("section");
       const heading = document.createElement("h3");
       heading.textContent = title;
@@ -297,7 +623,7 @@ class HVLSPreviewPanel extends HTMLElement {
         const total = document.createElement("strong");
         total.textContent = String(count);
         row.append(label, total);
-        if (title === "Par domaine") {
+        if (type === "domain") {
           const details = document.createElement("details");
           details.className = "domain-details";
 
@@ -322,7 +648,7 @@ class HVLSPreviewPanel extends HTMLElement {
 
             const info = document.createElement("small");
             info.textContent =
-              `${entity.entity_id} · ${entity.room || "Sans pièce"}`;
+              `${entity.entity_id} · ${entity.room || this._t("noArea")}`;
 
             item.append(friendlyName, info);
             list.appendChild(item);
@@ -335,7 +661,7 @@ class HVLSPreviewPanel extends HTMLElement {
           section.appendChild(row);
         }
       }
-      if (title === "Par domaine") {
+      if (type === "domain") {
         const excluded = result.exclusions?.entities || [];
         const unsupported = {};
 
@@ -348,7 +674,7 @@ class HVLSPreviewPanel extends HTMLElement {
         }
 
         const subtitle = document.createElement("h3");
-        subtitle.textContent = "Domaines non activés";
+        subtitle.textContent = this._t("disabledDomains");
         subtitle.style.marginTop = "20px";
         section.appendChild(subtitle);
 
@@ -358,7 +684,7 @@ class HVLSPreviewPanel extends HTMLElement {
         if (entries.length === 0) {
           const empty = document.createElement("p");
           empty.className = "diagnostic-note";
-          empty.textContent = "Aucun domaine non activé détecté.";
+          empty.textContent = this._t("noDisabledDomains");
           section.appendChild(empty);
         }
 
@@ -379,7 +705,7 @@ class HVLSPreviewPanel extends HTMLElement {
         const note = document.createElement("p");
         note.className = "diagnostic-note";
         note.textContent =
-          "Entités étiquetées HVLS uniquement.";
+          this._t("labeledOnly");
         section.appendChild(note);
       }
 
@@ -391,34 +717,34 @@ class HVLSPreviewPanel extends HTMLElement {
 
     const comparison = result.comparison || {status: "missing"};
     const heading = document.createElement("h2");
-    heading.textContent = "Diff Preview / Production";
+    heading.textContent = this._t("comparisonTitle");
     panel.appendChild(heading);
     if (comparison.status !== "ok") {
       const warning = document.createElement("p");
       warning.textContent = comparison.status === "missing"
-        ? "Comparaison impossible : fichier de production absent."
-        : `Comparaison impossible (${comparison.status}) : ${comparison.reason || "fichier illisible"}`;
+        ? this._t("comparisonMissing")
+        : this._tf("comparisonFailed", {status: comparison.status, reason: comparison.reason || this._t("unreadableFile")});
       panel.appendChild(warning);
       return;
     }
     const counters = document.createElement("div");
     counters.className = "metrics";
-    this._addMetric(counters, "Ajoutées", comparison.added.length);
-    this._addMetric(counters, "Supprimées", comparison.removed.length);
-    this._addMetric(counters, "Modifiées", comparison.modified.length);
-    this._addMetric(counters, "Inchangées", comparison.unchanged);
+    this._addMetric(counters, this._t("added"), comparison.added.length);
+    this._addMetric(counters, this._t("removed"), comparison.removed.length);
+    this._addMetric(counters, this._t("modified"), comparison.modified.length);
+    this._addMetric(counters, this._t("unchanged"), comparison.unchanged);
     panel.appendChild(counters);
 
     if (comparison.identical_entities) {
       const ok = document.createElement("p");
       ok.textContent = comparison.identical_text
-        ? "✓ Aucune différence : YAML identique à la production."
-        : "✓ Même configuration par entité (différences de présentation YAML uniquement).";
+        ? this._t("identicalYaml")
+        : this._t("identicalEntities");
       panel.appendChild(ok);
     }
-    this._addGroup(panel, "Entités ajoutées", comparison.added);
-    this._addGroup(panel, "Entités supprimées", comparison.removed);
-    this._addGroup(panel, "Entités modifiées", comparison.modified);
+    this._addGroup(panel, this._t("entitiesAdded"), comparison.added);
+    this._addGroup(panel, this._t("entitiesRemoved"), comparison.removed);
+    this._addGroup(panel, this._t("entitiesModified"), comparison.modified);
 
     if (comparison.unified_diff) {
       this.querySelector("#rawDiffDetails").hidden = false;
@@ -433,6 +759,18 @@ class HVLSPreviewPanel extends HTMLElement {
         .container { max-width:1200px; margin:0 auto; }
         .header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
         h1 { margin:0; font-size:28px; font-weight:500; }
+        .hvls-brand {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 0;
+        }
+        .hvls-brand img {
+          width: 44px;
+          height: 44px;
+          object-fit: contain;
+          flex-shrink: 0;
+        }
         h2 { font-size:20px; margin-top:24px; }
         h3 { font-size:16px; margin:12px 0; }
         .actions { display:flex; gap:8px; }
@@ -630,6 +968,50 @@ class HVLSPreviewPanel extends HTMLElement {
           margin-top: 10px;
         }
 
+        .entity-hvls-control {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          margin-left: 12px;
+          white-space: nowrap;
+          cursor: pointer;
+          font-size: 12px;
+        }
+        .entity-hvls-checkbox {
+          cursor: pointer;
+          accent-color: var(--primary-color);
+        }
+        .entity-hvls-checkbox:disabled {
+          cursor: wait;
+        }
+
+        /* Alignement des trois colonnes du gestionnaire */
+        .entity-catalog-row {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 110px 72px;
+          align-items: center;
+          gap: 12px;
+        }
+        .entity-catalog-info {
+          min-width: 0;
+          overflow-wrap: anywhere;
+        }
+        .entity-catalog-label {
+          text-align: center;
+          justify-self: center;
+        }
+        .entity-hvls-control {
+          justify-self: center;
+          justify-content: center;
+          margin-left: 0;
+        }
+        @media (max-width: 600px) {
+          .entity-catalog-row {
+            grid-template-columns: minmax(0, 1fr) 85px 62px;
+            gap: 6px;
+          }
+        }
+
         .entity-domain-more {
           margin: 12px 0 4px;
           font-size: 12px;
@@ -644,7 +1026,10 @@ class HVLSPreviewPanel extends HTMLElement {
       </style>
       <div class="container">
         <div class="header">
-          <h1>HA Voice Label Sync</h1>
+          <div class="hvls-brand">
+            <img id="hvlsBrandIcon" alt="" hidden>
+            <h1>HA Voice Label Sync</h1>
+          </div>
           <div class="actions">
             <button id="generate">Générer le Preview</button>
             <button id="refresh" class="secondary">Actualiser</button>
@@ -653,8 +1038,8 @@ class HVLSPreviewPanel extends HTMLElement {
             <button id="settings" class="secondary">⚙ Paramètres</button>
           </div>
         </div>
-        <div id="status">En attente de Home Assistant…</div>
-        <nav class="hvls-tabs" aria-label="Sections HVLS" role="tablist">
+        <div id="status">${this._t("waitingHA")}</div>
+        <nav class="hvls-tabs" aria-label="${this._t("tabsLabel")}" role="tablist">
           <button class="hvls-tab active" type="button"
             data-tab="summary" role="tab" aria-selected="true">
             1 · Statistiques
@@ -711,11 +1096,11 @@ class HVLSPreviewPanel extends HTMLElement {
         <section id="tab-preview" class="hvls-tab-panel"
           role="tabpanel" hidden>
         <details id="rawDiffDetails" hidden>
-          <summary>Diff YAML détaillé</summary>
+          <summary>${this._t("rawDiffSummary")}</summary>
           <pre id="unifiedDiff"></pre>
         </details>
         <details>
-          <summary>Afficher le YAML du Preview</summary>
+          <summary>${this._t("showPreviewYaml")}</summary>
           <pre id="content"></pre>
         </details>
         </section>
@@ -752,14 +1137,14 @@ class HVLSPreviewPanel extends HTMLElement {
 
 
   async _loadEntities() {
-    if (!this._hass || this._entityLoading) return;
+    if (!this._hass || this._entityLoading) return false;
 
     this._entityLoading = true;
     const refresh = this.querySelector("#refreshEntities");
     const status = this.querySelector("#entityStatus");
 
     if (refresh) refresh.disabled = true;
-    if (status) status.textContent = "Chargement des registres HA…";
+    if (status) status.textContent = this._t("registriesLoading");
 
     try {
       const catalog = await this._hass.callWS({
@@ -767,20 +1152,89 @@ class HVLSPreviewPanel extends HTMLElement {
       });
 
       this._entityCatalog = catalog;
+      this._entityLoadError = null;
       this._entityLimit = 100;
       this._renderEntities();
+      return true;
     } catch (error) {
       this._entityCatalog = null;
+      this._entityLoadError = error.message || String(error);
       this.querySelector("#entityList")?.replaceChildren();
       const more = this.querySelector("#entityMore");
       if (more) more.hidden = true;
       if (status) {
         status.textContent =
-          `Impossible de charger les entités : ${error.message || String(error)}`;
+          this._tf("entitiesLoadFailed", {error: error.message || String(error)});
       }
+      return false;
     } finally {
       this._entityLoading = false;
       if (refresh) refresh.disabled = false;
+    }
+  }
+
+  async _setEntityLabel(entity, checkbox) {
+    const current = entity.has_label === true;
+    const enabled = !current;
+    const action = this._t(enabled ? "actionAdd" : "actionRemove");
+
+    // Ne jamais considérer la case comme modifiée avant confirmation.
+    checkbox.checked = current;
+
+    if (this._entityWritePending) return;
+
+    const warning = enabled && entity.eligible === false
+      ? "\n" + this._t("ineligibleWarning")
+      : "";
+
+    const confirmed = window.confirm(
+      this._tf("confirmLabel", {action}) + "\n\n" +
+      `${entity.name || entity.entity_id}\n` +
+      `${entity.entity_id}\n\n` +
+      this._t("otherLabelsPreserved") +
+      warning
+    );
+
+    if (!confirmed) return;
+
+    this._entityWritePending = true;
+
+    const controls = Array.from(
+      this.querySelectorAll(".entity-hvls-checkbox")
+    );
+    controls.forEach((control) => { control.disabled = true; });
+
+    try {
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/set_entity_label",
+        entity_id: entity.entity_id,
+        enabled,
+        expected_enabled: current,
+      });
+
+      if (result.entity_id !== entity.entity_id ||
+          result.has_label !== enabled) {
+        throw new Error(this._t("inconsistentRegistry"));
+      }
+
+      // Le catalogue est relu depuis les registres réels de HA.
+      const reloaded = await this._loadEntities();
+      if (!reloaded) {
+        window.alert(
+          this._t("reloadFailed")
+        );
+      }
+    } catch (error) {
+      checkbox.checked = current;
+      window.alert(
+        this._tf("updateFailed", {entity: entity.entity_id}) + "\n" +
+        (error.message || String(error))
+      );
+    } finally {
+      this._entityWritePending = false;
+      this.querySelectorAll(".entity-hvls-checkbox").forEach(
+        (control) => { control.disabled = false; }
+      );
     }
   }
 
@@ -802,11 +1256,11 @@ class HVLSPreviewPanel extends HTMLElement {
     const filter = this.querySelector("#entityFilter")?.value || "all";
 
     const reasons = {
-      domain_not_enabled: "Domaine non autorisé",
-      unsupported_device_class: "Classe de capteur non compatible",
-      disabled: "Entité désactivée",
-      hidden: "Entité masquée",
-      entity_category: "Configuration ou diagnostic",
+      domain_not_enabled: this._t("reasonDomain"),
+      unsupported_device_class: this._t("reasonClass"),
+      disabled: this._t("reasonDisabled"),
+      hidden: this._t("reasonHidden"),
+      entity_category: this._t("reasonCategory"),
     };
 
     // Mémoriser les domaines ouverts.
@@ -891,7 +1345,7 @@ class HVLSPreviewPanel extends HTMLElement {
       title.textContent = domain;
 
       const count = document.createElement("span");
-      count.textContent = `${entities.length} entités`;
+      count.textContent = this._tf("entitiesCount", {count: entities.length});
 
       heading.append(title, count);
       details.appendChild(heading);
@@ -917,7 +1371,7 @@ class HVLSPreviewPanel extends HTMLElement {
 
           const description = document.createElement("small");
           description.textContent =
-            `${entity.entity_id} · ${entity.room || "Sans pièce"}`;
+            `${entity.entity_id} · ${entity.room || this._t("noArea")}`;
 
           info.append(name, description);
 
@@ -931,19 +1385,40 @@ class HVLSPreviewPanel extends HTMLElement {
             label.classList.add("ineligible");
             label.textContent = "✕ HVLS";
           } else if (entity.has_label) {
-            label.textContent = "HVLS · statut inconnu";
+            label.textContent = this._t("unknownHVLS");
           } else {
-            label.textContent = "— Sans HVLS";
+            label.textContent = this._t("withoutHVLS");
           }
 
           if (entity.eligible === false) {
             const reason = document.createElement("small");
             reason.textContent =
-              reasons[entity.exclusion_reason] || "Non éligible";
+              reasons[entity.exclusion_reason] || this._t("notEligible");
             info.appendChild(reason);
           }
 
-          row.append(info, label);
+          const control = document.createElement("label");
+          control.className = "entity-hvls-control";
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.className = "entity-hvls-checkbox";
+          checkbox.checked = entity.has_label === true;
+          checkbox.disabled = Boolean(this._entityWritePending);
+          checkbox.setAttribute(
+            "aria-label",
+            this._tf("hvlsLabelAria", {entity: entity.entity_id})
+          );
+
+          checkbox.addEventListener("change", () => {
+            this._setEntityLabel(entity, checkbox);
+          });
+
+          const controlText = document.createElement("span");
+          controlText.textContent = "HVLS";
+
+          control.append(checkbox, controlText);
+          row.append(info, label, control);
           rows.appendChild(row);
         }
 
@@ -954,7 +1429,7 @@ class HVLSPreviewPanel extends HTMLElement {
           more.className = "secondary entity-domain-more";
           more.type = "button";
           more.textContent =
-            `Afficher 100 de plus (${visible.length}/${entities.length})`;
+            this._tf("moreDomain", {shown: visible.length, total: entities.length});
 
           more.addEventListener("click", (event) => {
             event.stopPropagation();
@@ -989,12 +1464,16 @@ class HVLSPreviewPanel extends HTMLElement {
     }
 
     supportedHeading.textContent =
-      `✓ Domaines pris en charge par HVLS ` +
-      `(${supportedDomainCount} domaines · ${supportedCount} entités)`;
+      `✓ ${this._t("domainsSupported")} ` +
+      `(${this._tf("domainCount", {
+        count: supportedDomainCount, entities: supportedCount
+      })})`;
 
     unsupportedHeading.textContent =
-      `Domaines non pris en charge ` +
-      `(${unsupportedDomainCount} domaines · ${unsupportedCount} entités)`;
+      `${this._t("domainsUnsupported")} ` +
+      `(${this._tf("domainCount", {
+        count: unsupportedDomainCount, entities: unsupportedCount
+      })})`;
 
     unsupportedDetails.addEventListener("toggle", () => {
       this._unsupportedDomainsOpen = unsupportedDetails.open;
@@ -1011,20 +1490,22 @@ class HVLSPreviewPanel extends HTMLElement {
     if (matching.length === 0) {
       const empty = document.createElement("p");
       empty.className = "diagnostic-note";
-      empty.textContent = "Aucune entité correspondant aux filtres.";
+      empty.textContent = this._t("noMatches");
       fragment.appendChild(empty);
     }
 
     list.replaceChildren(fragment);
 
-    status.textContent =
-      `${matching.length} entités correspondant aux filtres · ` +
-      `${catalog.labeled} étiquetées sur ${catalog.total} · ` +
-      `Étiquette : ${catalog.label}`;
+    status.textContent = this._tf("catalogStatus", {
+      matching: matching.length,
+      labeled: catalog.labeled,
+      total: catalog.total,
+      label: catalog.label,
+    });
 
     if (catalog.warnings?.length) {
       status.textContent +=
-        ` · Attention : ${catalog.warnings.join("; ")}`;
+        ` · ${this._tf("catalogWarning", {warnings: catalog.warnings.join("; ")})}`;
     }
   }
 
@@ -1050,6 +1531,7 @@ class HVLSPreviewPanel extends HTMLElement {
   }
 
   _setStatus(message) {
+    this._statusKey = null;
     const status = this.querySelector("#status");
     if (status) status.textContent = message;
   }
