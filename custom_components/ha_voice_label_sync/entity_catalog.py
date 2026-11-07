@@ -98,7 +98,6 @@ def build_entity_catalog(
         "label": label,
         "label_ids": sorted(label_ids),
         "supported_domains": sorted(domains) if domains is not None else [],
-        "supported_domains": sorted(domains) if domains is not None else [],
         "warnings": list(warnings),
         "total": len(catalog),
         "labeled": sum(item["has_label"] for item in catalog),

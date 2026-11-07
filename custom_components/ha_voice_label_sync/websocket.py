@@ -25,8 +25,8 @@ from .const import (
 )
 from .entity_catalog import build_entity_catalog
 from .entity_label_writer import update_entity_label
-from .label_update import LabelUpdateError
 from .ha_registries import get_live_registries
+from .label_update import LabelUpdateError
 from .preview_apply import apply_reviewed_preview
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_exclusions import analyze_exclusions
