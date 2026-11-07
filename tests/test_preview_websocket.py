@@ -87,6 +87,46 @@ def websocket_module(monkeypatch):
         return_value={"entity_registry": {"data": {"entities": []}}}
     )
 
+    catalog = ModuleType(f"{prefix}.entity_catalog")
+    catalog.build_entity_catalog = Mock(
+        return_value={
+            "label": "google_assistant",
+            "total": 1,
+            "labeled": 1,
+            "entities": [
+                {
+                    "entity_id": "switch.pompe",
+                    "has_label": True,
+                }
+            ],
+        }
+    )
+    monkeypatch.setitem(
+        sys.modules, f"{prefix}.entity_catalog", catalog
+    )
+
+    writer = ModuleType(f"{prefix}.entity_label_writer")
+    writer.update_entity_label = Mock(
+        return_value={
+            "entity_id": "switch.pompe",
+            "has_label": True,
+            "label_id": "google_assistant",
+            "labels": ["google_assistant", "salon"],
+            "changed": True,
+        }
+    )
+    monkeypatch.setitem(
+        sys.modules, f"{prefix}.entity_label_writer", writer
+    )
+
+    label_update = ModuleType(f"{prefix}.label_update")
+    label_update.LabelUpdateError = type(
+        "LabelUpdateError", (ValueError,), {}
+    )
+    monkeypatch.setitem(
+        sys.modules, f"{prefix}.label_update", label_update
+    )
+
     services = ModuleType(f"{prefix}.services")
     services.DEFAULT_DOMAINS = frozenset({"switch"})
     services.async_run_workflow = Mock()
@@ -350,3 +390,149 @@ def test_apply_websocket_rejects_changed_production(websocket_module):
     connection.send_result.assert_not_called()
     connection.send_error.assert_called_once()
     assert connection.send_error.call_args.args[1] == "apply_failed"
+
+
+def test_get_entities_returns_catalog(websocket_module):
+    connection = SimpleNamespace(
+        send_result=Mock(),
+        send_error=Mock(),
+    )
+
+    asyncio.run(
+        websocket_module.websocket.websocket_get_entities(
+            make_hass(), connection, {"id": 101}
+        )
+    )
+
+    connection.send_error.assert_not_called()
+    connection.send_result.assert_called_once()
+
+    msg_id, result = connection.send_result.call_args.args
+    assert msg_id == 101
+    assert result["total"] == 1
+    assert result["labeled"] == 1
+    assert result["entities"][0]["entity_id"] == "switch.pompe"
+
+
+def test_get_entities_registry_error(websocket_module):
+    websocket_module.registries.get_live_registries.side_effect = (
+        ValueError("registry unavailable")
+    )
+    connection = SimpleNamespace(
+        send_result=Mock(),
+        send_error=Mock(),
+    )
+
+    asyncio.run(
+        websocket_module.websocket.websocket_get_entities(
+            make_hass(), connection, {"id": 102}
+        )
+    )
+
+    connection.send_result.assert_not_called()
+    connection.send_error.assert_called_once()
+    assert connection.send_error.call_args.args[1] == "registry_error"
+
+
+def test_get_entities_without_configuration(websocket_module):
+    hass = make_hass()
+    hass.config_entries.async_entries = lambda domain: []
+
+    connection = SimpleNamespace(
+        send_result=Mock(),
+        send_error=Mock(),
+    )
+
+    asyncio.run(
+        websocket_module.websocket.websocket_get_entities(
+            hass, connection, {"id": 103}
+        )
+    )
+
+    connection.send_result.assert_not_called()
+    connection.send_error.assert_called_once()
+    assert connection.send_error.call_args.args[1] == "not_configured"
+
+
+def test_set_entity_label_success(websocket_module):
+    ws = websocket_module.websocket
+    connection = SimpleNamespace(
+        send_result=Mock(),
+        send_error=Mock(),
+    )
+
+    asyncio.run(
+        ws.websocket_set_entity_label(
+            make_hass(),
+            connection,
+            {
+                "id": 201,
+                "entity_id": "switch.pompe",
+                "enabled": True,
+                "expected_enabled": False,
+            },
+        )
+    )
+
+    connection.send_error.assert_not_called()
+    connection.send_result.assert_called_once()
+
+    msg_id, result = connection.send_result.call_args.args
+    assert msg_id == 201
+    assert result["has_label"] is True
+    assert result["changed"] is True
+
+
+def test_set_entity_label_refused(websocket_module):
+    ws = websocket_module.websocket
+    ws.update_entity_label.side_effect = (
+        ws.LabelUpdateError("HVLS label changed")
+    )
+
+    connection = SimpleNamespace(
+        send_result=Mock(),
+        send_error=Mock(),
+    )
+
+    asyncio.run(
+        ws.websocket_set_entity_label(
+            make_hass(),
+            connection,
+            {
+                "id": 202,
+                "entity_id": "switch.pompe",
+                "enabled": False,
+                "expected_enabled": True,
+            },
+        )
+    )
+
+    connection.send_result.assert_not_called()
+    assert connection.send_error.call_args.args[1] == "label_update_refused"
+
+
+def test_set_entity_label_not_configured(websocket_module):
+    ws = websocket_module.websocket
+    hass = make_hass()
+    hass.config_entries.async_entries = lambda domain: []
+
+    connection = SimpleNamespace(
+        send_result=Mock(),
+        send_error=Mock(),
+    )
+
+    asyncio.run(
+        ws.websocket_set_entity_label(
+            hass,
+            connection,
+            {
+                "id": 203,
+                "entity_id": "switch.pompe",
+                "enabled": True,
+                "expected_enabled": False,
+            },
+        )
+    )
+
+    connection.send_result.assert_not_called()
+    assert connection.send_error.call_args.args[1] == "not_configured"

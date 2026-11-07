@@ -23,7 +23,10 @@ from .const import (
     DEFAULT_OUTPUT,
     DOMAIN,
 )
+from .entity_catalog import build_entity_catalog
+from .entity_label_writer import update_entity_label
 from .ha_registries import get_live_registries
+from .label_update import LabelUpdateError
 from .preview_apply import apply_reviewed_preview
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_exclusions import analyze_exclusions
@@ -272,8 +275,98 @@ async def websocket_generate_preview(
     )
 
 
+WS_TYPE_GET_ENTITIES = f"{DOMAIN}/get_entities"
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_TYPE_GET_ENTITIES}
+)
+async def websocket_get_entities(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return current HA entities and HVLS label membership."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        connection.send_error(
+            msg["id"], "not_configured", "HVLS is not configured."
+        )
+        return
+
+    settings = {**entries[0].data, **entries[0].options}
+    label = settings.get(CONF_LABEL, DEFAULT_LABEL)
+
+    try:
+        # Native HA registries must be read on the event-loop thread.
+        registries = get_live_registries(hass)
+        catalog = await hass.async_add_executor_job(
+            build_entity_catalog, registries, label, DEFAULT_DOMAINS
+        )
+    except (KeyError, AttributeError, TypeError, ValueError) as exc:
+        connection.send_error(
+            msg["id"], "registry_error", str(exc)
+        )
+        return
+
+    connection.send_result(msg["id"], catalog)
+
+
+WS_TYPE_SET_ENTITY_LABEL = f"{DOMAIN}/set_entity_label"
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_TYPE_SET_ENTITY_LABEL,
+        vol.Required("entity_id"): str,
+        vol.Required("enabled"): bool,
+        vol.Required("expected_enabled"): bool,
+    }
+)
+async def websocket_set_entity_label(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Update exactly one entity's HVLS label, without generating YAML."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        connection.send_error(
+            msg["id"], "not_configured", "HVLS is not configured."
+        )
+        return
+
+    settings = {**entries[0].data, **entries[0].options}
+    configured_label = settings.get(CONF_LABEL, DEFAULT_LABEL)
+
+    try:
+        # Entire read/check/write sequence runs on the HA event loop.
+        # Do not add an await between these operations.
+        result = update_entity_label(
+            hass,
+            msg["entity_id"],
+            configured_label,
+            msg["enabled"],
+            msg["expected_enabled"],
+        )
+    except LabelUpdateError as exc:
+        connection.send_error(msg["id"], "label_update_refused", str(exc))
+        return
+    except (ValueError, TypeError, KeyError) as exc:
+        connection.send_error(msg["id"], "label_update_failed", str(exc))
+        return
+
+    connection.send_result(msg["id"], result)
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register the HVLS WebSocket API."""
     websocket_api.async_register_command(hass, websocket_get_preview)
+    websocket_api.async_register_command(hass, websocket_get_entities)
+    websocket_api.async_register_command(hass, websocket_set_entity_label)
     websocket_api.async_register_command(hass, websocket_apply_preview)
     websocket_api.async_register_command(hass, websocket_generate_preview)
