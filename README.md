@@ -16,7 +16,7 @@ Generate Google Assistant entity exposure configuration from **Home Assistant la
 >
 > HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. Set up and verify Google Assistant before using HVLS.
 
-**Current documented integration:** `v0.3.9` (released); `v0.3.10` cache fix prepared in the development workflow. Check [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for the latest published version.  
+**Latest release:** `v0.3.10` (stable). Check [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for the latest published version.  
 **Python core dependency:** `ha-voice-label-sync==0.3.5` (separate from the Home Assistant integration version).
 
 > [!NOTE]
@@ -38,7 +38,7 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 - ⚡ Trigger Preview or direct generation through native Home Assistant actions
 - 🔌 Keep the architecture open for future voice assistant backends
 - 📦 Install from the HACS/Marketplace catalog using the release ZIP asset
-- 🧹 Use a content-based SHA-256 fingerprint in the panel JavaScript URL to reduce stale browser caching (v0.3.10 change, verify availability in Releases)
+- 🧹 Use a content-based SHA-256 fingerprint in the panel JavaScript URL to reduce stale browser caching (available since v0.3.10)
 
 ## 📸 Screenshots
 
