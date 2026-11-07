@@ -8,6 +8,27 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.0.0-beta.1] - Unreleased (release candidate)
+
+### Added
+- Full Home Assistant entity catalog with domain grouping, search, filters and per-domain pagination.
+- Interactive HVLS label management directly from the panel, with confirmation and preservation of other labels.
+- Four-tab panel for statistics, excluded entities, entity management and YAML Preview.
+- Native registry diagnostics, eligible/ineligible status and exclusion reasons.
+- HVLS icon alongside the panel heading.
+- French/English localization of panel controls, dynamic statistics, confirmations and errors.
+
+### Improved
+- Preview/Production comparison and review-before-Apply workflow.
+- Automated coverage of the entity catalog, label updates and WebSocket operations.
+- CI validation with Ruff, Python tests, HACS and Hassfest.
+
+### Notes
+- Google Assistant setup and Google Home linking remain manual; a guided wizard is planned for V2.
+- The Python core remains `ha-voice-label-sync==0.3.5`; the Home Assistant integration has its own version.
+- No production YAML is modified by changing labels alone. Explicit Preview generation and Apply are required.
+
+
 ## [0.3.1] - 2026-07-21
 
 ### Documentation
