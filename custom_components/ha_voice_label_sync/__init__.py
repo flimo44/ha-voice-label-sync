@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
 from pathlib import Path
 
 from homeassistant.components import frontend
@@ -30,6 +31,10 @@ async def async_setup(
 
     frontend_path = Path(__file__).parent / "frontend"
 
+    # Change the resource URL whenever its content changes.
+    js_path = frontend_path / "hvls-preview-panel.js"
+    js_version = sha256(js_path.read_bytes()).hexdigest()[:12]
+
     await hass.http.async_register_static_paths(
         [
             StaticPathConfig(
@@ -49,7 +54,9 @@ async def async_setup(
         config={
             "_panel_custom": {
                 "name": "hvls-preview-panel",
-                "js_url": "/ha_voice_label_sync/hvls-preview-panel.js",
+                "js_url": (
+                    f"/ha_voice_label_sync/hvls-preview-panel.js?v={js_version}"
+                ),
                 "embed_iframe": False,
                 "trust_external": False,
             }
