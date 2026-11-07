@@ -22,6 +22,23 @@ Generate Google Assistant entity exposure configuration from **Home Assistant la
 > [!NOTE]
 > HVLS remains under active development and has not yet reached v1.0. Its Home Assistant integration and standalone PyPI core have independent version numbers. Feedback and issue reports are welcome.
 
+## 🧪 V1 beta release candidate (not published yet)
+
+The next milestone is **`v1.0.0-beta.1`**, currently being prepared and validated. **The latest published release remains `v0.3.10` until the V1 beta is actually released.** The Home Assistant integration version is independent of the Python core (`ha-voice-label-sync==0.3.5`); no new PyPI publication is planned unless the core changes.
+
+### What's ready for V1
+
+- Four-tab Home Assistant panel: **Statistics**, **Excluded entities**, **HVLS Entity Management**, **Preview**.
+- Complete entity catalog with search, filters, grouping by supported/unsupported domains and per-domain pagination.
+- Add or remove the HVLS label from an entity with confirmation; preserve other labels and refresh from Home Assistant registries.
+- Review YAML Preview, exclusions and Preview/Production differences before any production Apply.
+- Protected Apply with checksums, optional backups and safe production writes.
+- HVLS branding in the panel header, and French/English interface based on the Home Assistant language.
+
+**Important:** Changing labels in the entity manager does **not** automatically generate or apply Google Assistant YAML. Run **Generate Preview**, review the result, then explicitly select **Apply Preview**. HVLS does not perform Google Cloud project setup or Google Home pairing.
+
+The step-by-step Google Assistant setup wizard, including staged validation of DNS/HTTPS, Google Cloud credentials and Google Home linking, is **planned for V2** and is **not part of V1**.
+
 ## ✨ Why HVLS?
 
 Maintaining large Google Assistant `entity_config` sections by hand is tedious and error-prone. HVLS lets you select entities using a Home Assistant label and review proposed changes before writing them.
@@ -303,13 +320,11 @@ The frontend panel now computes a shortened SHA-256 hash of `hvls-preview-panel.
 
 > This reduces HTTP caching problems but does not force an already open browser tab to hot-reload its JavaScript. After upgrades, a Home Assistant restart and page reload may still be needed.
 
-## 🛣️ Planned improvements (not implemented yet)
+## 🛣️ Roadmap after V1
 
-- Expand domains and rooms to inspect the included entities (name, entity ID, area).
-- Manage HVLS labels directly from the panel, while keeping Preview and Apply as separate, reviewed steps.
-- Investigate Google Assistant reload and Google Home device synchronization after applying a Preview; verify additions and removals before enabling automation.
-- Build a step-by-step Google Assistant configuration checklist with validation of external access, Google Cloud setup, credentials and entity exposure.
-- Add the official HVLS logo and integration version to the panel header.
+- **V1 stable:** complete beta feedback, documentation, installation verification and any regression fixes.
+- **V2:** guided Google Assistant setup with a step-by-step checklist and verified prerequisites (external DNS/HTTPS, Google Cloud project, service account, Home Assistant and Google Home connection).
+- **Under investigation:** safer automation of Google Assistant reload and Google Home device synchronization after Apply; not implemented in V1.
 
 ## 📚 Documentation and roadmap
 
