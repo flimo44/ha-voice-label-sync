@@ -16,11 +16,11 @@ Generate Google Assistant entity exposure configuration from **Home Assistant la
 >
 > HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. Set up and verify Google Assistant before using HVLS.
 
-**Latest tested Home Assistant integration:** `v0.3.5-beta.6` (**pre-release**)  
-**Required Python core for this beta:** `ha-voice-label-sync==0.3.5`
+**Current documented integration:** `v0.3.9` (released); `v0.3.10` cache fix prepared in the development workflow. Check [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for the latest published version.  
+**Python core dependency:** `ha-voice-label-sync==0.3.5` (separate from the Home Assistant integration version).
 
 > [!NOTE]
-> HVLS remains under active development. The current beta is not a v1.0 stable release. Feedback and issue reports are welcome.
+> HVLS remains under active development and has not yet reached v1.0. Its Home Assistant integration and standalone PyPI core have independent version numbers. Feedback and issue reports are welcome.
 
 ## ✨ Why HVLS?
 
@@ -28,17 +28,21 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 
 - 🏷️ Select entities through Home Assistant labels
 - 🏠 Resolve names, areas and devices from **live Home Assistant registries** in the native integration
-- 👀 Generate a dedicated Preview and inspect statistics by domain and room
+- 👀 Generate a dedicated Preview and inspect statistics by domain and room, including labeled entities in non-enabled domains
 - 🔍 See excluded entities and the reasons they were filtered out
+- ⚙️ Open the integration configuration from the Preview panel
+- 🎨 Identify Preview generation and production application with distinct blue and green actions
 - 📊 Compare the Preview with the current production YAML (added, removed, modified, unchanged)
 - ✅ Apply a reviewed Preview with SHA-256 change detection
 - 💾 Preserve the previous configuration with optional automatic backups and retention
 - ⚡ Trigger Preview or direct generation through native Home Assistant actions
 - 🔌 Keep the architecture open for future voice assistant backends
+- 📦 Install from the HACS/Marketplace catalog using the release ZIP asset
+- 🧹 Use a content-based SHA-256 fingerprint in the panel JavaScript URL to reduce stale browser caching (v0.3.10 change, verify availability in Releases)
 
 ## 📸 Screenshots
 
-> Screenshots may show earlier beta versions; labels and layout can evolve.
+> Some screenshots below show earlier versions. The current panel uses the **HA Voice Label Sync** title, a Settings button, blue Generate Preview and green Apply Preview buttons, and a non-enabled domains section.
 
 ### Home Assistant configuration
 
@@ -62,25 +66,25 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 
 ## 🚀 Installation
 
-### Install with HACS (recommended)
+### Install with the Home Assistant Marketplace / HACS (recommended)
 
-**HA Voice Label Sync is listed in the HACS catalog.** A custom repository is not required for a standard installation.
+**HA Voice Label Sync is listed in the HACS catalog and can be discovered through the Home Assistant Marketplace where available.** A custom repository is not required for a standard installation.
 
-1. Open **HACS** in Home Assistant and search for **HA Voice Label Sync**.
-2. Download the integration. To test the current beta, select **`v0.3.5-beta.6`** from the available versions (pre-release availability may depend on your HACS download options).
+1. Open **Marketplace / HACS** in Home Assistant and search for **HA Voice Label Sync**.
+2. Download the latest **published** release (check [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases)).
 3. Restart Home Assistant.
 4. Go to **Settings → Devices & services → Add integration**.
 5. Search for **HA Voice Label Sync**, add it and configure its options.
-6. Reload the browser after upgrades if an older Preview panel remains cached (`Ctrl+Shift+R` on most desktop browsers).
+6. Open **HA Voice Label Sync** in the sidebar. If an older UI persists on versions before the cache fix, use a browser hard reload or clear the site cache.
 
 **Requirements**
 
-- Home Assistant **2025.6.0 or later** (the project-stated minimum; compatibility with every release has not been individually verified)
+- Home Assistant **2025.7.0 or later** (as declared in `hacs.json`; compatibility with every release has not been individually verified)
 - An existing and working [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup) for actual Google Home exposure
 
 ### Manual installation
 
-Download the desired [GitHub release](https://github.com/flimo44/ha-voice-label-sync/releases), copy `custom_components/ha_voice_label_sync` into `/config/custom_components/`, restart Home Assistant, then add the integration under **Devices & services**. Its Python core dependency is specified in `manifest.json`.
+Download the desired [GitHub release](https://github.com/flimo44/ha-voice-label-sync/releases). For ZIP-based releases, extract `ha_voice_label_sync.zip` and ensure the integration files end up in `/config/custom_components/ha_voice_label_sync/`. Restart Home Assistant, then add the integration under **Devices & services**. Its Python core dependency is specified in `manifest.json`.
 
 ## ⚙️ Google Assistant configuration
 
@@ -104,7 +108,7 @@ google_assistant:
 This is an example: retain your actual project settings, credentials and other Google Assistant options. HVLS does not create `google_key.json` or configure Google Cloud.
 
 > [!IMPORTANT]
-> Changing the generated `entity_config` file does **not** automatically reload Google Assistant. Restart Home Assistant after applying changes, then synchronize devices with Google Home if necessary.
+> Applying a generated `entity_config` file does **not**, by itself, guarantee that Google Home has received the new device list. Reload the Google Assistant integration if available in your installation (or restart Home Assistant), then request a Google device sync if necessary. HVLS does not yet automate this end-to-end.
 
 ## 🧭 Recommended workflow: Preview → Review → Apply
 
@@ -119,12 +123,12 @@ This is an example: retain your actual project settings, credentials and other G
                    ↓
 💾 Backup and atomic production write
                    ↓
-🔄 Restart Home Assistant
+🔄 Reload Google Assistant where supported (or restart Home Assistant)
                    ↓
-🎤 Sync Google Home when needed
+🎤 Request a Google Home device sync if needed
 ```
 
-The Preview panel provides four distinct actions:
+The Preview panel offers four workflow actions plus a **Settings** shortcut:
 
 | Action | What it does |
 | --- | --- |
@@ -132,8 +136,9 @@ The Preview panel provides four distinct actions:
 | **Refresh** | Reloads existing Preview, comparisons and current diagnostics without generating a new YAML file. |
 | **Copy YAML** | Copies the generated Preview content. |
 | **Apply Preview** | Requests confirmation, checks the reviewed Preview and production SHA-256 fingerprints, then writes to the configured production path, with a backup when enabled. |
+| **Settings** | Opens the Home Assistant integration details/configuration page. |
 
-The panel also shows the count of entities, breakdowns by domain and room, exclusion diagnostics, and a Preview/Production comparison.
+The panel also shows entity counts, breakdowns by domain and room, labeled entities from **non-enabled domains**, exclusion diagnostics, and a Preview/Production comparison. **Generate Preview** is blue and **Apply Preview** is green to distinguish preparation from production changes. The sidebar and page title both use **HA Voice Label Sync**.
 
 > [!WARNING]
 > **Apply Preview changes the configured production file.** Read the differences first. HACS rollback restores integration code, **not** previously generated YAML. Automatic backups are stored under `/config/.hvls_backups/` for the default production output directory, when enabled.
@@ -154,19 +159,69 @@ The integration also provides a separate **HVLS settings** options flow.
 
 ## 🧩 Entity eligibility and exclusions
 
-A label identifies candidate entities, but it does not guarantee exposure. HVLS filters candidates by supported domain and, for certain domains, by compatible `device_class`.
+Adding the HVLS label makes an entity a **candidate**, not a guarantee that it will appear in the generated Google Assistant YAML. HVLS applies the selection rules below. These lists describe **HVLS eligibility**, not every entity type that Google Assistant might support independently.
 
-For the `sensor` domain, this beta recognizes the following Google Assistant-compatible classes:
+### Domains enabled by the Home Assistant integration
 
-| Sensor device class | Supported |
+The native integration enables these **14 domains** by default:
+
+| | | |
+| --- | --- | --- |
+| `binary_sensor` | `climate` | `cover` |
+| `fan` | `input_boolean` | `input_select` |
+| `light` | `lock` | `scene` |
+| `script` | `select` | `sensor` |
+| `switch` | `vacuum` | |
+
+> **CLI difference:** The standalone CLI defaults to the same list **except** `sensor` and `binary_sensor` (12 domains). This section otherwise describes the native Home Assistant integration.
+
+### Supported `sensor` device classes
+
+Only `sensor` entities with one of these `device_class` values are selected:
+
+| Device class | Description |
 | --- | --- |
-| `temperature`, `humidity` | Yes |
-| `aqi`, `carbon_dioxide`, `carbon_monoxide` | Yes |
-| `pm10`, `pm25`, `volatile_organic_compounds` | Yes |
+| `temperature` | Temperature |
+| `humidity` | Humidity |
+| `aqi` | Air quality index |
+| `carbon_dioxide` | CO₂ |
+| `carbon_monoxide` | Carbon monoxide |
+| `pm10` | PM10 |
+| `pm25` | PM2.5 |
+| `volatile_organic_compounds` | Volatile organic compounds |
 
-Supported `binary_sensor` device classes are also filtered. Entities with unsupported domains or classes are listed in **Excluded entities** with a reason. Raw measurements such as pH or electrical power are not automatically exposed just because they carry the label.
+A sensor with a missing or different device class (for example `power`, `energy`, or a pH measurement without a supported class) is **not selected**, even if it has the HVLS label.
 
-**Example:** A Zigbee2MQTT rain `binary_sensor` configured in Home Assistant to **Show as → Moisture** can be considered eligible. This changes the effective binary sensor class; it does not alter the original Zigbee2MQTT device.
+### Supported `binary_sensor` device classes
+
+Only these `binary_sensor` device classes are selected:
+
+| Device class | Description |
+| --- | --- |
+| `carbon_monoxide` | Carbon monoxide detection |
+| `door` | Door |
+| `garage_door` | Garage door |
+| `lock` | Lock |
+| `moisture` | Moisture / water detection |
+| `opening` | Opening |
+| `smoke` | Smoke detection |
+| `window` | Window |
+
+**Example:** A Zigbee2MQTT rain `binary_sensor` configured in Home Assistant as **Show as → Moisture** may become eligible if its effective `device_class` is `moisture`. This does not change the Zigbee device itself.
+
+### Other reasons an entity may be excluded
+
+An entity is also skipped when it:
+
+- belongs to a domain not enabled in HVLS (`domain_not_enabled`);
+- has an unsupported `sensor` or `binary_sensor` device class (`unsupported_device_class`);
+- is disabled (`disabled`) or hidden (`hidden`);
+- belongs to the `diagnostic` or `config` entity category (`entity_category`);
+- does not carry the selected HVLS label.
+
+The Preview panel shows included-entity counts **by domain and room**. Under **Non-enabled domains**, it groups *labeled* entities excluded because their domain is not enabled; the **Excluded entities** diagnostic lists labeled exclusions and their reasons. Entities without the selected label are not included in these exclusion statistics.
+
+> **Note:** These are the selection rules shown in the local `src/hvls/engine.py` and `custom_components/ha_voice_label_sync/services.py` excerpts. Before publishing this documentation, verify that the installed `ha-voice-label-sync==0.3.5` package uses the same rules, since it is a separately versioned dependency.
 
 ## 🏠 Home Assistant integration features
 
@@ -193,7 +248,7 @@ hvls \
   --label google_assistant
 ```
 
-The standalone CLI reads registry files in Home Assistant `.storage`. **The native Home Assistant integration uses live/in-memory Home Assistant registries** instead; this migration is already implemented in the current beta.
+The standalone CLI reads registry files in Home Assistant `.storage`. **The native Home Assistant integration uses live/in-memory Home Assistant registries** instead; this migration is already implemented.
 
 ## 🎤 Supported voice assistants
 
@@ -229,9 +284,32 @@ Future backends may share the label-driven workflow. Only Google Assistant YAML 
 
 ## 🧪 Tests and releases
 
-The `v0.3.5-beta.6` development snapshot passed **82 Python tests**, **8 JavaScript tests**, and Ruff checks. The repository also runs Home Assistant/HACS validation and package checks in GitHub Actions.
+A prior `v0.3.5-beta.6` snapshot passed **82 Python tests** and **8 JavaScript tests**. More recent UI and cache changes passed their respective checks, including GitHub CI (HACS validation, Hassfest, package validation and Python checks). These historical test counts are not claimed as the current suite totals.
 
-See [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for tagged versions and changelogs. Beta releases are intended for evaluation before a stable v1.0.
+See [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for tagged versions and changelogs. See release notes for the exact status of each version; v1.0 has not yet been announced.
+
+## 🧩 Recent interface changes
+
+### v0.3.9 — Panel usability
+
+- Sidebar and page title: **HA Voice Label Sync** (without “Preview”).
+- Direct **Settings** button to reach the integration configuration.
+- Distinct blue **Generate Preview** and green **Apply Preview** buttons.
+- **Non-enabled domains** section below the domain breakdown, counting only labeled candidates omitted because their domains are not enabled.
+
+### v0.3.10 — Frontend cache-busting change
+
+The frontend panel now computes a shortened SHA-256 hash of `hvls-preview-panel.js` at Home Assistant setup time and appends it to the script URL (for example `?v=<hash>`). Changing the JS changes the URL on the next integration setup, reducing the chance of stale browser assets. Confirm this version is published before presenting it as an installed feature.
+
+> This reduces HTTP caching problems but does not force an already open browser tab to hot-reload its JavaScript. After upgrades, a Home Assistant restart and page reload may still be needed.
+
+## 🛣️ Planned improvements (not implemented yet)
+
+- Expand domains and rooms to inspect the included entities (name, entity ID, area).
+- Manage HVLS labels directly from the panel, while keeping Preview and Apply as separate, reviewed steps.
+- Investigate Google Assistant reload and Google Home device synchronization after applying a Preview; verify additions and removals before enabling automation.
+- Build a step-by-step Google Assistant configuration checklist with validation of external access, Google Cloud setup, credentials and entity exposure.
+- Add the official HVLS logo and integration version to the panel header.
 
 ## 📚 Documentation and roadmap
 
