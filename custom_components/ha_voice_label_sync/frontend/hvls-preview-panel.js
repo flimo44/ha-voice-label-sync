@@ -5,6 +5,7 @@ class HVLSPreviewPanel extends HTMLElement {
       this._initialized = true;
       this._render();
       this._loadPreview();
+      this._loadEntities();
     }
   }
 
@@ -268,6 +269,7 @@ class HVLSPreviewPanel extends HTMLElement {
   _renderAnalysis(result) {
     const panel = this.querySelector("#analysis");
     panel.replaceChildren();
+    this.querySelector("#exclusions").replaceChildren();
     this.querySelector("#unifiedDiff").textContent = "";
     this.querySelector("#rawDiffDetails").hidden = true;
     if (!result.available || !result.summary) return;
@@ -385,7 +387,7 @@ class HVLSPreviewPanel extends HTMLElement {
     }
     panel.appendChild(breakdown);
 
-    this._renderExclusions(panel, result.exclusions);
+    this._renderExclusions(this.querySelector("#exclusions"), result.exclusions);
 
     const comparison = result.comparison || {status: "missing"};
     const heading = document.createElement("h2");
@@ -496,6 +498,143 @@ class HVLSPreviewPanel extends HTMLElement {
           font-size: 12px;
         }
 
+        #entityManager {
+          margin: 24px 0;
+          padding: 16px;
+          background: var(--card-background-color);
+          border-radius: 12px;
+          border: 1px solid var(--divider-color);
+        }
+        .entity-manager-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .entity-manager-header h2 { margin: 0; }
+        .entity-controls {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin: 14px 0;
+        }
+        .entity-controls input,
+        .entity-controls select {
+          padding: 10px;
+          border: 1px solid var(--divider-color);
+          border-radius: 8px;
+          background: var(--card-background-color);
+          color: var(--primary-text-color);
+          font: inherit;
+        }
+        .entity-controls input { flex: 1; min-width: 200px; }
+        .entity-controls select { min-width: 170px; }
+        .entity-catalog-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 9px 4px;
+          border-bottom: 1px solid var(--divider-color);
+        }
+        .entity-catalog-info {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          min-width: 0;
+          overflow-wrap: anywhere;
+        }
+        .entity-catalog-info small {
+          color: var(--secondary-text-color);
+        }
+        .entity-catalog-label {
+          white-space: nowrap;
+          font-size: 12px;
+          flex-shrink: 0;
+        }
+        .entity-catalog-label.active {
+          color: var(--success-color, #238455);
+        }
+        #entityMore { margin-top: 12px; }
+
+        .hvls-tabs {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin: 22px 0 16px;
+          border-bottom: 1px solid var(--divider-color);
+        }
+        .hvls-tab {
+          background: transparent;
+          color: var(--primary-text-color);
+          border-radius: 8px 8px 0 0;
+          border-bottom: 3px solid transparent;
+          padding: 12px 14px;
+        }
+        .hvls-tab.active {
+          color: var(--primary-color);
+          border-bottom-color: var(--primary-color);
+          font-weight: 600;
+        }
+        .hvls-tab-panel[hidden] { display: none !important; }
+        #entityManager { margin-top: 0; }
+
+        .entity-catalog-domain {
+          margin: 6px 0;
+          border-bottom: 1px solid var(--divider-color);
+        }
+        .entity-catalog-domain > summary {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px 8px;
+          font-weight: 500;
+        }
+        .entity-catalog-domain > summary span {
+          color: var(--secondary-text-color);
+          font-size: 13px;
+        }
+        .entity-catalog-group {
+          padding: 4px 12px 12px 24px;
+          background: var(--secondary-background-color);
+          border-radius: 8px;
+        }
+        .entity-catalog-label.eligible {
+          color: var(--success-color, #238455);
+          font-weight: 600;
+        }
+        .entity-catalog-label.ineligible {
+          color: var(--error-color, #db4437);
+          font-weight: 600;
+        }
+
+        .entity-domain-section {
+          margin: 18px 0;
+        }
+        .entity-domain-section h3 {
+          color: var(--success-color, #238455);
+          margin-bottom: 12px;
+        }
+        .unsupported-domain-section {
+          margin: 22px 0;
+          border-top: 1px solid var(--divider-color);
+          padding-top: 12px;
+        }
+        .unsupported-domain-section > summary {
+          font-weight: 600;
+          color: var(--secondary-text-color);
+        }
+        .unsupported-domain-section > div {
+          margin-top: 10px;
+        }
+
+        .entity-domain-more {
+          margin: 12px 0 4px;
+          font-size: 12px;
+        }
+
         .change-group { margin:12px 0; }
         .change-group li { overflow-wrap:anywhere; padding:4px 0; }
         .diagnostic-note { color:var(--secondary-text-color); font-size:13px; }
@@ -515,7 +654,62 @@ class HVLSPreviewPanel extends HTMLElement {
           </div>
         </div>
         <div id="status">En attente de Home Assistant…</div>
-        <div id="analysis"></div>
+        <nav class="hvls-tabs" aria-label="Sections HVLS" role="tablist">
+          <button class="hvls-tab active" type="button"
+            data-tab="summary" role="tab" aria-selected="true">
+            1 · Statistiques
+          </button>
+          <button class="hvls-tab" type="button"
+            data-tab="exclusions" role="tab" aria-selected="false">
+            2 · Entités exclues
+          </button>
+          <button class="hvls-tab" type="button"
+            data-tab="entities" role="tab" aria-selected="false">
+            3 · Gestion des entités HVLS
+          </button>
+          <button class="hvls-tab" type="button"
+            data-tab="preview" role="tab" aria-selected="false">
+            4 · Preview
+          </button>
+        </nav>
+
+        <section id="tab-summary" class="hvls-tab-panel" role="tabpanel">
+          <div id="analysis"></div>
+        </section>
+
+        <section id="tab-exclusions" class="hvls-tab-panel"
+          role="tabpanel" hidden>
+          <div id="exclusions"></div>
+        </section>
+
+        <section id="entityManager" class="hvls-tab-panel"
+          role="tabpanel" hidden>
+          <div class="entity-manager-header">
+            <h2>Gestion des entités HVLS</h2>
+            <button id="refreshEntities" class="secondary">
+              Actualiser les entités
+            </button>
+          </div>
+          <p id="entityStatus" class="diagnostic-note">
+            Chargement des entités…
+          </p>
+          <div class="entity-controls">
+            <input id="entitySearch" type="search"
+              placeholder="Rechercher un nom, identifiant ou une pièce…"
+              aria-label="Rechercher une entité">
+            <select id="entityFilter" aria-label="Filtrer les entités">
+              <option value="all">Toutes les entités</option>
+              <option value="yes">Avec HVLS</option>
+              <option value="no">Sans HVLS</option>
+            </select>
+          </div>
+          <div id="entityList"></div>
+          <button id="entityMore" class="secondary" hidden>
+            Afficher 100 entités supplémentaires
+          </button>
+        </section>
+        <section id="tab-preview" class="hvls-tab-panel"
+          role="tabpanel" hidden>
         <details id="rawDiffDetails" hidden>
           <summary>Diff YAML détaillé</summary>
           <pre id="unifiedDiff"></pre>
@@ -524,14 +718,334 @@ class HVLSPreviewPanel extends HTMLElement {
           <summary>Afficher le YAML du Preview</summary>
           <pre id="content"></pre>
         </details>
+        </section>
       </div>
     `;
+    this.querySelector("#entitySearch").addEventListener("input", () => {
+      this._entityLimit = 100;
+      this._renderEntities();
+    });
+    this.querySelector("#entityFilter").addEventListener("change", () => {
+      this._entityLimit = 100;
+      this._renderEntities();
+    });
+    this.querySelector("#entityMore").addEventListener("click", () => {
+      this._entityLimit = (this._entityLimit || 100) + 100;
+      this._renderEntities();
+    });
+    this.querySelector("#refreshEntities").addEventListener(
+      "click", () => this._loadEntities()
+    );
+    this.querySelectorAll(".hvls-tab").forEach((button) => {
+      button.addEventListener("click", () => {
+        this._activateTab(button.dataset.tab);
+      });
+    });
     this.querySelector("#generate").addEventListener("click", () => this._generatePreview());
     this.querySelector("#refresh").addEventListener("click", () => this._loadPreview());
     this.querySelector("#copy").addEventListener("click", () => this._copyPreview());
     this.querySelector("#apply").addEventListener("click", () => this._applyPreview());
     this.querySelector("#settings").addEventListener("click", () => {
       window.location.assign("/config/integrations/integration/ha_voice_label_sync");
+    });
+  }
+
+
+  async _loadEntities() {
+    if (!this._hass || this._entityLoading) return;
+
+    this._entityLoading = true;
+    const refresh = this.querySelector("#refreshEntities");
+    const status = this.querySelector("#entityStatus");
+
+    if (refresh) refresh.disabled = true;
+    if (status) status.textContent = "Chargement des registres HA…";
+
+    try {
+      const catalog = await this._hass.callWS({
+        type: "ha_voice_label_sync/get_entities",
+      });
+
+      this._entityCatalog = catalog;
+      this._entityLimit = 100;
+      this._renderEntities();
+    } catch (error) {
+      this._entityCatalog = null;
+      this.querySelector("#entityList")?.replaceChildren();
+      const more = this.querySelector("#entityMore");
+      if (more) more.hidden = true;
+      if (status) {
+        status.textContent =
+          `Impossible de charger les entités : ${error.message || String(error)}`;
+      }
+    } finally {
+      this._entityLoading = false;
+      if (refresh) refresh.disabled = false;
+    }
+  }
+
+  _renderEntities() {
+    const catalog = this._entityCatalog;
+    if (!catalog) return;
+
+    const list = this.querySelector("#entityList");
+    const status = this.querySelector("#entityStatus");
+    const legacyMore = this.querySelector("#entityMore");
+
+    if (!list || !status) return;
+
+    // Ancienne pagination globale : désactivée.
+    if (legacyMore) legacyMore.hidden = true;
+
+    const query = (this.querySelector("#entitySearch")?.value || "")
+      .trim().toLocaleLowerCase();
+    const filter = this.querySelector("#entityFilter")?.value || "all";
+
+    const reasons = {
+      domain_not_enabled: "Domaine non autorisé",
+      unsupported_device_class: "Classe de capteur non compatible",
+      disabled: "Entité désactivée",
+      hidden: "Entité masquée",
+      entity_category: "Configuration ou diagnostic",
+    };
+
+    // Mémoriser les domaines ouverts.
+    const openDomains = new Set(
+      Array.from(
+        list.querySelectorAll(".entity-catalog-domain[open]")
+      ).map((details) => details.dataset.domain)
+    );
+
+    // Recherche sur l'ensemble du catalogue HA.
+    const matching = (catalog.entities || []).filter((entity) => {
+      if (filter === "yes" && !entity.has_label) return false;
+      if (filter === "no" && entity.has_label) return false;
+
+      const searchable = [
+        entity.name,
+        entity.entity_id,
+        entity.room,
+        entity.domain
+      ].join(" ").toLocaleLowerCase();
+
+      return searchable.includes(query);
+    });
+
+    matching.sort((a, b) =>
+      a.domain.localeCompare(b.domain) ||
+      a.entity_id.localeCompare(b.entity_id)
+    );
+
+    // Tous les domaines, sans limite globale.
+    const grouped = new Map();
+
+    for (const entity of matching) {
+      if (!grouped.has(entity.domain)) {
+        grouped.set(entity.domain, []);
+      }
+      grouped.get(entity.domain).push(entity);
+    }
+
+    // Pagination indépendante pour chaque domaine.
+    this._domainLimits ||= new Map();
+
+    const fragment = document.createDocumentFragment();
+    const supportedDomains = new Set(catalog.supported_domains || []);
+
+    const supportedSection = document.createElement("section");
+    supportedSection.className = "entity-domain-section";
+
+    const supportedHeading = document.createElement("h3");
+    supportedHeading.textContent = "✓ Domaines pris en charge par HVLS";
+    supportedSection.appendChild(supportedHeading);
+
+    const supportedList = document.createElement("div");
+    supportedSection.appendChild(supportedList);
+
+    const unsupportedDetails = document.createElement("details");
+    unsupportedDetails.className = "unsupported-domain-section";
+    unsupportedDetails.open =
+      Boolean(query) || Boolean(this._unsupportedDomainsOpen);
+
+    const unsupportedHeading = document.createElement("summary");
+    unsupportedDetails.appendChild(unsupportedHeading);
+
+    const unsupportedList = document.createElement("div");
+    unsupportedDetails.appendChild(unsupportedList);
+
+    let supportedCount = 0;
+    let unsupportedCount = 0;
+    let supportedDomainCount = 0;
+    let unsupportedDomainCount = 0;
+
+    for (const [domain, entities] of grouped) {
+      const details = document.createElement("details");
+      details.className = "entity-catalog-domain";
+      details.dataset.domain = domain;
+      details.open = Boolean(query) || openDomains.has(domain);
+
+      const heading = document.createElement("summary");
+      heading.className = "breakdown-row";
+
+      const title = document.createElement("strong");
+      title.textContent = domain;
+
+      const count = document.createElement("span");
+      count.textContent = `${entities.length} entités`;
+
+      heading.append(title, count);
+      details.appendChild(heading);
+
+      const group = document.createElement("div");
+      group.className = "entity-catalog-group";
+      details.appendChild(group);
+
+      const renderDomain = () => {
+        const limit = this._domainLimits.get(domain) || 100;
+        const visible = entities.slice(0, limit);
+        const rows = document.createDocumentFragment();
+
+        for (const entity of visible) {
+          const row = document.createElement("div");
+          row.className = "entity-catalog-row";
+
+          const info = document.createElement("div");
+          info.className = "entity-catalog-info";
+
+          const name = document.createElement("strong");
+          name.textContent = entity.name || entity.entity_id;
+
+          const description = document.createElement("small");
+          description.textContent =
+            `${entity.entity_id} · ${entity.room || "Sans pièce"}`;
+
+          info.append(name, description);
+
+          const label = document.createElement("span");
+          label.className = "entity-catalog-label";
+
+          if (entity.has_label && entity.eligible === true) {
+            label.classList.add("eligible");
+            label.textContent = "✓ HVLS";
+          } else if (entity.has_label && entity.eligible === false) {
+            label.classList.add("ineligible");
+            label.textContent = "✕ HVLS";
+          } else if (entity.has_label) {
+            label.textContent = "HVLS · statut inconnu";
+          } else {
+            label.textContent = "— Sans HVLS";
+          }
+
+          if (entity.eligible === false) {
+            const reason = document.createElement("small");
+            reason.textContent =
+              reasons[entity.exclusion_reason] || "Non éligible";
+            info.appendChild(reason);
+          }
+
+          row.append(info, label);
+          rows.appendChild(row);
+        }
+
+        group.replaceChildren(rows);
+
+        if (visible.length < entities.length) {
+          const more = document.createElement("button");
+          more.className = "secondary entity-domain-more";
+          more.type = "button";
+          more.textContent =
+            `Afficher 100 de plus (${visible.length}/${entities.length})`;
+
+          more.addEventListener("click", (event) => {
+            event.stopPropagation();
+            this._domainLimits.set(domain, limit + 100);
+            renderDomain();
+          });
+
+          group.appendChild(more);
+        }
+      };
+
+      // Ne créer les lignes qu'à l'ouverture du domaine.
+      details.addEventListener("toggle", () => {
+        if (details.open && !group.hasChildNodes()) {
+          renderDomain();
+        }
+      });
+
+      if (details.open) {
+        renderDomain();
+      }
+
+      if (supportedDomains.has(domain)) {
+        supportedList.appendChild(details);
+        supportedCount += entities.length;
+        supportedDomainCount++;
+      } else {
+        unsupportedList.appendChild(details);
+        unsupportedCount += entities.length;
+        unsupportedDomainCount++;
+      }
+    }
+
+    supportedHeading.textContent =
+      `✓ Domaines pris en charge par HVLS ` +
+      `(${supportedDomainCount} domaines · ${supportedCount} entités)`;
+
+    unsupportedHeading.textContent =
+      `Domaines non pris en charge ` +
+      `(${unsupportedDomainCount} domaines · ${unsupportedCount} entités)`;
+
+    unsupportedDetails.addEventListener("toggle", () => {
+      this._unsupportedDomainsOpen = unsupportedDetails.open;
+    });
+
+    if (supportedDomainCount) {
+      fragment.appendChild(supportedSection);
+    }
+
+    if (unsupportedDomainCount) {
+      fragment.appendChild(unsupportedDetails);
+    }
+
+    if (matching.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "diagnostic-note";
+      empty.textContent = "Aucune entité correspondant aux filtres.";
+      fragment.appendChild(empty);
+    }
+
+    list.replaceChildren(fragment);
+
+    status.textContent =
+      `${matching.length} entités correspondant aux filtres · ` +
+      `${catalog.labeled} étiquetées sur ${catalog.total} · ` +
+      `Étiquette : ${catalog.label}`;
+
+    if (catalog.warnings?.length) {
+      status.textContent +=
+        ` · Attention : ${catalog.warnings.join("; ")}`;
+    }
+  }
+
+  _activateTab(tab) {
+    const panels = {
+      summary: "#tab-summary",
+      exclusions: "#tab-exclusions",
+      entities: "#entityManager",
+      preview: "#tab-preview",
+    };
+
+    if (!Object.hasOwn(panels, tab)) return;
+
+    for (const [name, selector] of Object.entries(panels)) {
+      this.querySelector(selector).hidden = name !== tab;
+    }
+
+    this.querySelectorAll(".hvls-tab").forEach((button) => {
+      const active = button.dataset.tab === tab;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", String(active));
     });
   }
 
