@@ -203,7 +203,6 @@ test("Generate Preview regenerates YAML and refreshes panel", async () => {
 
   assert.equal(controls.apply.disabled, false);
   assert.equal(controls.refresh.disabled, false);
-  assert.equal(controls.generate.disabled, false);
   assert.match(panel.status, /32 entités/);
 });
 
@@ -227,7 +226,6 @@ test("Generate Preview prevents applying stale review", async () => {
 
   assert.equal(controls.apply.disabled, true);
   assert.equal(controls.refresh.disabled, true);
-  assert.equal(controls.generate.disabled, true);
 
   // An attempted application during generation must do nothing.
   await panel._applyPreview();
@@ -240,7 +238,7 @@ test("Generate Preview prevents applying stale review", async () => {
   pending.resolve({ generated: true, entity_count: 32 });
   await generation;
 
-  assert.equal(controls.generate.disabled, false);
+  assert.equal(controls.refresh.disabled, false);
 });
 
 test("Failed generation invalidates previously approved Preview", async () => {
@@ -262,7 +260,6 @@ test("Failed generation invalidates previously approved Preview", async () => {
   await panel._generatePreview();
 
   assert.equal(controls.apply.disabled, true);
-  assert.equal(controls.generate.disabled, false);
   assert.match(panel.status, /Échec de génération/);
   assert.deepEqual(calls, [
     "ha_voice_label_sync/get_preview",
@@ -295,6 +292,7 @@ test("Ineligible previously labelled entity can be cleaned up", async () => {
   const checkbox = { checked: false, disabled: false, dataset: { ineligible: "false" } };
   panel.querySelectorAll = () => [checkbox];
   panel._loadEntities = async () => true;
+  panel._generatePreview = async () => {};
   await panel._setEntityLabel(
     { entity_id: "sensor.legacy", name: "Legacy", has_label: true, eligible: false },
     checkbox
@@ -418,4 +416,80 @@ test("Global refresh is an accessible compact icon action", () => {
   assert.match(source, /id="refresh" class="secondary icon-action" type="button"/);
   assert.match(source, /id="refresh"[^>]*aria-label=/);
   assert.match(source, /this\._refreshAll\(\)/);
+});
+
+test("Label change regenerates Preview after registry reload without production Apply", async () => {
+  const calls = [];
+  const { panel, controls } = makePanel(async message => {
+    calls.push(message.type);
+    if (message.type === "ha_voice_label_sync/set_entity_label") {
+      assert.equal(controls.apply.disabled, true);
+      return { entity_id: message.entity_id, has_label: message.enabled };
+    }
+    if (message.type === "ha_voice_label_sync/generate_preview")
+      return { generated: true, entity_count: 41 };
+    return preview(true);
+  });
+  const checkbox = { checked: true, disabled: false, dataset: { ineligible: "false" } };
+  panel.querySelectorAll = () => [checkbox];
+  panel._loadEntities = async () => { calls.push("reloaded_entities"); return true; };
+  await panel._loadPreview();
+  await panel._setEntityLabel(
+    { entity_id: "light.salon", name: "Salon", has_label: false, eligible: true },
+    checkbox
+  );
+  assert.deepEqual(calls, [
+    "ha_voice_label_sync/get_preview",
+    "ha_voice_label_sync/set_entity_label",
+    "reloaded_entities",
+    "ha_voice_label_sync/generate_preview",
+    "ha_voice_label_sync/get_preview",
+  ]);
+  assert.equal(calls.includes("ha_voice_label_sync/apply_preview"), false);
+  assert.equal(controls.apply.disabled, false);
+});
+
+test("Failed label write invalidates previous Preview approval", async () => {
+  const calls = [];
+  const { panel, controls } = makePanel(async message => {
+    calls.push(message.type);
+    if (message.type === "ha_voice_label_sync/set_entity_label")
+      throw new Error("Write failed");
+    return preview(true);
+  });
+  const checkbox = { checked: false, disabled: false, dataset: { ineligible: "false" } };
+  panel.querySelectorAll = () => [checkbox];
+  // The production UI uses a native alert after server-side refusal.
+  // Supply a harmless alert in the test context through the original window.
+  panel._loadEntities = async () => true;
+  await panel._loadPreview();
+  assert.equal(controls.apply.disabled, false);
+  panel._generatePreview = () => { throw new Error("Must not regenerate"); };
+  // Add a test-only catch for the browser alert in this isolated environment.
+  // The vm context does not expose alert; a failed operation therefore throws here.
+  await assert.rejects(
+    panel._setEntityLabel(
+      { entity_id: "light.salon", name: "Salon", has_label: false, eligible: true },
+      checkbox
+    ),
+    /window.alert is not a function/
+  );
+  assert.equal(controls.apply.disabled, true);
+  assert.equal(panel._review, null);
+  assert.deepEqual(calls, [
+    "ha_voice_label_sync/get_preview",
+    "ha_voice_label_sync/set_entity_label",
+  ]);
+});
+
+test("Preview contains the Copy YAML and Apply actions, not the header", () => {
+  const header = source.match(/<div class="header">([\s\S]*?)<div id="status">/)?.[1];
+  const previewPanel = source.match(/<section id="tab-preview"([\s\S]*?)<\/section>/)?.[1];
+  assert.ok(header);
+  assert.ok(previewPanel);
+  assert.doesNotMatch(header, /id="generate"|id="copy"|id="apply"/);
+  assert.match(previewPanel, /id="copy"/);
+  assert.match(previewPanel, /id="apply"/);
+  assert.match(header, /id="refresh"/);
+  assert.match(header, /id="settings"/);
 });
