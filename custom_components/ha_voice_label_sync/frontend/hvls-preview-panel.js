@@ -94,6 +94,7 @@ const HVLS_TRANSLATIONS = {
     tabsLabel: "Sections HVLS",
     rawDiffSummary: "Diff YAML détaillé",
     hvlsLabelAria: "Étiquette HVLS : {entity}",
+    entityMoreInfo: "Afficher les informations de {entity} dans Home Assistant",
     catalogWarning: "Attention : {warnings}",
     absentValue: "(absent)",
     showPreviewYaml: "Afficher le YAML du Preview",
@@ -200,6 +201,7 @@ const HVLS_TRANSLATIONS = {
     tabsLabel: "HVLS sections",
     rawDiffSummary: "Detailed YAML diff",
     hvlsLabelAria: "HVLS label: {entity}",
+    entityMoreInfo: "Show {entity} details in Home Assistant",
     catalogWarning: "Warning: {warnings}",
     absentValue: "(absent)",
     showPreviewYaml: "Show Preview YAML",
@@ -1251,6 +1253,32 @@ class HVLSPreviewPanel extends HTMLElement {
           min-width: 0;
           overflow-wrap: anywhere;
         }
+        .entity-more-info {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 3px;
+          width: 100%;
+          min-width: 0;
+          padding: 3px 5px;
+          background: transparent;
+          color: var(--primary-text-color);
+          border-radius: 6px;
+          text-align: left;
+          overflow-wrap: anywhere;
+        }
+        .entity-more-info:hover {
+          background: var(--secondary-background-color);
+          color: var(--primary-color);
+        }
+        .entity-more-info:focus-visible {
+          outline: 2px solid var(--primary-color);
+          outline-offset: 2px;
+        }
+        .entity-more-info small {
+          font-size: 12px;
+          color: var(--secondary-text-color);
+        }
         .entity-catalog-label {
           text-align: center;
           justify-self: center;
@@ -1529,6 +1557,15 @@ class HVLSPreviewPanel extends HTMLElement {
     if (reloadSucceeded) await this._generatePreview();
   }
 
+  _openEntityDetails(entityId) {
+    if (!entityId) return;
+    this.dispatchEvent(new CustomEvent("hass-more-info", {
+      detail: {entityId},
+      bubbles: true,
+      composed: true
+    }));
+  }
+
   _renderEntities() {
     const catalog = this._entityCatalog;
     if (!catalog) return;
@@ -1656,6 +1693,14 @@ class HVLSPreviewPanel extends HTMLElement {
           const info = document.createElement("div");
           info.className = "entity-catalog-info";
 
+          // The name/ID opens HA's native More Info dialog. The HVLS
+          // checkbox remains a separate control and does not trigger it.
+          const entityButton = document.createElement("button");
+          entityButton.type = "button";
+          entityButton.className = "entity-more-info";
+          entityButton.setAttribute("aria-label", this._tf("entityMoreInfo", {
+            entity: entity.name || entity.entity_id
+          }));
           const name = document.createElement("strong");
           name.textContent = entity.name || entity.entity_id;
 
@@ -1663,7 +1708,11 @@ class HVLSPreviewPanel extends HTMLElement {
           description.textContent =
             `${entity.entity_id} · ${entity.room || this._t("noArea")}`;
 
-          info.append(name, description);
+          entityButton.append(name, description);
+          entityButton.addEventListener("click", () => {
+            this._openEntityDetails(entity.entity_id);
+          });
+          info.appendChild(entityButton);
 
           const label = document.createElement("span");
           label.className = "entity-catalog-label";
