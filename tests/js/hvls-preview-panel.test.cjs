@@ -43,6 +43,14 @@ function makePanel(callWS, confirm = () => true) {
         };
       },
     },
+    CustomEvent: class {
+      constructor(type, options = {}) {
+        this.type = type;
+        this.detail = options.detail;
+        this.bubbles = options.bubbles;
+        this.composed = options.composed;
+      }
+    },
     Event: class {
       constructor(type, options = {}) {
         this.type = type;
@@ -662,4 +670,33 @@ test("Entity filter options and exclusions tab count are translated", () => {
 
 test("Hidden exclusions tab has an explicit CSS visibility rule", () => {
   assert.match(source, /\.hvls-tab\[hidden\] \{ display: none !important; \}/);
+});
+
+test("Clicking an entity opens the native Home Assistant More Info dialog", () => {
+  const { panel } = makePanel(async () => preview());
+  let event;
+  panel.dispatchEvent = dispatched => { event = dispatched; };
+  panel._openEntityDetails("switch.pompe_piscine");
+  assert.equal(event.type, "hass-more-info");
+  assert.equal(event.detail.entityId, "switch.pompe_piscine");
+  assert.equal(event.bubbles, true);
+  assert.equal(event.composed, true);
+});
+
+test("More Info ignores an empty entity ID", () => {
+  const { panel } = makePanel(async () => preview());
+  let count = 0;
+  panel.dispatchEvent = () => { count++; };
+  panel._openEntityDetails("");
+  assert.equal(count, 0);
+});
+
+test("Entity details use their own keyboard-accessible button, not the HVLS checkbox", () => {
+  assert.match(source, /entityButton\.type = "button"/);
+  assert.match(source, /entityButton\.className = "entity-more-info"/);
+  assert.match(source, /entityButton\.setAttribute\("aria-label"/);
+  assert.match(source, /entityButton\.addEventListener\("click"/);
+  assert.match(source, /this\._openEntityDetails\(entity\.entity_id\)/);
+  assert.match(source, /checkbox\.addEventListener\("change"/);
+  assert.match(source, /entityButton\.append\(name, description\)/);
 });
