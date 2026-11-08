@@ -617,6 +617,13 @@ class HVLSPreviewPanel extends HTMLElement {
         type: "ha_voice_label_sync/apply_preview",
         ...review,
       });
+      // A successful apply may create a new backup. Invalidate the list
+      // immediately so the next Backups visit always reflects disk state.
+      this._backupList = null;
+      this._backupReview = null;
+      this._selectedBackup = null;
+      this._backupReviewNumber = (this._backupReviewNumber || 0) + 1;
+      this._updateApplyButton();
       // Keep Apply locked throughout the post-apply refresh.
       await this._loadPreview(true);
       this._setStatusKey("previewApplied", {
@@ -2151,7 +2158,8 @@ class HVLSPreviewPanel extends HTMLElement {
       button.classList.toggle("active", active);
       button.setAttribute("aria-selected", String(active));
     });
-    if (tab === "backups" && !this._backupList && !this._backupLoading) this._loadBackups();
+    // Read the live filesystem each time the Backups tab is opened.
+    if (tab === "backups") this._loadBackups();
   }
 
   _setStatus(message) {
