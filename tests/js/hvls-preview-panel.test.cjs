@@ -700,3 +700,16 @@ test("Entity details use their own keyboard-accessible button, not the HVLS chec
   assert.match(source, /checkbox\.addEventListener\("change"/);
   assert.match(source, /entityButton\.append\(name, description\)/);
 });
+
+test("Statistics domain entities open native HA details without changing HVLS labels", () => {
+  const start = source.indexOf('const entities = (stats.entities || []).filter(');
+  const end = source.indexOf('details.appendChild(list);', start);
+  const block = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(block, /entityButton\.type = "button"/);
+  assert.match(block, /entityButton\.className = "entity-more-info"/);
+  assert.match(block, /entityButton\.setAttribute\("aria-label"/);
+  assert.match(block, /this\._openEntityDetails\(entity\.entity_id\)/);
+  assert.match(block, /entityButton\.append\(friendlyName, info\)/);
+  assert.doesNotMatch(block, /_setEntityLabel|set_entity_label/);
+});
