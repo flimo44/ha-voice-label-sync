@@ -10,6 +10,20 @@ const HVLS_TRANSLATIONS = {
     tabExclusions: "Entités exclues",
     tabEntities: "Gestion des entités HVLS",
     tabPreview: "Preview",
+    tabBackups: "Sauvegardes",
+    backupIntro: "Choisissez une sauvegarde pour voir ses différences avec la production. Seul le YAML Google Assistant sera restauré, jamais les étiquettes Home Assistant.",
+    backupLoading: "Chargement des sauvegardes…",
+    backupEmpty: "Aucune sauvegarde disponible.",
+    backupReviewing: "Comparaison avec la production…",
+    backupReviewFailed: "Comparaison impossible : {error}",
+    backupLoadFailed: "Chargement impossible : {error}",
+    backupRestore: "Restaurer cette sauvegarde",
+    backupConfirm: "Restaurer ce YAML en production ? Une copie de sécurité de la production actuelle sera créée obligatoirement. Les étiquettes HA ne seront pas modifiées.",
+    backupRestoreFailed: "Restauration refusée : {error}",
+    backupRestored: "Restauration terminée. Copie de sécurité : {backup}",
+    backupNoDiff: "YAML identique à la production.",
+    backupDiffTitle: "Changements si cette sauvegarde est restaurée",
+    backupSize: "{size} octets",
     refreshEntities: "Actualiser les entités",
     loadingEntities: "Chargement des entités…",
     searchPlaceholder: "Rechercher un nom, identifiant ou une pièce…",
@@ -120,6 +134,20 @@ const HVLS_TRANSLATIONS = {
     tabExclusions: "Excluded entities",
     tabEntities: "HVLS Entity Management",
     tabPreview: "Preview",
+    tabBackups: "Backups",
+    backupIntro: "Select a backup to compare it with current production. Only the Google Assistant YAML file is restored, never Home Assistant labels.",
+    backupLoading: "Loading backups…",
+    backupEmpty: "No backups available.",
+    backupReviewing: "Comparing with production…",
+    backupReviewFailed: "Cannot compare: {error}",
+    backupLoadFailed: "Cannot load backups: {error}",
+    backupRestore: "Restore this backup",
+    backupConfirm: "Restore this YAML to production? A safety copy of the current production file will always be created. HA labels will not be changed.",
+    backupRestoreFailed: "Restore refused: {error}",
+    backupRestored: "Restore completed. Safety backup: {backup}",
+    backupNoDiff: "YAML matches production.",
+    backupDiffTitle: "Changes if this backup is restored",
+    backupSize: "{size} bytes",
     refreshEntities: "Refresh entities",
     loadingEntities: "Loading entities…",
     searchPlaceholder: "Search by name, entity ID or area…",
@@ -312,6 +340,10 @@ class HVLSPreviewPanel extends HTMLElement {
     if (status && !this._entityCatalog && !this._entityLoading && !this._entityLoadError) {
       status.textContent = this._t("loadingEntities");
     }
+    const backupIntro = this.querySelector("#backupIntro");
+    if (backupIntro) backupIntro.textContent = this._t("backupIntro");
+    const restore = this.querySelector("#restoreBackup");
+    if (restore) restore.textContent = this._t("backupRestore");
     const nav = this.querySelector(".hvls-tabs");
     if (nav) nav.setAttribute("aria-label", this._t("tabsLabel"));
   }
@@ -322,6 +354,7 @@ class HVLSPreviewPanel extends HTMLElement {
       ["exclusions", "tabExclusions"],
       ["entities", "tabEntities"],
       ["preview", "tabPreview"],
+      ["backups", "tabBackups"],
     ];
     let number = 0;
     for (const [tab, key] of tabs) {
@@ -379,6 +412,8 @@ class HVLSPreviewPanel extends HTMLElement {
         this._renderEntities();
       }
       if (this._statusKey) this._setStatusKey(this._statusKey, this._statusValues);
+      this._renderBackups();
+      this._renderBackupDiff();
       if (this._entityLoadError) {
         const entityStatus = this.querySelector("#entityStatus");
         if (entityStatus) entityStatus.textContent = this._tf("entitiesLoadFailed", {error: this._entityLoadError});
@@ -497,13 +532,16 @@ class HVLSPreviewPanel extends HTMLElement {
     const refresh = this.querySelector("#refresh");
     if (refresh) refresh.disabled =
       this._applying === true || this._generating === true || this._refreshing === true;
+    const restore = this.querySelector("#restoreBackup");
+    if (restore) restore.disabled = !this._backupReview || this._restoring ||
+      this._applying || this._refreshing || this._generating || this._entityWritePending;
     const generate = this.querySelector("#generate");
     if (generate) generate.disabled =
       this._applying === true || this._generating === true || this._refreshing === true;
   }
 
   async _generatePreview(fromRefresh = false) {
-    if (!this._hass || this._generating || this._applying || (this._refreshing && !fromRefresh)) return;
+    if (!this._hass || this._generating || this._applying || this._restoring || (this._refreshing && !fromRefresh)) return;
 
     this._generating = true;
     this._loadId = (this._loadId || 0) + 1;
@@ -528,7 +566,7 @@ class HVLSPreviewPanel extends HTMLElement {
 
   async _refreshAll() {
     if (!this._hass || this._refreshing || this._generating ||
-        this._applying || this._entityWritePending || this._entityLoading) return;
+        this._applying || this._restoring || this._entityWritePending || this._entityLoading) return;
 
     this._refreshing = true;
     // A refresh can change the input registry or the YAML. Invalidate any
@@ -555,7 +593,7 @@ class HVLSPreviewPanel extends HTMLElement {
   }
 
   async _applyPreview() {
-    if (!this._hass || !this._review || this._applying || this._refreshing || this._generating || this._entityWritePending) return;
+    if (!this._hass || !this._review || this._applying || this._restoring || this._refreshing || this._generating || this._entityWritePending) return;
 
     const review = {...this._review};
 
@@ -1190,6 +1228,10 @@ class HVLSPreviewPanel extends HTMLElement {
         }
         .hvls-tab-panel[hidden] { display: none !important; }
         #entityManager { margin-top: 0; }
+        .backup-item { display:flex; align-items:center; gap:12px; padding:12px; border-bottom:1px solid var(--divider-color); cursor:pointer; }
+        .backup-item input { width:18px; height:18px; }
+        #backupDiff { margin:20px 0; }
+        #restoreBackup { background:#b35427; color:#fff; }
 
         .entity-catalog-domain {
           margin: 6px 0;
@@ -1395,6 +1437,10 @@ class HVLSPreviewPanel extends HTMLElement {
             data-tab="preview" role="tab" aria-selected="false">
             4 · Preview
           </button>
+          <button class="hvls-tab" type="button"
+            data-tab="backups" role="tab" aria-selected="false">
+            5 · Sauvegardes
+          </button>
         </nav>
 
         <section id="tab-summary" class="hvls-tab-panel" role="tabpanel">
@@ -1452,6 +1498,14 @@ class HVLSPreviewPanel extends HTMLElement {
           <button id="apply" type="button" disabled>${this._t("apply")}</button>
         </div>
         </section>
+        <section id="tab-backups" class="hvls-tab-panel" role="tabpanel" hidden>
+          <h2>${this._t("tabBackups")}</h2>
+          <p id="backupIntro" class="diagnostic-note">${this._t("backupIntro")}</p>
+          <p id="backupStatus" role="status"></p>
+          <div id="backupList"></div>
+          <div id="backupDiff"></div>
+          <button id="restoreBackup" type="button" disabled>${this._t("backupRestore")}</button>
+        </section>
       </div>
     `;
     this.querySelector("#entitySearch").addEventListener("input", () => {
@@ -1479,6 +1533,7 @@ class HVLSPreviewPanel extends HTMLElement {
     this.querySelector("#refresh").addEventListener("click", () => this._refreshAll());
     this.querySelector("#copy").addEventListener("click", () => this._copyPreview());
     this.querySelector("#apply").addEventListener("click", () => this._applyPreview());
+    this.querySelector("#restoreBackup").addEventListener("click", () => this._restoreBackup());
     this.querySelector("#settings").addEventListener("click", () => {
       window.location.assign("/config/integrations/integration/ha_voice_label_sync");
     });
@@ -1894,12 +1949,173 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+
+  async _loadBackups() {
+    if (!this._hass || this._backupLoading || this._restoring) return;
+    this._backupLoading = true;
+    this._backupReview = null;
+    this._backupList = null;
+    this._updateApplyButton();
+    const status = this.querySelector("#backupStatus");
+    if (status) status.textContent = this._t("backupLoading");
+    try {
+      const result = await this._hass.callWS({type: "ha_voice_label_sync/list_backups"});
+      this._backupList = result.backups || [];
+      if (status) status.textContent = this._backupList.length
+        ? "" : this._t("backupEmpty");
+      this._renderBackups();
+    } catch (error) {
+      if (status) status.textContent = this._tf("backupLoadFailed", {
+        error: error.message || String(error)
+      });
+    } finally {
+      this._backupLoading = false;
+    }
+  }
+
+  _renderBackups() {
+    const list = this.querySelector("#backupList");
+    if (!list || !Array.isArray(this._backupList)) return;
+    list.replaceChildren();
+    const group = document.createElement("div");
+    group.setAttribute("role", "radiogroup");
+    group.setAttribute("aria-label", this._t("tabBackups"));
+    for (const item of this._backupList) {
+      const label = document.createElement("label");
+      label.className = "backup-item";
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "hvls_backup_selection";
+      radio.value = item.id;
+      radio.checked = item.id === this._selectedBackup;
+      radio.addEventListener("change", () => this._reviewBackup(item.id));
+      const info = document.createElement("span");
+      info.textContent = `${item.timestamp} · ${this._tf("backupSize", {size: item.size})}`;
+      label.append(radio, info);
+      group.appendChild(label);
+    }
+    list.appendChild(group);
+  }
+
+  async _reviewBackup(id) {
+    if (!this._hass || this._restoring || this._applying) return;
+    this._selectedBackup = id;
+    this._backupReview = null;
+    const reviewNumber = (this._backupReviewNumber || 0) + 1;
+    this._backupReviewNumber = reviewNumber;
+    this._updateApplyButton();
+    this._renderBackups();
+    const status = this.querySelector("#backupStatus");
+    if (status) status.textContent = this._t("backupReviewing");
+    this.querySelector("#backupDiff")?.replaceChildren();
+    try {
+      const data = await this._hass.callWS({
+        type: "ha_voice_label_sync/review_backup", backup_id: id
+      });
+      if (reviewNumber !== this._backupReviewNumber) return;
+      this._backupReview = data;
+      if (status) status.textContent = "";
+      this._renderBackupDiff();
+    } catch (error) {
+      if (reviewNumber !== this._backupReviewNumber) return;
+      if (status) status.textContent = this._tf("backupReviewFailed", {
+        error: error.message || String(error)
+      });
+    } finally {
+      if (reviewNumber === this._backupReviewNumber) this._updateApplyButton();
+    }
+  }
+
+  _renderBackupDiff() {
+    const container = this.querySelector("#backupDiff");
+    if (!container) return;
+    container.replaceChildren();
+    const data = this._backupReview;
+    if (!data || !data.comparison || data.comparison.status !== "ok") return;
+    const heading = document.createElement("h3");
+    heading.textContent = this._t("backupDiffTitle");
+    container.appendChild(heading);
+    const comparison = data.comparison;
+    const metrics = document.createElement("div");
+    metrics.className = "metrics";
+    for (const [key, n] of [
+      ["added", comparison.added.length],
+      ["removed", comparison.removed.length],
+      ["modified", comparison.modified.length],
+      ["unchanged", comparison.unchanged]
+    ]) this._addMetric(metrics, this._t(key), n);
+    container.appendChild(metrics);
+    for (const [key, values] of [
+      ["entitiesAdded", comparison.added],
+      ["entitiesRemoved", comparison.removed],
+      ["entitiesModified", comparison.modified.map(x => x.entity_id)]
+    ]) {
+      if (!values.length) continue;
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = `${this._t(key)} (${values.length})`;
+      details.appendChild(summary);
+      const items = document.createElement("ul");
+      for (const id of values) {
+        const li = document.createElement("li");
+        li.textContent = id;
+        items.appendChild(li);
+      }
+      details.appendChild(items);
+      container.appendChild(details);
+    }
+    const restore = this.querySelector("#restoreBackup");
+    if (restore) restore.disabled = comparison.identical_text || this._restoring ||
+      this._applying || this._refreshing || this._generating || this._entityWritePending;
+    if (comparison.identical_text) {
+      const text = document.createElement("p");
+      text.textContent = this._t("backupNoDiff");
+      container.appendChild(text);
+    }
+  }
+
+  async _restoreBackup() {
+    const data = this._backupReview;
+    if (!data || this._restoring || this._applying ||
+        this._refreshing || this._generating || this._entityWritePending ||
+        data.comparison?.identical_text) return;
+    if (!window.confirm(this._t("backupConfirm"))) return;
+    this._restoring = true;
+    this._backupReviewNumber = (this._backupReviewNumber || 0) + 1;
+    this._backupReview = null;
+    this._review = null; // An earlier Preview is never approved after a restore.
+    this._updateApplyButton();
+    const status = this.querySelector("#backupStatus");
+    try {
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/restore_backup",
+        backup_id: data.backup_id,
+        backup_sha256: data.backup_sha256,
+        production_sha256: data.production_sha256,
+      });
+      if (status) status.textContent = this._tf("backupRestored", {
+        backup: result.safety_backup
+      });
+      await this._loadPreview(true);
+      this._backupList = null;
+    } catch (error) {
+      if (status) status.textContent = this._tf("backupRestoreFailed", {
+        error: error.message || String(error)
+      });
+    } finally {
+      this._restoring = false;
+      this._updateApplyButton();
+      await this._loadBackups();
+    }
+  }
+
   _activateTab(tab) {
     const panels = {
       summary: "#tab-summary",
       exclusions: "#tab-exclusions",
       entities: "#entityManager",
       preview: "#tab-preview",
+      backups: "#tab-backups",
     };
 
     if (!Object.hasOwn(panels, tab)) return;
@@ -1915,6 +2131,7 @@ class HVLSPreviewPanel extends HTMLElement {
       button.classList.toggle("active", active);
       button.setAttribute("aria-selected", String(active));
     });
+    if (tab === "backups" && !this._backupList && !this._backupLoading) this._loadBackups();
   }
 
   _setStatus(message) {
