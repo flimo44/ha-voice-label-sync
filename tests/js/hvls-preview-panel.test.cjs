@@ -847,3 +847,42 @@ test("Identical backup is never restored even with confirmation", async () => {
   await panel._restoreBackup();
   assert.equal(calls.length, 0);
 });
+
+
+test("Successful Apply invalidates cached backups so new snapshots become visible", async () => {
+  const calls = [];
+  const {panel} = makePanel(async message => {
+    calls.push(message.type);
+    if (message.type === "ha_voice_label_sync/apply_preview")
+      return {output_path: "/config/google_entities.yaml", bytes_written: 77,
+        backup_path: "/config/.hvls_backups/new.bak"};
+    return preview();
+  });
+  panel._review = {preview_sha256: "a".repeat(64), production_sha256: null};
+  panel._backupList = [{id: "old.bak"}];
+  panel._backupReview = {backup_id: "old.bak"};
+  panel._selectedBackup = "old.bak";
+  await panel._applyPreview();
+  assert.equal(panel._backupList, null);
+  assert.equal(panel._backupReview, null);
+  assert.equal(panel._selectedBackup, null);
+  assert.ok(calls.includes("ha_voice_label_sync/apply_preview"));
+});
+
+test("Opening Backups fetches live list even when it was already cached", () => {
+  const {panel} = makePanel(async () => ({}));
+  const panels = {};
+  const buttons = ["summary", "entities", "preview", "backups"].map(tab => ({
+    dataset: {tab}, classList: {toggle() {}}, setAttribute() {},
+  }));
+  panel.querySelector = selector => {
+    if (selector.startsWith("#")) return panels[selector] ||= {hidden: true};
+    return null;
+  };
+  panel.querySelectorAll = () => buttons;
+  let loads = 0;
+  panel._backupList = [{id: "cached.bak"}];
+  panel._loadBackups = () => {loads++};
+  panel._activateTab("backups");
+  assert.equal(loads, 1);
+});
