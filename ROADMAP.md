@@ -157,6 +157,41 @@ Make HVLS immediately understandable for people who already use the manual Home 
 
 ---
 
+# v1.0.0-beta.4 — Backup History and Safe Restore
+
+Goal: make HVLS recovery as understandable and safe as Preview/Apply.
+The user journey is **Select backup → Review differences → Confirm restore**.
+
+## Backup browsing and comparison
+
+- [x] Show a Backups tab with existing HVLS YAML backups (date, entity count, size).
+- [x] Offer a single selectable backup and a semantic, directional diff against production.
+- [x] Report added/removed/modified/unchanged entities, including field-level modifications.
+- [x] Reject empty, malformed, inaccessible and unrelated backup files.
+
+## Restoration safety
+
+- [x] Require administrator access and explicit browser confirmation.
+- [x] Revalidate SHA-256 for selected backup and current production.
+- [x] Create an **unconditional safety backup** before restoring, independent of backup settings.
+- [x] Use the existing atomic YAML file writer.
+- [x] Never modify Home Assistant entity labels or registries.
+- [x] Keep a restore error or success message and advise restarting HA to reload Google Assistant YAML.
+
+## Quality gates
+
+- [x] Python regression tests (path traversal, symlinks, empty YAML, changing inputs, safety copy).
+- [x] Frontend interaction regression tests added.
+- [x] GitHub Python, Package, Hassfest and HACS validation passed on the development branch.
+- [ ] Run local Node.js frontend test suite and inspect the UI in desktop/mobile HA.
+- [ ] Test a **full restore workflow on a copy** of the production YAML, including rollback.
+- [ ] Confirm that the resulting production YAML is accepted on HA reboot.
+- [ ] Refresh release documentation and screenshots, bump manifest to beta.4, then publish as a pre-release.
+
+This work belongs to branch `feat/v1-beta4-backup-restore`; **do not publish or merge until end-to-end restore validation**.
+
+---
+
 # v0.4 — Voice Assistant Platform
 
 Goal:
