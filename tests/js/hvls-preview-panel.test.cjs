@@ -659,3 +659,7 @@ test("Entity filter options and exclusions tab count are translated", () => {
   assert.match(source, /this\._updateTabLabels\(\)/);
   assert.match(source, /this\._syncExclusionsTab\(result\.exclusions\)/);
 });
+
+test("Hidden exclusions tab has an explicit CSS visibility rule", () => {
+  assert.match(source, /\.hvls-tab\[hidden\] \{ display: none !important; \}/);
+});
