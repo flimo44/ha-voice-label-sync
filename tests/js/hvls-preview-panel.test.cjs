@@ -747,3 +747,16 @@ test("FR and EN exclusion diagnostics share the same explanation helper", () => 
   assert.match(panel._eligibilityExplanation("disabled"), /It remains in Home Assistant/);
   assert.match(source, /this\._eligibilityExplanation\(entity\.reason\)/);
 });
+
+test("Statistics shows excluded domains only when labeled entities actually have unsupported domains", () => {
+  const start = source.indexOf('const excluded = result.exclusions?.entities || []');
+  const end = source.indexOf('breakdown.appendChild(section);', start);
+  const block = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(block, /entity\.reason !== "domain_not_enabled"/);
+  assert.match(block, /if \(entries\.length > 0\) \{/);
+  assert.match(block, /subtitle\.textContent = this\._t\("disabledDomains"\)/);
+  assert.doesNotMatch(block, /noDisabledDomains/);
+  assert.match(source, /disabledDomains: "Domaines exclus de la sélection HVLS"/);
+  assert.match(source, /disabledDomains: "Domains excluded from HVLS selection"/);
+});
