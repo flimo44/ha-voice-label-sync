@@ -151,3 +151,11 @@ def test_restore_does_not_touch_other_labels(backup_module, sample):
         output, backup_id, review["backup_sha256"], review["production_sha256"]
     )
     assert marker.read_text() == '{"labels":["google_assistant","other"]}'
+
+
+def test_empty_backup_not_offered_or_restored(backup_module, sample):
+    output, backup_id, source = sample
+    source.write_text("", encoding="utf-8")
+    assert backup_module.list_backups(output)["backups"] == []
+    with pytest.raises(backup_module.BackupRestoreError, match="empty"):
+        backup_module.review_backup(output, backup_id)
