@@ -760,3 +760,90 @@ test("Statistics shows excluded domains only when labeled entities actually have
   assert.match(source, /disabledDomains: "Domaines exclus de la sélection HVLS"/);
   assert.match(source, /disabledDomains: "Domains excluded from HVLS selection"/);
 });
+
+
+test("Backup tab is present and uses admin-only WS actions", () => {
+  assert.match(source, /data-tab="backups"/);
+  assert.match(source, /id="tab-backups"/);
+  assert.match(source, /ha_voice_label_sync\/list_backups/);
+  assert.match(source, /ha_voice_label_sync\/review_backup/);
+  assert.match(source, /ha_voice_label_sync\/restore_backup/);
+});
+
+test("Backup review is invalidated when a different snapshot is selected", async () => {
+  const pending = deferred();
+  const calls = [];
+  const { panel } = makePanel(async message => {
+    calls.push(message);
+    if (message.backup_id === "first") return pending.promise;
+    return {
+      backup_id: "second", backup_sha256: "b".repeat(64),
+      production_sha256: "p".repeat(64),
+      comparison: {status: "ok", added: [], removed: [], modified: [],
+        unchanged: 0, identical_text: true}
+    };
+  });
+  panel._renderBackups = () => {};
+  panel._renderBackupDiff = () => {};
+  const first = panel._reviewBackup("first");
+  const second = panel._reviewBackup("second");
+  await second;
+  pending.resolve({backup_id: "first"});
+  await first;
+  assert.equal(panel._backupReview.backup_id, "second");
+  assert.equal(panel._selectedBackup, "second");
+  assert.deepEqual(calls.map(c => c.backup_id), ["first", "second"]);
+});
+
+test("Cancelled backup restore never sends any restore command", async () => {
+  const calls = [];
+  const { panel } = makePanel(async message => {
+    calls.push(message.type);
+    return {};
+  }, () => false);
+  panel._backupReview = {
+    backup_id: "google.yaml.20261108-220000.bak",
+    backup_sha256: "b".repeat(64),
+    production_sha256: "a".repeat(64),
+    comparison: {identical_text: false}
+  };
+  await panel._restoreBackup();
+  assert.deepEqual(calls, []);
+  assert.equal(panel._backupReview.backup_id, "google.yaml.20261108-220000.bak");
+});
+
+test("Confirmed backup restore transmits reviewed hashes and refreshes Preview", async () => {
+  const calls = [];
+  const { panel, controls } = makePanel(async message => {
+    calls.push(message);
+    return {restored: true, safety_backup: "safety.bak"};
+  });
+  panel._backupReview = {
+    backup_id: "google.yaml.20261108-220000.bak",
+    backup_sha256: "b".repeat(64),
+    production_sha256: "a".repeat(64),
+    comparison: {identical_text: false}
+  };
+  let refreshed = false, backupsRefreshed = false;
+  panel._loadPreview = async () => { refreshed = true; };
+  panel._loadBackups = async () => { backupsRefreshed = true; };
+  await panel._restoreBackup();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].type, "ha_voice_label_sync/restore_backup");
+  assert.equal(calls[0].backup_id, "google.yaml.20261108-220000.bak");
+  assert.equal(calls[0].backup_sha256, "b".repeat(64));
+  assert.equal(calls[0].production_sha256, "a".repeat(64));
+  assert.equal(refreshed, true);
+  assert.equal(backupsRefreshed, true);
+  assert.equal(controls.apply.disabled, true);
+});
+
+test("Identical backup is never restored even with confirmation", async () => {
+  const calls = [];
+  const { panel } = makePanel(async message => { calls.push(message); });
+  panel._backupReview = {
+    backup_id: "foo", comparison: {identical_text: true}
+  };
+  await panel._restoreBackup();
+  assert.equal(calls.length, 0);
+});
