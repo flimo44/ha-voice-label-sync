@@ -7,9 +7,9 @@
 [![PyPI Downloads](https://static.pepy.tech/badge/ha-voice-label-sync)](https://pepy.tech/projects/ha-voice-label-sync)
 [![Downloads/month](https://api.pepy.tech/badge/ha-voice-label-sync/month)](https://pepy.tech/projects/ha-voice-label-sync)
 
-> **Manage once in Home Assistant. Sync everywhere.**
+> **Already using Google Assistant with Home Assistant without Home Assistant Cloud? Easily manage exposed entities using labels.**
 
-Generate Google Assistant entity exposure configuration from **Home Assistant labels**. Select eligible entities, generate and review a YAML Preview, compare it with production, and apply reviewed changes with safeguards and backups.
+For the **manual Home Assistant Google Assistant integration** (without Home Assistant Cloud), use native Home Assistant labels to choose exposed entities. **Select → Review → Apply:** HVLS prepares a Preview automatically after label changes, shows entity-level differences, and only updates production after your explicit review and confirmation.
 
 > [!IMPORTANT]
 > **HA Voice Label Sync (HVLS) is not a voice assistant integration.**
@@ -24,18 +24,20 @@ Generate Google Assistant entity exposure configuration from **Home Assistant la
 
 ## 🧪 V1 beta releases
 
-**`v1.0.0-beta.1` is published as a pre-release.** The `v1.0.0-beta.2` update fixes HVLS entity-label eligibility controls and server-side validation. Select a pre-release in HACS if you want the V1 beta, rather than the latest stable `v0.3.10`. The Home Assistant integration version is independent of the Python core (`ha-voice-label-sync==0.3.5`); no new PyPI publication is planned unless the core changes.
+**`v1.0.0-beta.3` is being prepared for publication as a pre-release.** It introduces the streamlined three-tab interface, mobile navigation, integrated entity management, automatic Preview refresh, visual diffs and clearer exclusion details. Select a pre-release in HACS after beta.3 is published; the current stable channel remains independent. The Home Assistant integration version is independent of the Python core (`ha-voice-label-sync==0.3.5`); no new PyPI release is required for these frontend changes.
 
 ### What's ready for V1
 
-- Four-tab Home Assistant panel: **Statistics**, **Excluded entities**, **HVLS Entity Management**, **Preview**.
-- Complete entity catalog with search, filters, grouping by supported/unsupported domains and per-domain pagination.
-- Add or remove the HVLS label from an entity with confirmation; preserve other labels and refresh from Home Assistant registries.
-- Review YAML Preview, exclusions and Preview/Production differences before any production Apply.
-- Protected Apply with checksums, optional backups and safe production writes.
-- HVLS branding in the panel header, and French/English interface based on the Home Assistant language.
+- Three main tabs: **Statistics**, **HVLS Entity Management**, **Preview**. The **Excluded entities** tab appears only when there are exclusions.
+- Complete entity catalog with search, eligibility and labeling filters, supported/unsupported domain grouping and per-domain pagination.
+- Open an entity's native Home Assistant More Info dialog from entity lists or Statistics.
+- Add or remove the HVLS label with confirmation; other labels are preserved. HVLS regenerates the Preview after a successful label change.
+- Refresh the catalog, Preview, statistics and differences with the compact refresh action. **This never applies changes to production.**
+- Review grouped entity-level changes, exclusions and the full YAML Preview before selecting **Apply changes**.
+- Protected explicit Apply with checksum freshness checks, optional backups and safe production writes.
+- Responsive desktop/mobile interface with FR/EN text and accessible eligibility explanations.
 
-**Important:** Changing labels in the entity manager does **not** automatically generate or apply Google Assistant YAML. Run **Generate Preview**, review the result, then explicitly select **Apply Preview**. HVLS does not perform Google Cloud project setup or Google Home pairing.
+**Important:** Changing labels in the entity manager regenerates the **Preview only**; it never applies the configuration to production. Review changes in the Preview tab and explicitly choose **Apply changes**. HVLS does not perform Google Cloud project setup or Google Home pairing.
 
 The step-by-step Google Assistant setup wizard, including staged validation of DNS/HTTPS, Google Cloud credentials and Google Home linking, is **planned for V2** and is **not part of V1**.
 
@@ -59,7 +61,7 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 
 ## 📸 Screenshots
 
-> Some screenshots below show earlier versions. The current panel uses the **HA Voice Label Sync** title, a Settings button, blue Generate Preview and green Apply Preview buttons, and a non-enabled domains section.
+> **Screenshot update pending:** the images below may show earlier versions. In beta.3 the panel has a compact refresh action, three principal tabs, and the **Apply changes** action inside Preview. New beta.3 screenshots will replace the older ones before the stable V1 release.
 
 ### Home Assistant configuration
 
@@ -92,7 +94,7 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 3. Restart Home Assistant.
 4. Go to **Settings → Devices & services → Add integration**.
 5. Search for **HA Voice Label Sync**, add it and configure its options.
-6. Open **HA Voice Label Sync** in the sidebar. If an older UI persists on versions before the cache fix, use a browser hard reload or clear the site cache.
+6. Open **HA Voice Label Sync** in the sidebar. If the panel still shows an older interface after a manual update, confirm Home Assistant was restarted: its JavaScript asset fingerprint is computed when the integration initializes.
 
 **Requirements**
 
