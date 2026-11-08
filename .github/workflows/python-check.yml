@@ -34,6 +34,9 @@ jobs:
       - name: Run unit tests
         run: python -m pytest -q tests/
 
+      - name: Run frontend regression tests
+        run: node --test tests/js/*.test.cjs
+
       - name: Check Python syntax
         run: python -m py_compile scripts/ga_label_sync.py
 
