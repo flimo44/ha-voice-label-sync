@@ -904,3 +904,17 @@ test("Preview change rows expose native HA More Info for added, removed and modi
   assert.doesNotMatch(block, /_setEntityLabel\(/);
   assert.doesNotMatch(block, /apply_preview/);
 });
+
+test("Statistics room rows expand to matching entities including unassigned ones", () => {
+  const start = source.indexOf('for (const [type, title, values] of [["domain"');
+  const end = source.indexOf('if (type === "domain") {\n        const excluded', start);
+  const section = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(section, /const details = document\.createElement\("details"\)/);
+  assert.match(section, /type === "domain"/);
+  assert.match(section, /entity\.domain === name/);
+  assert.match(section, /\(entity\.room \|\| this\._t\("noArea"\)\) === name/);
+  assert.match(section, /this\._openEntityDetails\(entity\.entity_id\)/);
+  assert.match(section, /details\.appendChild\(list\)/);
+  assert.doesNotMatch(section, /_setEntityLabel|set_entity_label/);
+});
