@@ -18,6 +18,8 @@ const HVLS_TRANSLATIONS = {
     filterAll: "Toutes les entités",
     filterWith: "Avec HVLS",
     filterWithout: "Sans HVLS",
+    filterEligibleWithout: "Sans HVLS — éligibles",
+    filterIneligible: "Non éligibles",
     actionAdd: "AJOUTER",
     actionRemove: "RETIRER",
     confirmLabel: "{action} l'étiquette HVLS ?",
@@ -122,6 +124,8 @@ const HVLS_TRANSLATIONS = {
     filterAll: "All entities",
     filterWith: "With HVLS",
     filterWithout: "Without HVLS",
+    filterEligibleWithout: "Without HVLS — eligible",
+    filterIneligible: "Ineligible",
     actionAdd: "ADD",
     actionRemove: "REMOVE",
     confirmLabel: "{action} the HVLS label?",
@@ -261,21 +265,7 @@ class HVLSPreviewPanel extends HTMLElement {
       }
     }
 
-    const tabs = {
-      summary: ["1", "tabStats"],
-      exclusions: ["2", "tabExclusions"],
-      entities: ["3", "tabEntities"],
-      preview: ["4", "tabPreview"]
-    };
-
-    for (const [tab, [number, key]] of Object.entries(tabs)) {
-      const button = this.querySelector(
-        `.hvls-tab[data-tab="${tab}"]`
-      );
-      if (button) {
-        button.textContent = `${number} · ${this._t(key)}`;
-      }
-    }
+    this._updateTabLabels();
 
     const heading = this.querySelector(
       "#entityManager .entity-manager-header h2"
@@ -295,7 +285,9 @@ class HVLSPreviewPanel extends HTMLElement {
       for (const [value, key] of [
         ["all", "filterAll"],
         ["yes", "filterWith"],
-        ["no", "filterWithout"]
+        ["no", "filterWithout"],
+        ["eligible_no", "filterEligibleWithout"],
+        ["ineligible", "filterIneligible"]
       ]) {
         const option = filter.querySelector(
           `option[value="${value}"]`
@@ -314,6 +306,48 @@ class HVLSPreviewPanel extends HTMLElement {
     }
     const nav = this.querySelector(".hvls-tabs");
     if (nav) nav.setAttribute("aria-label", this._t("tabsLabel"));
+  }
+
+  _updateTabLabels() {
+    const tabs = [
+      ["summary", "tabStats"],
+      ["exclusions", "tabExclusions"],
+      ["entities", "tabEntities"],
+      ["preview", "tabPreview"],
+    ];
+    let number = 0;
+    for (const [tab, key] of tabs) {
+      const button = this.querySelector(`.hvls-tab[data-tab="${tab}"]`);
+      if (!button) continue;
+      if (button.hidden) continue;
+      number += 1;
+      const count = tab === "exclusions" && this._excludedCount != null
+        ? ` (${this._excludedCount})` : "";
+      button.textContent = `${number} · ${this._t(key)}${count}`;
+    }
+  }
+
+  _syncExclusionsTab(exclusions) {
+    // Never interpret absent diagnostics (loading/error) as zero exclusions.
+    if (!exclusions || !Array.isArray(exclusions.entities)) return;
+    const button = this.querySelector('.hvls-tab[data-tab="exclusions"]');
+    if (!button) return;
+    this._excludedCount = exclusions.entities.length;
+    button.hidden = this._excludedCount === 0;
+
+    if (button.hidden && button.getAttribute("aria-selected") === "true") {
+      this._activateTab("entities");
+    }
+    this._updateTabLabels();
+  }
+
+  _entityMatchesFilter(entity, filter) {
+    if (filter === "yes") return entity.has_label === true;
+    if (filter === "no") return entity.has_label !== true;
+    if (filter === "eligible_no")
+      return entity.eligible === true && entity.has_label !== true;
+    if (filter === "ineligible") return entity.eligible !== true;
+    return true;
   }
 
   set hass(hass) {
@@ -790,6 +824,8 @@ class HVLSPreviewPanel extends HTMLElement {
     this.querySelector("#unifiedDiff").textContent = "";
     this.querySelector("#rawDiffDetails").hidden = true;
     this._lastAnalysis = result;
+    this._syncExclusionsTab(result.exclusions);
+    this._renderExclusions(this.querySelector("#exclusions"), result.exclusions);
     this._renderPreviewChanges(result);
     if (!result.available || !result.summary) return;
 
@@ -905,8 +941,6 @@ class HVLSPreviewPanel extends HTMLElement {
       breakdown.appendChild(section);
     }
     panel.appendChild(breakdown);
-
-    this._renderExclusions(this.querySelector("#exclusions"), result.exclusions);
 
     const comparison = result.comparison || {status: "missing"};
     const heading = document.createElement("h2");
@@ -1325,6 +1359,8 @@ class HVLSPreviewPanel extends HTMLElement {
               <option value="all">Toutes les entités</option>
               <option value="yes">Avec HVLS</option>
               <option value="no">Sans HVLS</option>
+              <option value="eligible_no">Sans HVLS — éligibles</option>
+              <option value="ineligible">Non éligibles</option>
             </select>
           </div>
           <div id="entityList"></div>
@@ -1526,8 +1562,7 @@ class HVLSPreviewPanel extends HTMLElement {
 
     // Recherche sur l'ensemble du catalogue HA.
     const matching = (catalog.entities || []).filter((entity) => {
-      if (filter === "yes" && !entity.has_label) return false;
-      if (filter === "no" && entity.has_label) return false;
+      if (!this._entityMatchesFilter(entity, filter)) return false;
 
       const searchable = [
         entity.name,
@@ -1778,6 +1813,8 @@ class HVLSPreviewPanel extends HTMLElement {
     };
 
     if (!Object.hasOwn(panels, tab)) return;
+    if (tab === "exclusions" &&
+        this.querySelector('.hvls-tab[data-tab="exclusions"]')?.hidden) return;
 
     for (const [name, selector] of Object.entries(panels)) {
       this.querySelector(selector).hidden = name !== tab;
