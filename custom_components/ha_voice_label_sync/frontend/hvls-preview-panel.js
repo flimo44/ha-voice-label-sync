@@ -304,7 +304,7 @@ class HVLSPreviewPanel extends HTMLElement {
       }
     }
 
-    const yamlSummary = this.querySelector("#tab-preview details:not(#rawDiffDetails) summary");
+    const yamlSummary = this.querySelector("#previewYamlDetails > summary");
     if (yamlSummary) yamlSummary.textContent = this._t("showPreviewYaml");
     const diffSummary = this.querySelector("#rawDiffDetails summary");
     if (diffSummary) diffSummary.textContent = this._t("rawDiffSummary");
@@ -1339,7 +1339,7 @@ class HVLSPreviewPanel extends HTMLElement {
           <summary>${this._t("rawDiffSummary")}</summary>
           <pre id="unifiedDiff"></pre>
         </details>
-        <details>
+        <details id="previewYamlDetails">
           <summary>${this._t("showPreviewYaml")}</summary>
           <div class="preview-yaml-tools">
             <button id="copy" class="secondary" type="button">${this._t("copy")}</button>
