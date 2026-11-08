@@ -2060,6 +2060,16 @@ class HVLSPreviewPanel extends HTMLElement {
       for (const id of values) {
         const li = document.createElement("li");
         li.textContent = id;
+        if (key === "entitiesModified") {
+          const changed = comparison.modified.find(item => item.entity_id === id);
+          for (const [field, pair] of Object.entries(changed?.fields || {})) {
+            const detail = document.createElement("div");
+            const before = pair.before == null ? this._t("absentValue") : pair.before;
+            const after = pair.after == null ? this._t("absentValue") : pair.after;
+            detail.textContent = `${field}: ${this._t("fieldBefore")} ${before} → ${this._t("fieldAfter")} ${after}`;
+            li.appendChild(detail);
+          }
+        }
         items.appendChild(li);
       }
       details.appendChild(items);
