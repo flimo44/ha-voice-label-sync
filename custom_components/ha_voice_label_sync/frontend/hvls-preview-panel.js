@@ -525,7 +525,7 @@ class HVLSPreviewPanel extends HTMLElement {
   _updateApplyButton() {
     const button = this.querySelector("#apply");
     if (button) {
-      button.disabled = !this._review || this._applying === true ||
+      button.disabled = !this._review || this._applying === true || this._restoring === true ||
         this._generating === true || this._refreshing === true ||
         this._entityWritePending === true;
     }
@@ -533,7 +533,8 @@ class HVLSPreviewPanel extends HTMLElement {
     if (refresh) refresh.disabled =
       this._applying === true || this._generating === true || this._refreshing === true;
     const restore = this.querySelector("#restoreBackup");
-    if (restore) restore.disabled = !this._backupReview || this._restoring ||
+    if (restore) restore.disabled = !this._backupReview ||
+      this._backupReview?.comparison?.identical_text === true || this._restoring ||
       this._applying || this._refreshing || this._generating || this._entityWritePending;
     const generate = this.querySelector("#generate");
     if (generate) generate.disabled =
@@ -2093,11 +2094,10 @@ class HVLSPreviewPanel extends HTMLElement {
         backup_sha256: data.backup_sha256,
         production_sha256: data.production_sha256,
       });
-      if (status) status.textContent = this._tf("backupRestored", {
-        backup: result.safety_backup
-      });
+      this._restoreResult = result.safety_backup;
       await this._loadPreview(true);
       this._backupList = null;
+      this._selectedBackup = null;
     } catch (error) {
       if (status) status.textContent = this._tf("backupRestoreFailed", {
         error: error.message || String(error)
@@ -2106,6 +2106,10 @@ class HVLSPreviewPanel extends HTMLElement {
       this._restoring = false;
       this._updateApplyButton();
       await this._loadBackups();
+      if (this._restoreResult && status) {
+        status.textContent = this._tf("backupRestored", {backup: this._restoreResult});
+        this._restoreResult = null;
+      }
     }
   }
 
