@@ -77,6 +77,8 @@ const HVLS_TRANSLATIONS = {
     noDisabledDomains: "Aucun domaine non activé détecté.",
     labeledOnly: "Entités étiquetées HVLS uniquement.",
     comparisonTitle: "Diff Preview / Production",
+    pendingChanges: "{count} changement(s) à examiner avant application",
+    pendingAction: "Ouvrir le Preview",
     comparisonMissing: "Comparaison impossible : fichier de production absent.",
     comparisonFailed: "Comparaison impossible ({status}) : {reason}",
     unreadableFile: "fichier illisible",
@@ -203,6 +205,8 @@ const HVLS_TRANSLATIONS = {
     noDisabledDomains: "No disabled domains detected.",
     labeledOnly: "Only HVLS-labeled entities.",
     comparisonTitle: "Preview / Production diff",
+    pendingChanges: "{count} change(s) to review before applying",
+    pendingAction: "Open Preview",
     comparisonMissing: "Cannot compare: production file is missing.",
     comparisonFailed: "Cannot compare ({status}): {reason}",
     unreadableFile: "unreadable file",
@@ -1049,6 +1053,24 @@ class HVLSPreviewPanel extends HTMLElement {
       panel.appendChild(warning);
       return;
     }
+    const pendingCount = comparison.added.length +
+      comparison.removed.length + comparison.modified.length;
+    // A visible alert is shown only for a valid, actionable Preview.
+    // No notification is emitted or applied automatically.
+    if (pendingCount > 0 && this._review) {
+      const alert = document.createElement("div");
+      alert.className = "preview-pending-alert";
+      alert.setAttribute("role", "status");
+      const message = document.createElement("strong");
+      message.textContent = this._tf("pendingChanges", {count: pendingCount});
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "secondary";
+      action.textContent = this._t("pendingAction");
+      action.addEventListener("click", () => this._activateTab("preview"));
+      alert.append(message, action);
+      panel.appendChild(alert);
+    }
     const counters = document.createElement("div");
     counters.className = "metrics";
     this._addMetric(counters, this._t("added"), comparison.added.length);
@@ -1416,6 +1438,21 @@ class HVLSPreviewPanel extends HTMLElement {
           font-size: 12px;
         }
 
+        .preview-pending-alert {
+          display:flex; align-items:center; justify-content:space-between;
+          flex-wrap:wrap; gap:12px; padding:12px 16px; margin:12px 0;
+          border:2px solid #c62828; border-radius:10px;
+          background:rgba(198,40,40,.12); color:var(--primary-text-color);
+          animation:hvls-pending-pulse 2.6s ease-in-out infinite;
+        }
+        .preview-pending-alert strong { color:#ef5350; }
+        @keyframes hvls-pending-pulse {
+          0%,100% { border-color:#c62828; }
+          50% { border-color:#ef9a9a; }
+        }
+        @media (prefers-reduced-motion:reduce) {
+          .preview-pending-alert { animation:none; }
+        }
         .preview-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; margin-top:16px; }
         .preview-yaml-tools { display:flex; align-items:center; justify-content:flex-end; margin:8px 0; }
         .preview-change-group {
