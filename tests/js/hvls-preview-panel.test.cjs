@@ -39,6 +39,8 @@ function makePanel(callWS, confirm = () => true) {
   vm.runInContext(source, context);
 
   const panel = new Panel();
+  // Test messages against the French UI locale expected by these assertions.
+  panel._language = "fr";
   const controls = {
     apply: { disabled: true },
     refresh: { disabled: false },
