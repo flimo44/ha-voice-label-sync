@@ -12,6 +12,12 @@ from homeassistant.core import HomeAssistant
 
 from hvls import FileWriterError, GenerationRequest, RegistryError, WorkflowError
 
+from .backup_restore import (
+    BackupRestoreError,
+    list_backups,
+    restore_reviewed_backup,
+    review_backup,
+)
 from .const import (
     CONF_BACKUP_RETENTION,
     CONF_CREATE_BACKUP,
@@ -375,6 +381,104 @@ async def websocket_set_entity_label(
     connection.send_result(msg["id"], result)
 
 
+
+WS_TYPE_LIST_BACKUPS = f"{DOMAIN}/list_backups"
+WS_TYPE_REVIEW_BACKUP = f"{DOMAIN}/review_backup"
+WS_TYPE_RESTORE_BACKUP = f"{DOMAIN}/restore_backup"
+
+
+def _configured_output(hass: HomeAssistant) -> Path:
+    """Resolve the output path from the active HA integration settings."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        raise BackupRestoreError("HVLS is not configured.")
+    settings = {**entries[0].data, **entries[0].options}
+    path = Path(settings.get(CONF_OUTPUT, DEFAULT_OUTPUT))
+    if not path.is_absolute():
+        path = Path(hass.config.config_dir) / path
+    config_root = Path(hass.config.config_dir).resolve()
+    if not path.resolve().is_relative_to(config_root):
+        raise BackupRestoreError("Production output must be inside the HA config directory.")
+    if path.is_symlink():
+        raise BackupRestoreError("Production output cannot be a symbolic link.")
+    return path
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({vol.Required("type"): WS_TYPE_LIST_BACKUPS})
+async def websocket_list_backups(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """List known HVLS backups without exposing arbitrary file paths."""
+    try:
+        path = _configured_output(hass)
+        result = await hass.async_add_executor_job(list_backups, path)
+    except (BackupRestoreError, OSError, ValueError) as exc:
+        connection.send_error(msg["id"], "backup_list_failed", str(exc))
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_REVIEW_BACKUP,
+    vol.Required("backup_id"): str,
+})
+async def websocket_review_backup(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Compare a selected backup with the current production file."""
+    try:
+        path = _configured_output(hass)
+        result = await hass.async_add_executor_job(review_backup, path, msg["backup_id"])
+    except (BackupRestoreError, OSError, ValueError) as exc:
+        connection.send_error(msg["id"], "backup_review_failed", str(exc))
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_RESTORE_BACKUP,
+    vol.Required("backup_id"): str,
+    vol.Required("backup_sha256"): str,
+    vol.Required("production_sha256"): str,
+})
+async def websocket_restore_backup(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Only restore a backup confirmed against current production."""
+    async with get_workflow_lock(hass):
+        try:
+            path = _configured_output(hass)
+            result = await hass.async_add_executor_job(
+                restore_reviewed_backup,
+                path,
+                msg["backup_id"],
+                msg["backup_sha256"],
+                msg["production_sha256"],
+            )
+        except (
+            BackupRestoreError,
+            PreviewChangedError,
+            FileWriterError,
+            OSError,
+            ValueError,
+        ) as exc:
+            connection.send_error(msg["id"], "backup_restore_failed", str(exc))
+            return
+        connection.send_result(msg["id"], result)
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register the HVLS WebSocket API."""
     websocket_api.async_register_command(hass, websocket_get_preview)
@@ -382,3 +486,6 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_set_entity_label)
     websocket_api.async_register_command(hass, websocket_apply_preview)
     websocket_api.async_register_command(hass, websocket_generate_preview)
+    websocket_api.async_register_command(hass, websocket_list_backups)
+    websocket_api.async_register_command(hass, websocket_review_backup)
+    websocket_api.async_register_command(hass, websocket_restore_backup)
