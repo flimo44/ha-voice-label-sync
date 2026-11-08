@@ -33,6 +33,16 @@ function makePanel(callWS, confirm = () => true) {
       },
     },
     window: { confirm, alert: () => {} },
+    document: {
+      createElement(tag) {
+        return {
+          tag, children: [], textContent: "", className: "",
+          appendChild(child) { this.children.push(child); },
+          append(...children) { this.children.push(...children); },
+          replaceChildren(...children) { this.children = children; },
+        };
+      },
+    },
     Event: class {
       constructor(type, options = {}) {
         this.type = type;
@@ -511,4 +521,66 @@ test("Preview differences show an explicit state when production is absent", () 
   assert.match(source, /comparison\.status === "missing"/);
   assert.match(source, /this\._t\("firstProduction"\)/);
   assert.match(source, /this\._t\("noChanges"\)/);
+});
+
+function flattenText(node) {
+  return [node.textContent || "", ...(node.children || []).map(flattenText)].join(" | ");
+}
+
+test("Preview renders grouped entity changes and modified fields", () => {
+  const { panel } = makePanel(async () => preview());
+  const container = {
+    children: [],
+    appendChild(node) { this.children.push(node); },
+    replaceChildren() { this.children = []; },
+  };
+  panel.querySelector = selector => selector === "#previewChanges" ? container : null;
+  panel._renderPreviewChanges({
+    available: true,
+    summary: { entities: [
+      { entity_id: "light.new", name: "Living room" },
+      { entity_id: "switch.changed", name: "Garden" },
+    ]},
+    comparison: {
+      status: "ok", added: ["light.new"], removed: ["light.old"],
+      modified: [{
+        entity_id: "switch.changed",
+        fields: { name: { before: "Old", after: "Garden" } }
+      }],
+    },
+  });
+  const rendered = flattenText(container);
+  assert.match(rendered, /Entités ajoutées \(1\)/);
+  assert.match(rendered, /Entités supprimées \(1\)/);
+  assert.match(rendered, /Entités modifiées \(1\)/);
+  assert.match(rendered, /Living room/);
+  assert.match(rendered, /light.old/);
+  assert.match(rendered, /Avant: Old/);
+  assert.match(rendered, /Après: Garden/);
+  assert.match(rendered, /ne la supprime pas de Home Assistant/);
+});
+
+test("Preview clearly reports missing production and identical configurations", () => {
+  const { panel } = makePanel(async () => preview());
+  const container = {
+    children: [],
+    appendChild(node) { this.children.push(node); },
+    replaceChildren() { this.children = []; },
+  };
+  panel.querySelector = selector => selector === "#previewChanges" ? container : null;
+  panel._renderPreviewChanges({
+    available: true,
+    summary: {entities: []},
+    comparison: {status: "missing"},
+  });
+  assert.match(flattenText(container), /Aucune configuration de production existante/);
+  panel._renderPreviewChanges({
+    available: true,
+    summary: {entities: []},
+    comparison: {
+      status: "ok", added: [], removed: [], modified: [],
+      identical_text: true,
+    },
+  });
+  assert.match(flattenText(container), /Aucun changement d’entité/);
 });
