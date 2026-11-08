@@ -6,7 +6,6 @@ import hmac
 import os
 import re
 import shutil
-import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -16,7 +15,6 @@ from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_guard import (
     PreviewChangedError,
     preview_digest,
-    production_digest,
     validate_production_unchanged,
 )
 
@@ -157,11 +155,20 @@ def restore_reviewed_backup(
     # Re-check bytes on disk immediately before writing.
     validate_production_unchanged(output_path, production_sha256)
     safety_path = _safety_backup(output_path)
-    try:
-        bytes_written = atomic_write(output_path, candidate)
-    except Exception:
-        # Keep the safety backup intact if atomic write fails.
-        raise
+    # Verify that the safety copy is an exact copy of the reviewed production.
+    # Never replace production if its original bytes could not be preserved.
+    if not hmac.compare_digest(
+        preview_digest(_read_yaml(safety_path)), production_sha256
+    ):
+        raise PreviewChangedError(
+            "Production changed while creating the safety backup."
+        )
+    validate_production_unchanged(output_path, production_sha256)
+    if not hmac.compare_digest(
+        preview_digest(_read_yaml(backup_path)), backup_sha256
+    ):
+        raise PreviewChangedError("Selected backup changed before restore.")
+    bytes_written = atomic_write(output_path, candidate)
     return {
         "restored": True,
         "backup_id": backup_id,
