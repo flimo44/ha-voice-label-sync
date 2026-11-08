@@ -32,7 +32,7 @@ function makePanel(callWS, confirm = () => true) {
         Panel = component;
       },
     },
-    window: { confirm },
+    window: { confirm, alert: () => {} },
     Event: class {
       constructor(type, options = {}) {
         this.type = type;
@@ -459,20 +459,13 @@ test("Failed label write invalidates previous Preview approval", async () => {
   });
   const checkbox = { checked: false, disabled: false, dataset: { ineligible: "false" } };
   panel.querySelectorAll = () => [checkbox];
-  // The production UI uses a native alert after server-side refusal.
-  // Supply a harmless alert in the test context through the original window.
   panel._loadEntities = async () => true;
   await panel._loadPreview();
   assert.equal(controls.apply.disabled, false);
   panel._generatePreview = () => { throw new Error("Must not regenerate"); };
-  // Add a test-only catch for the browser alert in this isolated environment.
-  // The vm context does not expose alert; a failed operation therefore throws here.
-  await assert.rejects(
-    panel._setEntityLabel(
-      { entity_id: "light.salon", name: "Salon", has_label: false, eligible: true },
-      checkbox
-    ),
-    /window.alert is not a function/
+  await panel._setEntityLabel(
+    { entity_id: "light.salon", name: "Salon", has_label: false, eligible: true },
+    checkbox
   );
   assert.equal(controls.apply.disabled, true);
   assert.equal(panel._review, null);
