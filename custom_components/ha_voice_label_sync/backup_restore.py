@@ -75,7 +75,9 @@ def list_backups(output_path: Path) -> dict:
             continue
         result.append({
             "id": backup_id,
-            "timestamp": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
+            "timestamp": datetime.fromtimestamp(stat.st_mtime).isoformat(
+                timespec="seconds"
+            ),
             "size": stat.st_size,
             "sha256": preview_digest(content),
         })
@@ -89,7 +91,9 @@ def review_backup(output_path: Path, backup_id: str) -> dict:
     try:
         production = _read_yaml(output_path)
     except BackupRestoreError as exc:
-        raise BackupRestoreError("Cannot compare: current production YAML is unavailable.") from exc
+        raise BackupRestoreError(
+            "Cannot compare: current production YAML is unavailable."
+        ) from exc
     try:
         analysis = analyze_preview(candidate, production)
     except PreviewFormatError as exc:
