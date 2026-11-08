@@ -982,7 +982,12 @@ class HVLSPreviewPanel extends HTMLElement {
           accent-color: var(--primary-color);
         }
         .entity-hvls-checkbox:disabled {
-          cursor: wait;
+          cursor: not-allowed;
+        }
+        .entity-eligibility-info {
+          margin-left: 6px;
+          cursor: help;
+          color: var(--secondary-text-color);
         }
 
         /* Alignement des trois colonnes du gestionnaire */
@@ -1183,16 +1188,14 @@ class HVLSPreviewPanel extends HTMLElement {
 
     if (this._entityWritePending) return;
 
-    const warning = enabled && entity.eligible === false
-      ? "\n" + this._t("ineligibleWarning")
-      : "";
+    // A stale UI or a programmatic call cannot add an ineligible entity.
+    if (enabled && entity.eligible !== true) return;
 
     const confirmed = window.confirm(
       this._tf("confirmLabel", {action}) + "\n\n" +
       `${entity.name || entity.entity_id}\n` +
       `${entity.entity_id}\n\n` +
-      this._t("otherLabelsPreserved") +
-      warning
+      this._t("otherLabelsPreserved")
     );
 
     if (!confirmed) return;
@@ -1391,9 +1394,13 @@ class HVLSPreviewPanel extends HTMLElement {
           }
 
           if (entity.eligible === false) {
-            const reason = document.createElement("small");
-            reason.textContent =
-              reasons[entity.exclusion_reason] || this._t("notEligible");
+            const reason = document.createElement("span");
+            const explanation = reasons[entity.exclusion_reason] || this._t("notEligible");
+            reason.className = "entity-eligibility-info";
+            reason.textContent = "ⓘ";
+            reason.title = explanation;
+            reason.setAttribute("aria-label", explanation);
+            reason.setAttribute("role", "img");
             info.appendChild(reason);
           }
 
