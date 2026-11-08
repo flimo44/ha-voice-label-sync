@@ -925,7 +925,8 @@ class HVLSPreviewPanel extends HTMLElement {
         const total = document.createElement("strong");
         total.textContent = String(count);
         row.append(label, total);
-        if (type === "domain") {
+        // The domain and room views share the same expandable entity list.
+        {
           const details = document.createElement("details");
           details.className = "domain-details";
 
@@ -935,7 +936,9 @@ class HVLSPreviewPanel extends HTMLElement {
           details.appendChild(summary);
 
           const entities = (stats.entities || []).filter(
-            (entity) => entity.domain === name
+            (entity) => type === "domain"
+              ? entity.domain === name
+              : (entity.room || this._t("noArea")) === name
           );
 
           const list = document.createElement("div");
@@ -958,8 +961,9 @@ class HVLSPreviewPanel extends HTMLElement {
             friendlyName.textContent = entity.name || entity.entity_id;
 
             const info = document.createElement("small");
-            info.textContent =
-              `${entity.entity_id} · ${entity.room || this._t("noArea")}`;
+            info.textContent = type === "domain"
+              ? `${entity.entity_id} · ${entity.room || this._t("noArea")}`
+              : `${entity.entity_id} · ${entity.domain}`;
 
             entityButton.append(friendlyName, info);
             entityButton.addEventListener("click", () => {
@@ -971,9 +975,6 @@ class HVLSPreviewPanel extends HTMLElement {
 
           details.appendChild(list);
           section.appendChild(details);
-        } else {
-          row.append(label, total);
-          section.appendChild(row);
         }
       }
       if (type === "domain") {
