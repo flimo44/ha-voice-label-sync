@@ -8,9 +8,29 @@
  */
 (async () => {
   "use strict";
-  const panel = document.querySelector("hvls-preview-panel");
+  // HA renders custom panels inside nested open shadow roots. document.querySelector
+  // alone only sees the light DOM and therefore misses the HVLS component.
+  const findPanel = (root) => {
+    if (!root) return null;
+    const direct = root.querySelector?.("hvls-preview-panel");
+    if (direct) return direct;
+    for (const element of root.querySelectorAll?.("*") || []) {
+      if (element.shadowRoot) {
+        const nested = findPanel(element.shadowRoot);
+        if (nested) return nested;
+      }
+      if (element.tagName === "IFRAME") {
+        try {
+          const nested = findPanel(element.contentDocument);
+          if (nested) return nested;
+        } catch (_) { /* Cross-origin frame: cannot inspect. */ }
+      }
+    }
+    return null;
+  };
+  const panel = findPanel(document);
   if (!panel || !panel._hass) {
-    console.error("[HVLS benchmark] Open the HVLS panel first.");
+    console.error("[HVLS benchmark] HVLS panel not found. Open HVLS in HA and select the top frame in DevTools Console.");
     return;
   }
   if (panel._applying || panel._refreshing || panel._generating ||
