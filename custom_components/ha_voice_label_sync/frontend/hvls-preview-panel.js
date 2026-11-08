@@ -847,14 +847,26 @@ class HVLSPreviewPanel extends HTMLElement {
         const row = document.createElement("div");
         row.className = "preview-change-item";
 
+        // Reuse Home Assistant's native More Info dialog, as in the
+        // Statistics and Entity Management tabs. This is read-only.
+        const entityButton = document.createElement("button");
+        entityButton.type = "button";
+        entityButton.className = "entity-more-info";
+        entityButton.setAttribute("aria-label", this._tf("entityMoreInfo", {
+          entity: names.get(entityId) || entityId
+        }));
         const name = document.createElement("strong");
         name.textContent = names.get(entityId) || entityId;
-        row.appendChild(name);
+        entityButton.appendChild(name);
         if (names.get(entityId) && names.get(entityId) !== entityId) {
           const id = document.createElement("small");
           id.textContent = entityId;
-          row.appendChild(id);
+          entityButton.appendChild(id);
         }
+        entityButton.addEventListener("click", () => {
+          this._openEntityDetails(entityId);
+        });
+        row.appendChild(entityButton);
 
         if (typeof item !== "string") {
           for (const [field, values] of Object.entries(item.fields || {})) {
