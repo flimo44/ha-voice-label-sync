@@ -86,3 +86,38 @@ def test_refuse_ambiguous_labels():
         module.resolve_unique_label_id(
             labels, "Google Assistant"
         )
+
+
+def test_eligibility_guard_allows_eligible_addition():
+    module.ensure_entity_eligible_for_addition(
+        {"eligible": True, "exclusion_reason": None}, True
+    )
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "domain_not_enabled",
+        "unsupported_device_class",
+        "disabled",
+        "hidden",
+        "entity_category",
+    ],
+)
+def test_eligibility_guard_refuses_ineligible_addition(reason):
+    with pytest.raises(LabelUpdateError, match=reason):
+        module.ensure_entity_eligible_for_addition(
+            {"eligible": False, "exclusion_reason": reason}, True
+        )
+
+
+def test_eligibility_guard_refuses_missing_or_unknown_entity():
+    for entity in (None, {}, {"eligible": None}):
+        with pytest.raises(LabelUpdateError):
+            module.ensure_entity_eligible_for_addition(entity, True)
+
+
+def test_eligibility_guard_allows_legacy_label_removal():
+    for entity in (None, {"eligible": False, "exclusion_reason": "hidden"}):
+        module.ensure_entity_eligible_for_addition(entity, False)
+    assert prepare({"hvls", "other"}, "hvls", False, True) == {"other"}

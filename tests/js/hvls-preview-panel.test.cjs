@@ -39,6 +39,8 @@ function makePanel(callWS, confirm = () => true) {
   vm.runInContext(source, context);
 
   const panel = new Panel();
+  // Test messages against the French UI locale expected by these assertions.
+  panel._language = "fr";
   const controls = {
     apply: { disabled: true },
     refresh: { disabled: false },
@@ -259,4 +261,39 @@ test("Failed generation invalidates previously approved Preview", async () => {
     "ha_voice_label_sync/get_preview",
     "ha_voice_label_sync/generate_preview",
   ]);
+});
+
+
+test("Ineligible unlabelled entity cannot be added from the panel", async () => {
+  const calls = [];
+  const { panel } = makePanel(async message => {
+    calls.push(message);
+    return {};
+  });
+  const checkbox = { checked: true };
+  await panel._setEntityLabel(
+    { entity_id: "sensor.blocked", has_label: false, eligible: false },
+    checkbox
+  );
+  assert.equal(checkbox.checked, false);
+  assert.equal(calls.length, 0);
+});
+
+test("Ineligible previously labelled entity can be cleaned up", async () => {
+  const calls = [];
+  const { panel } = makePanel(async message => {
+    calls.push(message);
+    return { entity_id: message.entity_id, has_label: false };
+  });
+  const checkbox = { checked: false, disabled: false, dataset: { ineligible: "false" } };
+  panel.querySelectorAll = () => [checkbox];
+  panel._loadEntities = async () => true;
+  await panel._setEntityLabel(
+    { entity_id: "sensor.legacy", name: "Legacy", has_label: true, eligible: false },
+    checkbox
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].enabled, false);
+  assert.equal(calls[0].expected_enabled, true);
+  assert.equal(checkbox.disabled, false);
 });

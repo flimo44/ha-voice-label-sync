@@ -7,6 +7,20 @@ class LabelUpdateError(ValueError):
     """A requested label change is unsafe or inconsistent."""
 
 
+def ensure_entity_eligible_for_addition(entity: dict | None, enabled: bool) -> None:
+    """Refuse additions outside the current entity catalog eligibility rules.
+
+    Removals remain possible for legacy or newly ineligible entities.
+    """
+    if not enabled:
+        return
+    if entity is None:
+        raise LabelUpdateError("Entity is absent from the HVLS catalog")
+    if entity.get("eligible") is not True:
+        reason = entity.get("exclusion_reason") or "unknown"
+        raise LabelUpdateError(f"Entity is not eligible for HVLS: {reason}")
+
+
 def prepare_label_update(
     current_labels: set[str],
     label_id: str,

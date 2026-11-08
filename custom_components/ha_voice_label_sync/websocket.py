@@ -26,7 +26,7 @@ from .const import (
 from .entity_catalog import build_entity_catalog
 from .entity_label_writer import update_entity_label
 from .ha_registries import get_live_registries
-from .label_update import LabelUpdateError
+from .label_update import LabelUpdateError, ensure_entity_eligible_for_addition
 from .preview_apply import apply_reviewed_preview
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_exclusions import analyze_exclusions
@@ -346,6 +346,18 @@ async def websocket_set_entity_label(
     try:
         # Entire read/check/write sequence runs on the HA event loop.
         # Do not add an await between these operations.
+        if msg["enabled"]:
+            registries = get_live_registries(hass)
+            catalog = build_entity_catalog(
+                registries, configured_label, DEFAULT_DOMAINS
+            )
+            entity = next(
+                (item for item in catalog["entities"]
+                 if item["entity_id"] == msg["entity_id"]),
+                None,
+            )
+            ensure_entity_eligible_for_addition(entity, msg["enabled"])
+
         result = update_entity_label(
             hass,
             msg["entity_id"],
@@ -356,7 +368,7 @@ async def websocket_set_entity_label(
     except LabelUpdateError as exc:
         connection.send_error(msg["id"], "label_update_refused", str(exc))
         return
-    except (ValueError, TypeError, KeyError) as exc:
+    except (ValueError, TypeError, KeyError, AttributeError) as exc:
         connection.send_error(msg["id"], "label_update_failed", str(exc))
         return
 

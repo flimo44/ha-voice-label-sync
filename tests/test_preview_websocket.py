@@ -97,6 +97,8 @@ def websocket_module(monkeypatch):
                 {
                     "entity_id": "switch.pompe",
                     "has_label": True,
+                    "eligible": True,
+                    "exclusion_reason": None,
                 }
             ],
         }
@@ -119,13 +121,13 @@ def websocket_module(monkeypatch):
         sys.modules, f"{prefix}.entity_label_writer", writer
     )
 
-    label_update = ModuleType(f"{prefix}.label_update")
-    label_update.LabelUpdateError = type(
-        "LabelUpdateError", (ValueError,), {}
-    )
-    monkeypatch.setitem(
-        sys.modules, f"{prefix}.label_update", label_update
-    )
+    # Import the actual eligibility guard rather than a permissive mock.
+    label_name = f"{prefix}.label_update"
+    label_path = const_path.with_name("label_update.py")
+    label_spec = importlib.util.spec_from_file_location(label_name, label_path)
+    label_update = importlib.util.module_from_spec(label_spec)
+    monkeypatch.setitem(sys.modules, label_name, label_update)
+    label_spec.loader.exec_module(label_update)
 
     services = ModuleType(f"{prefix}.services")
     services.DEFAULT_DOMAINS = frozenset({"switch"})
@@ -536,3 +538,71 @@ def test_set_entity_label_not_configured(websocket_module):
 
     connection.send_result.assert_not_called()
     assert connection.send_error.call_args.args[1] == "not_configured"
+
+
+@pytest.mark.parametrize("reason", [
+    "domain_not_enabled",
+    "unsupported_device_class",
+    "disabled",
+    "hidden",
+    "entity_category",
+])
+def test_set_entity_label_websocket_refuses_ineligible_add(websocket_module, reason):
+    ws = websocket_module.websocket
+    ws.build_entity_catalog.return_value = {
+        "entities": [{
+            "entity_id": "switch.pompe",
+            "eligible": False,
+            "exclusion_reason": reason,
+        }]
+    }
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_set_entity_label(
+        make_hass(), connection, {
+            "id": 301, "entity_id": "switch.pompe",
+            "enabled": True, "expected_enabled": False,
+        }
+    ))
+    connection.send_result.assert_not_called()
+    assert connection.send_error.call_args.args[1] == "label_update_refused"
+    ws.update_entity_label.assert_not_called()
+
+
+def test_set_entity_label_websocket_allows_ineligible_removal(websocket_module):
+    ws = websocket_module.websocket
+    ws.build_entity_catalog.return_value = {
+        "entities": [{
+            "entity_id": "switch.pompe",
+            "eligible": False,
+            "exclusion_reason": "disabled",
+        }]
+    }
+    ws.update_entity_label.return_value = {
+        "entity_id": "switch.pompe", "has_label": False, "changed": True,
+    }
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_set_entity_label(
+        make_hass(), connection, {
+            "id": 302, "entity_id": "switch.pompe",
+            "enabled": False, "expected_enabled": True,
+        }
+    ))
+    connection.send_error.assert_not_called()
+    assert connection.send_result.call_args.args[1]["has_label"] is False
+    ws.update_entity_label.assert_called_once()
+    ws.build_entity_catalog.assert_not_called()
+
+
+def test_set_entity_label_websocket_refuses_missing_entity(websocket_module):
+    ws = websocket_module.websocket
+    ws.build_entity_catalog.return_value = {"entities": []}
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_set_entity_label(
+        make_hass(), connection, {
+            "id": 303, "entity_id": "switch.unknown",
+            "enabled": True, "expected_enabled": False,
+        }
+    ))
+    connection.send_result.assert_not_called()
+    assert connection.send_error.call_args.args[1] == "label_update_refused"
+    ws.update_entity_label.assert_not_called()
