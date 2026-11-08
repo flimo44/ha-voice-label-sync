@@ -8,7 +8,21 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
-## [1.0.0-beta.1] - Unreleased (release candidate)
+## [1.0.0-beta.2] - 2026-11-08
+
+### Fixed
+- Prevent assignment of the HVLS label to currently ineligible entities, including direct WebSocket requests.
+- Disable the HVLS checkbox for ineligible, unlabeled entities, with an accessible exclusion reason indicator.
+- Continue allowing removal of existing HVLS labels from entities that have become ineligible.
+- Restore disabled checkbox state after an entity update; ensure localized JavaScript tests use a fixed locale.
+- Add non-regression coverage for eligibility decisions and WebSocket refusal/removal flows.
+
+### Validation
+- 122 Python tests and 10 JavaScript tests passed on Tower2.
+- Manually confirmed disabled controls, exclusion tooltip, and legacy label removal in Home Assistant.
+- Python core dependency remains `ha-voice-label-sync==0.3.5`.
+
+## [1.0.0-beta.1] - 2026-11-08 (published pre-release)
 
 ### Added
 - Full Home Assistant entity catalog with domain grouping, search, filters and per-domain pagination.
