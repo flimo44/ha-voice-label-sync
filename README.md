@@ -22,9 +22,9 @@ Generate Google Assistant entity exposure configuration from **Home Assistant la
 > [!NOTE]
 > HVLS remains under active development and has not yet reached v1.0. Its Home Assistant integration and standalone PyPI core have independent version numbers. Feedback and issue reports are welcome.
 
-## 🧪 V1 beta release candidate (not published yet)
+## 🧪 V1 beta releases
 
-The next milestone is **`v1.0.0-beta.1`**, currently being prepared and validated. **The latest published release remains `v0.3.10` until the V1 beta is actually released.** The Home Assistant integration version is independent of the Python core (`ha-voice-label-sync==0.3.5`); no new PyPI publication is planned unless the core changes.
+**`v1.0.0-beta.1` is published as a pre-release.** The `v1.0.0-beta.2` update fixes HVLS entity-label eligibility controls and server-side validation. Select a pre-release in HACS if you want the V1 beta, rather than the latest stable `v0.3.10`. The Home Assistant integration version is independent of the Python core (`ha-voice-label-sync==0.3.5`); no new PyPI publication is planned unless the core changes.
 
 ### What's ready for V1
 
