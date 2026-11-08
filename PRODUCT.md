@@ -1,191 +1,115 @@
-# HA Voice Label Sync – Product Vision
+# HA Voice Label Sync — Product Vision
+
+> **Manage which Home Assistant entities are exposed to Google Assistant using labels — simply, visibly and safely.**
+
+This document defines the **purpose, audience and product principles** of HA Voice Label Sync (HVLS). It is not an implementation specification or release commitment. For the current technical architecture see [ARCHITECTURE.md](ARCHITECTURE.md); for scheduled improvements see [ROADMAP.md](ROADMAP.md).
 
 ## Mission
 
-Enable Home Assistant users to manage voice assistant exposure directly from Home Assistant labels.
+Make it straightforward for people who **already use Home Assistant's manually configured Google Assistant integration**, **without Home Assistant Cloud**, to select and maintain exposed entities using native Home Assistant labels.
 
-The project removes the need to manually maintain voice assistant configuration while keeping Home Assistant as the single source of truth.
+HVLS should remove the need to maintain a large Google Assistant entity list by hand while letting users understand what will change before applying a generated configuration.
 
-> This document describes the long-term vision of the project.
->
-> It intentionally evolves much more slowly than the implementation.
+**HVLS complements Google Assistant; it does not set it up.** It does not create Google Cloud credentials, link Google Home, or automatically synchronize devices after YAML changes.
 
----
+## Who HVLS is for
 
-# Problem Statement
+- Home Assistant users whose **manual Google Assistant integration is already working**.
+- People who want to choose exposed entities from a visual Home Assistant interface instead of editing each entity entry in YAML.
+- Installations of any size where clear selection, diagnostics and controlled changes provide value.
 
-Managing voice assistant exposure manually quickly becomes difficult on medium and large Home Assistant installations.
+### Who it is not for
 
-Users currently have to:
+- Users relying solely on **Home Assistant Cloud / Nabu Casa** for native Google Assistant exposure management.
+- Users looking for a one-click Google Assistant installation or a replacement for the Google Assistant integration.
+- Users expecting HVLS to manage all voice assistants or to replace Home Assistant's native entity registry.
 
-- manually edit configuration files
-- keep friendly names synchronized
-- maintain room assignments
-- remember every newly created entity
-- regenerate configuration after each change
+A clear product description should help people decide **before installation** whether HVLS matches their setup.
 
-This process is repetitive, error-prone and discourages users from maintaining a clean configuration.
+## The problem
 
----
+With a manually configured Google Assistant integration, maintaining entity-specific YAML by hand can become tedious:
 
-# Solution
+- Choosing which entities to expose is scattered across configuration and entity management.
+- Entity additions, renames and room changes make an existing selection harder to maintain.
+- It is difficult to see which entries would be added, removed or changed.
+- An incorrect write can disrupt a working configuration.
 
-HA Voice Label Sync automatically generates the required configuration from Home Assistant labels.
+The problem is not that Home Assistant lacks labels; it is that using those labels to manage a manual Google Assistant exposure configuration should be easy and safe.
 
-Users simply manage labels inside Home Assistant.
+## The product approach
 
-Everything else is generated automatically.
+**Select → Review → Apply.**
 
----
+1. **Select:** use a native Home Assistant label to identify entities intended for Google Assistant exposure. Display entities by domain, with search, filters and understandable eligibility feedback.
+2. **Review:** generate a Preview from current Home Assistant data and make the resulting YAML and differences understandable.
+3. **Apply:** require an intentional action before writing reviewed changes to production, with validation and appropriate safeguards.
 
-# Design Principles
+HVLS can automate the preparation and explanation of a change. **It must not silently apply a change to production simply because an entity label changed.**
 
-## 1. Home Assistant remains the source of truth
+Advanced and automation-oriented generation pathways may exist separately from the recommended, review-first UI workflow; they must be described accurately rather than confused with the reviewed Apply action.
 
-The project never creates a second place where users must manage entities.
+## Product principles
 
-Labels are the only selection mechanism.
+### 1. Understandable without a manual
 
----
+A person should understand what HVLS does, whether it is meant for them and what each action will do without reading pages of documentation.
 
-## 2. Simplicity first
+> If explaining a feature takes longer than using it, reconsider its interface before writing more documentation.
 
-The project should remain understandable by any Home Assistant user.
+Use familiar language, avoid unnecessary technical terms in the interface and present details progressively.
 
-Configuration must stay simple.
+### 2. Home Assistant is the source of truth
 
----
+Use the native Home Assistant entity, device, area and label data. Do not create a competing entity catalog or a separate labeling system users must maintain.
 
-## 3. Safety first
+An entity's eligibility for **Google Assistant exposure through HVLS** must not be confused with its general usefulness in Home Assistant.
 
-The project must never overwrite user data without protection.
+### 3. Safety without unnecessary friction
 
-Whenever possible it should:
+Show proposed changes before the recommended manual Apply. Explain exclusions and errors clearly, prevent invalid actions, detect stale changes and protect production writes.
 
-- preview changes
-- create backups
-- explain modifications
+Backups should be available and enabled by default, while documentation must respect the user's configurable backup settings. Do not promise a backup when it is disabled or there is no previous file.
 
----
+### 4. A native, practical Home Assistant experience
 
-## 4. Follow Home Assistant philosophy
+Keep normal entity selection, label management, Preview inspection and configuration within Home Assistant. Reuse native dialogs and behavior where practical instead of inventing an unrelated interface.
 
-The project complements Home Assistant.
+### 5. Be precise about scope and automation
 
-It does not replace existing features.
+HVLS generates Google Assistant exposure configuration. Applying that file does not itself guarantee a reload of Google Assistant or synchronization in Google Home.
 
----
+Do not market planned features as available, or imply that HVLS makes manual Google Assistant setup unnecessary.
 
-## 5. User experience matters
+### 6. Keep a reusable technical foundation
 
-Managing a voice assistant should become as simple as adding or removing a label.
+Keep the independent Python engine and Home Assistant integration responsibilities well separated. The underlying components may be reused elsewhere, but speculative future projects should not make HVLS more complicated.
 
----
+## Current product direction
 
-## 6. Build on solid foundations
+The V1 beta already provides a native Home Assistant panel for managing the HVLS label, inspecting eligibility and exclusions, generating a YAML Preview, comparing Preview with production and applying a reviewed result with safeguards. The separate CLI/PyPI core remains available for technical workflows.
 
-Good architecture and documentation always come before new features.
+**V1 priority:** refine that existing Google Assistant experience into an intuitive, dependable release. The beta.3 work focuses on clearer navigation, better entity management, an understandable Preview and accurate HACS/README messaging. Its precise feature checklist lives in [ROADMAP.md](ROADMAP.md).
 
----
+## Non-goals
 
-# Non Goals
+HVLS is not intended to:
 
-HVLS is **not** intended to:
+- Replace Google Assistant, Home Assistant Cloud or the initial Google integration setup.
+- Automatically configure Google Cloud or pair devices in Google Home.
+- Become a general-purpose Home Assistant entity/label manager within the HVLS V1 scope.
+- Replace Home Assistant areas, devices or native label management.
+- Automatically publish every label edit to the production YAML.
+- Promise Alexa, HomeKit, Matter or other backend support on a specific schedule.
 
-- replace Home Assistant voice integrations
-- replace Home Assistant Areas
-- become a complete voice assistant manager
-- duplicate Home Assistant configuration
-- introduce another entity management system
+Additional assistants and a generic label manager remain **possible ideas**, not commitments. If generic label management becomes useful in its own right, it can be considered as a **separate project** built on reusable components rather than changing HVLS's core mission.
 
-Its purpose is only to synchronize voice assistant configuration from Home Assistant labels.
+## What success looks like
 
----
-
-# Target Users
-
-### Today
-
-- Home Assistant users
-- Medium and large installations
-- Users managing Google Assistant
-
-### Tomorrow
-
-- Amazon Alexa users
-- Apple Home users
-- Future Home Assistant voice integrations
-
----
-
-# Product Evolution
-
-## v0.1 Foundation ✅
-
-Initial public release.
-
-CLI-based configuration generation from Home Assistant labels.
-
----
-
-## v0.2 User Experience ✅
-
-Focus on usability.
-
-- Preview
-- Backup
-- Diff
-- Better feedback
-
----
-
-## v0.3 Home Assistant Integration ✅
-
-HVLS became a complete Home Assistant integration.
-
-Highlights:
-
-- Config Flow
-- Options Flow
-- Preview panel
-- Generate action
-- PyPI package
-- GitHub Actions
-- HACS compatibility
-
----
-
-## v0.4 Multi Voice Assistant
-
-Expand the same workflow to additional voice assistants while preserving the same label-driven philosophy.
-
-Potential targets:
-
-- Amazon Alexa
-- Apple Home
-- Future Home Assistant integrations
-
----
-
-## v0.5 Ecosystem
-
-Focus on reliability.
-
-- Documentation
-- Community feedback
-- Continuous improvements
-- Long-term maintenance
-
----
-
-## v1.0 Stable
-
-A mature project providing a reliable and intuitive way to manage voice assistant exposure from Home Assistant labels.
-
----
-
-# Long-Term Vision
-
-Home Assistant labels become the single source of truth for voice assistant exposure.
-
-Users should never need to manually maintain voice assistant configuration again.
+- The right users recognize immediately that HVLS is for their **existing, non-Cloud Google Assistant setup**.
+- They can choose entities and understand the consequences without hand-editing entity lists.
+- They can see and verify the proposed change before applying it.
+- The integration protects existing production configuration and communicates failures clearly.
+- Everyday use feels simpler as the underlying implementation becomes more capable.
+
+**The purpose of HVLS is not to offer the most controls. It is to make the right task obvious and safe.**
