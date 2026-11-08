@@ -94,7 +94,14 @@ const HVLS_TRANSLATIONS = {
     hvlsLabelAria: "Étiquette HVLS : {entity}",
     catalogWarning: "Attention : {warnings}",
     absentValue: "(absent)",
-    showPreviewYaml: "Afficher le YAML du Preview"
+    showPreviewYaml: "Afficher le YAML du Preview",
+    changesProposed: "Changements proposés à Google Assistant",
+    changesIntro: "Vérifiez les différences avant d’appliquer la configuration.",
+    noChanges: "Aucun changement d’entité à appliquer.",
+    removalNote: "Retirer une entité ici ne la supprime pas de Home Assistant : seule sa configuration Google Assistant change.",
+    firstProduction: "Aucune configuration de production existante : impossible de calculer les différences avec un fichier précédent.",
+    fieldBefore: "Avant",
+    fieldAfter: "Après"
   },
   en: {
     generate: "Generate Preview",
@@ -191,7 +198,14 @@ const HVLS_TRANSLATIONS = {
     hvlsLabelAria: "HVLS label: {entity}",
     catalogWarning: "Warning: {warnings}",
     absentValue: "(absent)",
-    showPreviewYaml: "Show Preview YAML"
+    showPreviewYaml: "Show Preview YAML",
+    changesProposed: "Proposed Google Assistant changes",
+    changesIntro: "Review the differences before applying the configuration.",
+    noChanges: "No entity changes to apply.",
+    removalNote: "Removing an entity here does not delete it from Home Assistant: only its Google Assistant configuration changes.",
+    firstProduction: "No existing production configuration: differences cannot be calculated against a previous file.",
+    fieldBefore: "Before",
+    fieldAfter: "After"
   }
 };
 
@@ -653,6 +667,122 @@ class HVLSPreviewPanel extends HTMLElement {
     parent.appendChild(section);
   }
 
+  _renderPreviewChanges(result) {
+    const panel = this.querySelector("#previewChanges");
+    if (!panel) return;
+    panel.replaceChildren();
+
+    const heading = document.createElement("h2");
+    heading.textContent = this._t("changesProposed");
+    panel.appendChild(heading);
+
+    if (!result.available || !result.summary) {
+      const note = document.createElement("p");
+      note.className = "diagnostic-note";
+      note.textContent = result.error || this._t("previewMissing");
+      panel.appendChild(note);
+      return;
+    }
+
+    const comparison = result.comparison || {status: "missing"};
+    if (comparison.status !== "ok") {
+      const note = document.createElement("p");
+      note.className = "diagnostic-note";
+      note.textContent = comparison.status === "missing"
+        ? this._t("firstProduction")
+        : this._tf("comparisonFailed", {
+            status: comparison.status,
+            reason: comparison.reason || this._t("unreadableFile")
+          });
+      panel.appendChild(note);
+      return;
+    }
+
+    const added = Array.isArray(comparison.added) ? comparison.added : [];
+    const removed = Array.isArray(comparison.removed) ? comparison.removed : [];
+    const modified = Array.isArray(comparison.modified) ? comparison.modified : [];
+    const counters = document.createElement("div");
+    counters.className = "metrics";
+    for (const [key, count] of [
+      ["added", added.length], ["removed", removed.length], ["modified", modified.length]
+    ]) {
+      this._addMetric(counters, this._t(key), count);
+    }
+    panel.appendChild(counters);
+
+    if (added.length + removed.length + modified.length === 0) {
+      const note = document.createElement("p");
+      note.className = "diagnostic-note";
+      note.textContent = comparison.identical_text
+        ? this._t("noChanges")
+        : this._t("identicalEntities");
+      panel.appendChild(note);
+      return;
+    }
+
+    const intro = document.createElement("p");
+    intro.className = "diagnostic-note";
+    intro.textContent = this._t("changesIntro");
+    panel.appendChild(intro);
+
+    const names = new Map((result.summary.entities || []).map(
+      (entity) => [entity.entity_id, entity.name]
+    ));
+    for (const [key, items] of [
+      ["entitiesAdded", added], ["entitiesRemoved", removed], ["entitiesModified", modified]
+    ]) {
+      if (!items.length) continue;
+      const details = document.createElement("details");
+      details.className = "preview-change-group";
+      const summary = document.createElement("summary");
+      summary.textContent = `${this._t(key)} (${items.length})`;
+      details.appendChild(summary);
+
+      if (key === "entitiesRemoved") {
+        const warning = document.createElement("p");
+        warning.className = "diagnostic-note";
+        warning.textContent = this._t("removalNote");
+        details.appendChild(warning);
+      }
+
+      const list = document.createElement("div");
+      list.className = "preview-change-list";
+      for (const item of items) {
+        const entityId = typeof item === "string" ? item : item.entity_id;
+        const row = document.createElement("div");
+        row.className = "preview-change-item";
+
+        const name = document.createElement("strong");
+        name.textContent = names.get(entityId) || entityId;
+        row.appendChild(name);
+        if (names.get(entityId) && names.get(entityId) !== entityId) {
+          const id = document.createElement("small");
+          id.textContent = entityId;
+          row.appendChild(id);
+        }
+
+        if (typeof item !== "string") {
+          for (const [field, values] of Object.entries(item.fields || {})) {
+            const change = document.createElement("div");
+            change.className = "preview-field-change";
+            const fieldName = document.createElement("strong");
+            fieldName.textContent = field;
+            const before = values.before == null ? this._t("absentValue") : values.before;
+            const after = values.after == null ? this._t("absentValue") : values.after;
+            const comparisonText = document.createElement("span");
+            comparisonText.textContent =
+              `${this._t("fieldBefore")}: ${before}  →  ${this._t("fieldAfter")}: ${after}`;
+            change.append(fieldName, comparisonText);
+            row.appendChild(change);
+          }
+        }
+        list.appendChild(row);
+      }
+      details.appendChild(list);
+      panel.appendChild(details);
+    }
+  }
+
   _renderAnalysis(result) {
     const panel = this.querySelector("#analysis");
     panel.replaceChildren();
@@ -660,6 +790,7 @@ class HVLSPreviewPanel extends HTMLElement {
     this.querySelector("#unifiedDiff").textContent = "";
     this.querySelector("#rawDiffDetails").hidden = true;
     this._lastAnalysis = result;
+    this._renderPreviewChanges(result);
     if (!result.available || !result.summary) return;
 
     const stats = result.summary;
@@ -804,9 +935,6 @@ class HVLSPreviewPanel extends HTMLElement {
         : this._t("identicalEntities");
       panel.appendChild(ok);
     }
-    this._addGroup(panel, this._t("entitiesAdded"), comparison.added);
-    this._addGroup(panel, this._t("entitiesRemoved"), comparison.removed);
-    this._addGroup(panel, this._t("entitiesModified"), comparison.modified);
 
     if (comparison.unified_diff) {
       this.querySelector("#rawDiffDetails").hidden = false;
@@ -1111,6 +1239,23 @@ class HVLSPreviewPanel extends HTMLElement {
 
         .preview-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; margin-top:16px; }
         .preview-yaml-tools { display:flex; align-items:center; justify-content:flex-end; margin:8px 0; }
+        .preview-change-group {
+          margin:10px 0;
+          padding:0 14px;
+          border:1px solid var(--divider-color);
+          border-radius:10px;
+          background:var(--card-background-color);
+        }
+        .preview-change-group > summary { font-weight:600; padding:14px 0; }
+        .preview-change-list { padding-bottom:12px; }
+        .preview-change-item {
+          display:flex; flex-direction:column; gap:4px; min-width:0;
+          padding:10px 0; border-top:1px solid var(--divider-color);
+          overflow-wrap:anywhere;
+        }
+        .preview-change-item > small { color:var(--secondary-text-color); }
+        .preview-field-change { display:flex; flex-direction:column; gap:2px; padding-left:10px; }
+        .preview-field-change > span { white-space:pre-wrap; font-size:13px; }
         .change-group { margin:12px 0; }
         .change-group li { overflow-wrap:anywhere; padding:4px 0; }
         .diagnostic-note { color:var(--secondary-text-color); font-size:13px; }
@@ -1189,6 +1334,7 @@ class HVLSPreviewPanel extends HTMLElement {
         </section>
         <section id="tab-preview" class="hvls-tab-panel"
           role="tabpanel" hidden>
+        <div id="previewChanges"></div>
         <details id="rawDiffDetails" hidden>
           <summary>${this._t("rawDiffSummary")}</summary>
           <pre id="unifiedDiff"></pre>
