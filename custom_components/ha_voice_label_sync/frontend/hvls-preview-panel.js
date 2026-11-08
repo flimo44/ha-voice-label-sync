@@ -24,6 +24,8 @@ const HVLS_TRANSLATIONS = {
     backupNoDiff: "YAML identique à la production.",
     backupDiffTitle: "Changements si cette sauvegarde est restaurée",
     backupSize: "{size} octets",
+    backupEntities: "{count} entités",
+    backupRestartHint: "Le YAML a été restauré sur disque. Redémarrez Home Assistant pour que Google Assistant recharge sa configuration.",
     refreshEntities: "Actualiser les entités",
     loadingEntities: "Chargement des entités…",
     searchPlaceholder: "Rechercher un nom, identifiant ou une pièce…",
@@ -148,6 +150,8 @@ const HVLS_TRANSLATIONS = {
     backupNoDiff: "YAML matches production.",
     backupDiffTitle: "Changes if this backup is restored",
     backupSize: "{size} bytes",
+    backupEntities: "{count} entities",
+    backupRestartHint: "The YAML file has been restored on disk. Restart Home Assistant so Google Assistant reloads its configuration.",
     refreshEntities: "Refresh entities",
     loadingEntities: "Loading entities…",
     searchPlaceholder: "Search by name, entity ID or area…",
@@ -1991,7 +1995,7 @@ class HVLSPreviewPanel extends HTMLElement {
       radio.checked = item.id === this._selectedBackup;
       radio.addEventListener("change", () => this._reviewBackup(item.id));
       const info = document.createElement("span");
-      info.textContent = `${item.timestamp} · ${this._tf("backupSize", {size: item.size})}`;
+      info.textContent = `${item.timestamp} · ${this._tf("backupEntities", {count: item.entities_count})} · ${this._tf("backupSize", {size: item.size})}`;
       label.append(radio, info);
       group.appendChild(label);
     }
@@ -2109,16 +2113,18 @@ class HVLSPreviewPanel extends HTMLElement {
       this._backupList = null;
       this._selectedBackup = null;
     } catch (error) {
-      if (status) status.textContent = this._tf("backupRestoreFailed", {
-        error: error.message || String(error)
-      });
+      this._restoreError = error.message || String(error);
     } finally {
       this._restoring = false;
       this._updateApplyButton();
       await this._loadBackups();
       if (this._restoreResult && status) {
-        status.textContent = this._tf("backupRestored", {backup: this._restoreResult});
+        status.textContent = this._tf("backupRestored", {backup: this._restoreResult})
+          + " " + this._t("backupRestartHint");
         this._restoreResult = null;
+      } else if (this._restoreError && status) {
+        status.textContent = this._tf("backupRestoreFailed", {error: this._restoreError});
+        this._restoreError = null;
       }
     }
   }
