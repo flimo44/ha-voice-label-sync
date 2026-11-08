@@ -231,7 +231,6 @@ class HVLSPreviewPanel extends HTMLElement {
     }
 
     const texts = {
-      generate: "generate",
       copy: "copy",
       apply: "apply",
       settings: "settings",
@@ -435,7 +434,9 @@ class HVLSPreviewPanel extends HTMLElement {
   _updateApplyButton() {
     const button = this.querySelector("#apply");
     if (button) {
-      button.disabled = !this._review || this._applying === true || this._generating === true || this._refreshing === true;
+      button.disabled = !this._review || this._applying === true ||
+        this._generating === true || this._refreshing === true ||
+        this._entityWritePending === true;
     }
     const refresh = this.querySelector("#refresh");
     if (refresh) refresh.disabled =
@@ -498,7 +499,7 @@ class HVLSPreviewPanel extends HTMLElement {
   }
 
   async _applyPreview() {
-    if (!this._hass || !this._review || this._applying || this._refreshing || this._generating) return;
+    if (!this._hass || !this._review || this._applying || this._refreshing || this._generating || this._entityWritePending) return;
 
     const review = {...this._review};
 
@@ -1108,6 +1109,8 @@ class HVLSPreviewPanel extends HTMLElement {
           font-size: 12px;
         }
 
+        .preview-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; margin-top:16px; }
+        .preview-yaml-tools { display:flex; align-items:center; justify-content:flex-end; margin:8px 0; }
         .change-group { margin:12px 0; }
         .change-group li { overflow-wrap:anywhere; padding:4px 0; }
         .diagnostic-note { color:var(--secondary-text-color); font-size:13px; }
@@ -1124,11 +1127,8 @@ class HVLSPreviewPanel extends HTMLElement {
             <h1>HA Voice Label Sync</h1>
           </div>
           <div class="actions">
-            <button id="generate">Générer le Preview</button>
             <button id="refresh" class="secondary icon-action" type="button"
               aria-label="${this._t("refresh")}" title="${this._t("refresh")}">↻</button>
-            <button id="copy" class="secondary">Copier YAML</button>
-            <button id="apply" disabled>Appliquer le Preview</button>
             <button id="settings" class="secondary">⚙ Paramètres</button>
           </div>
         </div>
@@ -1195,8 +1195,14 @@ class HVLSPreviewPanel extends HTMLElement {
         </details>
         <details>
           <summary>${this._t("showPreviewYaml")}</summary>
+          <div class="preview-yaml-tools">
+            <button id="copy" class="secondary" type="button">${this._t("copy")}</button>
+          </div>
           <pre id="content"></pre>
         </details>
+        <div class="preview-actions">
+          <button id="apply" type="button" disabled>${this._t("apply")}</button>
+        </div>
         </section>
       </div>
     `;
@@ -1222,7 +1228,6 @@ class HVLSPreviewPanel extends HTMLElement {
     });
     this.querySelector("#menuToggle").addEventListener("click", () => this._toggleMenu());
     this._syncMenuVisibility();
-    this.querySelector("#generate").addEventListener("click", () => this._generatePreview());
     this.querySelector("#refresh").addEventListener("click", () => this._refreshAll());
     this.querySelector("#copy").addEventListener("click", () => this._copyPreview());
     this.querySelector("#apply").addEventListener("click", () => this._applyPreview());
@@ -1292,6 +1297,11 @@ class HVLSPreviewPanel extends HTMLElement {
     if (!confirmed) return;
 
     this._entityWritePending = true;
+    // The previous Preview approval predates this label change.
+    this._loadId = (this._loadId || 0) + 1;
+    this._review = null;
+    this._updateApplyButton();
+    let reloadSucceeded = false;
 
     const controls = Array.from(
       this.querySelectorAll(".entity-hvls-checkbox")
@@ -1313,6 +1323,7 @@ class HVLSPreviewPanel extends HTMLElement {
 
       // Le catalogue est relu depuis les registres réels de HA.
       const reloaded = await this._loadEntities();
+      reloadSucceeded = reloaded;
       if (!reloaded) {
         window.alert(
           this._t("reloadFailed")
@@ -1330,6 +1341,9 @@ class HVLSPreviewPanel extends HTMLElement {
         (control) => { control.disabled = control.dataset.ineligible === "true"; }
       );
     }
+    // Regenerate only after successful label update + catalog reload.
+    // This writes the Preview file, never the Google Assistant production file.
+    if (reloadSucceeded) await this._generatePreview();
   }
 
   _renderEntities() {
