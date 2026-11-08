@@ -1,7 +1,7 @@
 const HVLS_TRANSLATIONS = {
   fr: {
     generate: "Générer le Preview",
-    refresh: "Actualiser",
+    refresh: "Actualiser toutes les données",
     copy: "Copier YAML",
     apply: "Appliquer le Preview",
     settings: "Paramètres",
@@ -98,7 +98,7 @@ const HVLS_TRANSLATIONS = {
   },
   en: {
     generate: "Generate Preview",
-    refresh: "Refresh",
+    refresh: "Refresh all data",
     copy: "Copy YAML",
     apply: "Apply Preview",
     settings: "Settings",
@@ -224,10 +224,14 @@ class HVLSPreviewPanel extends HTMLElement {
       menuToggle.setAttribute("aria-label", this._t("menu"));
       menuToggle.title = this._t("menu");
     }
+    const globalRefresh = this.querySelector("#refresh");
+    if (globalRefresh) {
+      globalRefresh.setAttribute("aria-label", this._t("refresh"));
+      globalRefresh.title = this._t("refresh");
+    }
 
     const texts = {
       generate: "generate",
-      refresh: "refresh",
       copy: "copy",
       apply: "apply",
       settings: "settings",
@@ -431,18 +435,18 @@ class HVLSPreviewPanel extends HTMLElement {
   _updateApplyButton() {
     const button = this.querySelector("#apply");
     if (button) {
-      button.disabled = !this._review || this._applying === true || this._generating === true;
+      button.disabled = !this._review || this._applying === true || this._generating === true || this._refreshing === true;
     }
     const refresh = this.querySelector("#refresh");
     if (refresh) refresh.disabled =
-      this._applying === true || this._generating === true;
+      this._applying === true || this._generating === true || this._refreshing === true;
     const generate = this.querySelector("#generate");
     if (generate) generate.disabled =
-      this._applying === true || this._generating === true;
+      this._applying === true || this._generating === true || this._refreshing === true;
   }
 
-  async _generatePreview() {
-    if (!this._hass || this._generating || this._applying) return;
+  async _generatePreview(fromRefresh = false) {
+    if (!this._hass || this._generating || this._applying || (this._refreshing && !fromRefresh)) return;
 
     this._generating = true;
     this._loadId = (this._loadId || 0) + 1;
@@ -465,8 +469,36 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  async _refreshAll() {
+    if (!this._hass || this._refreshing || this._generating ||
+        this._applying || this._entityWritePending || this._entityLoading) return;
+
+    this._refreshing = true;
+    // A refresh can change the input registry or the YAML. Invalidate any
+    // earlier approval before the first asynchronous operation.
+    this._loadId = (this._loadId || 0) + 1;
+    this._review = null;
+    this._updateApplyButton();
+
+    try {
+      const entitiesLoaded = await this._loadEntities();
+      if (!entitiesLoaded) {
+        this._setStatusKey("entitiesLoadFailed", {
+          error: this._entityLoadError || this._t("inconsistentRegistry")
+        });
+        return;
+      }
+      // Regenerates the Preview, then fetches the updated statistics,
+      // exclusions and production diff. This does NOT apply to production.
+      await this._generatePreview(true);
+    } finally {
+      this._refreshing = false;
+      this._updateApplyButton();
+    }
+  }
+
   async _applyPreview() {
-    if (!this._hass || !this._review || this._applying) return;
+    if (!this._hass || !this._review || this._applying || this._refreshing || this._generating) return;
 
     const review = {...this._review};
 
@@ -822,6 +854,13 @@ class HVLSPreviewPanel extends HTMLElement {
         h3 { font-size:16px; margin:12px 0; }
         .actions { display:flex; gap:8px; }
         button { border:0; border-radius:10px; padding:10px 16px; cursor:pointer; background:var(--primary-color); color:var(--text-primary-color); font:inherit; }
+        button.icon-action {
+          width:44px; height:44px; padding:0; font-size:25px;
+          display:inline-flex; justify-content:center; align-items:center;
+        }
+        button.icon-action:focus-visible {
+          outline:2px solid var(--primary-color); outline-offset:2px;
+        }
         button.secondary { background:var(--secondary-background-color); color:var(--primary-text-color); }
         #generate { background:#1976d2; color:#ffffff; }
         #apply { background:#238455; color:#ffffff; }
@@ -1086,7 +1125,8 @@ class HVLSPreviewPanel extends HTMLElement {
           </div>
           <div class="actions">
             <button id="generate">Générer le Preview</button>
-            <button id="refresh" class="secondary">Actualiser</button>
+            <button id="refresh" class="secondary icon-action" type="button"
+              aria-label="${this._t("refresh")}" title="${this._t("refresh")}">↻</button>
             <button id="copy" class="secondary">Copier YAML</button>
             <button id="apply" disabled>Appliquer le Preview</button>
             <button id="settings" class="secondary">⚙ Paramètres</button>
@@ -1183,7 +1223,7 @@ class HVLSPreviewPanel extends HTMLElement {
     this.querySelector("#menuToggle").addEventListener("click", () => this._toggleMenu());
     this._syncMenuVisibility();
     this.querySelector("#generate").addEventListener("click", () => this._generatePreview());
-    this.querySelector("#refresh").addEventListener("click", () => this._loadPreview());
+    this.querySelector("#refresh").addEventListener("click", () => this._refreshAll());
     this.querySelector("#copy").addEventListener("click", () => this._copyPreview());
     this.querySelector("#apply").addEventListener("click", () => this._applyPreview());
     this.querySelector("#settings").addEventListener("click", () => {
