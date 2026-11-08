@@ -713,3 +713,37 @@ test("Statistics domain entities open native HA details without changing HVLS la
   assert.match(block, /entityButton\.append\(friendlyName, info\)/);
   assert.doesNotMatch(block, /_setEntityLabel|set_entity_label/);
 });
+
+test("Eligibility explanations distinguish Home Assistant state from Google exposure", () => {
+  const { panel } = makePanel(async () => preview());
+  const actual = {
+    disabled: /désactivée dans Home Assistant/,
+    hidden: /masquée dans Home Assistant/,
+    domain_not_enabled: /domaine n’est pas pris en charge/,
+    unsupported_device_class: /classe de capteur n’est pas prise en charge/,
+    entity_category: /configuration ou de diagnostic/,
+  };
+  for (const [reason, expected] of Object.entries(actual)) {
+    const explanation = panel._eligibilityExplanation(reason);
+    assert.match(explanation, expected);
+    assert.match(explanation, /Exclue de la configuration Google Assistant générée par HVLS/);
+    assert.match(explanation, /Elle reste dans Home Assistant/);
+  }
+});
+
+test("Eligibility information can be expanded by keyboard or touch", () => {
+  assert.match(source, /reason\.type = "button"/);
+  assert.match(source, /reason\.setAttribute\("aria-expanded", "false"\)/);
+  assert.match(source, /reason\.addEventListener\("click"/);
+  assert.match(source, /explanationText\.hidden = !explanationText\.hidden/);
+  assert.match(source, /entity-eligibility-detail\[hidden\]/);
+  assert.match(source, /this\._eligibilityExplanation\(entity\.exclusion_reason\)/);
+});
+
+test("FR and EN exclusion diagnostics share the same explanation helper", () => {
+  const { panel } = makePanel(async () => preview());
+  panel._language = "en";
+  assert.match(panel._eligibilityExplanation("disabled"), /disabled in Home Assistant/);
+  assert.match(panel._eligibilityExplanation("disabled"), /It remains in Home Assistant/);
+  assert.match(source, /this\._eligibilityExplanation\(entity\.reason\)/);
+});
