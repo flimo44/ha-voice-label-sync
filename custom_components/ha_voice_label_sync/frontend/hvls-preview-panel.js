@@ -874,6 +874,15 @@ class HVLSPreviewPanel extends HTMLElement {
             const item = document.createElement("div");
             item.className = "domain-entity-item";
 
+            // Reuse the native HA More Info event; do not navigate away from
+            // the Statistics tab or change the entity's HVLS label.
+            const entityButton = document.createElement("button");
+            entityButton.type = "button";
+            entityButton.className = "entity-more-info";
+            entityButton.setAttribute("aria-label", this._tf("entityMoreInfo", {
+              entity: entity.name || entity.entity_id
+            }));
+
             const friendlyName = document.createElement("strong");
             friendlyName.textContent = entity.name || entity.entity_id;
 
@@ -881,7 +890,11 @@ class HVLSPreviewPanel extends HTMLElement {
             info.textContent =
               `${entity.entity_id} · ${entity.room || this._t("noArea")}`;
 
-            item.append(friendlyName, info);
+            entityButton.append(friendlyName, info);
+            entityButton.addEventListener("click", () => {
+              this._openEntityDetails(entity.entity_id);
+            });
+            item.appendChild(entityButton);
             list.appendChild(item);
           }
 
@@ -1081,6 +1094,9 @@ class HVLSPreviewPanel extends HTMLElement {
         }
         .domain-entity-item strong {
           font-size: 13px;
+        }
+        .domain-entity-item .entity-more-info {
+          padding: 4px 6px;
         }
         .domain-entity-item small {
           color: var(--secondary-text-color);
