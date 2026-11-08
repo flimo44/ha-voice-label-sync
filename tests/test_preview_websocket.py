@@ -158,6 +158,15 @@ def websocket_module(monkeypatch):
     monkeypatch.setitem(sys.modules, guard_name, guard_module)
     guard_spec.loader.exec_module(guard_module)
 
+    # Mock the new beta.4 backup module in the existing isolated WebSocket tests.
+    # Dedicated backup_restore tests exercise the real filesystem implementation.
+    backup_module = ModuleType(f"{prefix}.backup_restore")
+    backup_module.BackupRestoreError = type("BackupRestoreError", (ValueError,), {})
+    backup_module.list_backups = Mock(return_value={"backups": []})
+    backup_module.review_backup = Mock()
+    backup_module.restore_reviewed_backup = Mock()
+    monkeypatch.setitem(sys.modules, f"{prefix}.backup_restore", backup_module)
+
     # Mock dependencies of the apply_preview WebSocket command.
     apply_module = ModuleType(f"{prefix}.preview_apply")
     apply_module.apply_reviewed_preview = Mock()

@@ -40,6 +40,8 @@ function makePanel(callWS, confirm = () => true) {
           appendChild(child) { this.children.push(child); },
           append(...children) { this.children.push(...children); },
           replaceChildren(...children) { this.children = children; },
+          setAttribute(name, value) { this[name] = value; },
+          addEventListener(name, callback) { this["on_" + name] = callback; },
         };
       },
     },
@@ -759,4 +761,172 @@ test("Statistics shows excluded domains only when labeled entities actually have
   assert.doesNotMatch(block, /noDisabledDomains/);
   assert.match(source, /disabledDomains: "Domaines exclus de la sélection HVLS"/);
   assert.match(source, /disabledDomains: "Domains excluded from HVLS selection"/);
+});
+
+
+test("Backup tab is present and uses admin-only WS actions", () => {
+  assert.match(source, /data-tab="backups"/);
+  assert.match(source, /id="tab-backups"/);
+  assert.match(source, /ha_voice_label_sync\/list_backups/);
+  assert.match(source, /ha_voice_label_sync\/review_backup/);
+  assert.match(source, /ha_voice_label_sync\/restore_backup/);
+});
+
+test("Backup review is invalidated when a different snapshot is selected", async () => {
+  const pending = deferred();
+  const calls = [];
+  const { panel } = makePanel(async message => {
+    calls.push(message);
+    if (message.backup_id === "first") return pending.promise;
+    return {
+      backup_id: "second", backup_sha256: "b".repeat(64),
+      production_sha256: "p".repeat(64),
+      comparison: {status: "ok", added: [], removed: [], modified: [],
+        unchanged: 0, identical_text: true}
+    };
+  });
+  panel._renderBackups = () => {};
+  panel._renderBackupDiff = () => {};
+  const first = panel._reviewBackup("first");
+  const second = panel._reviewBackup("second");
+  await second;
+  pending.resolve({backup_id: "first"});
+  await first;
+  assert.equal(panel._backupReview.backup_id, "second");
+  assert.equal(panel._selectedBackup, "second");
+  assert.deepEqual(calls.map(c => c.backup_id), ["first", "second"]);
+});
+
+test("Cancelled backup restore never sends any restore command", async () => {
+  const calls = [];
+  const { panel } = makePanel(async message => {
+    calls.push(message.type);
+    return {};
+  }, () => false);
+  panel._backupReview = {
+    backup_id: "google.yaml.20261108-220000.bak",
+    backup_sha256: "b".repeat(64),
+    production_sha256: "a".repeat(64),
+    comparison: {identical_text: false}
+  };
+  await panel._restoreBackup();
+  assert.deepEqual(calls, []);
+  assert.equal(panel._backupReview.backup_id, "google.yaml.20261108-220000.bak");
+});
+
+test("Confirmed backup restore transmits reviewed hashes and refreshes Preview", async () => {
+  const calls = [];
+  const { panel, controls } = makePanel(async message => {
+    calls.push(message);
+    return {restored: true, safety_backup: "safety.bak"};
+  });
+  panel._backupReview = {
+    backup_id: "google.yaml.20261108-220000.bak",
+    backup_sha256: "b".repeat(64),
+    production_sha256: "a".repeat(64),
+    comparison: {identical_text: false}
+  };
+  let refreshed = false, backupsRefreshed = false;
+  panel._loadPreview = async () => { refreshed = true; };
+  panel._loadBackups = async () => { backupsRefreshed = true; };
+  await panel._restoreBackup();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].type, "ha_voice_label_sync/restore_backup");
+  assert.equal(calls[0].backup_id, "google.yaml.20261108-220000.bak");
+  assert.equal(calls[0].backup_sha256, "b".repeat(64));
+  assert.equal(calls[0].production_sha256, "a".repeat(64));
+  assert.equal(refreshed, true);
+  assert.equal(backupsRefreshed, true);
+  assert.equal(controls.apply.disabled, true);
+});
+
+test("Identical backup is never restored even with confirmation", async () => {
+  const calls = [];
+  const { panel } = makePanel(async message => { calls.push(message); });
+  panel._backupReview = {
+    backup_id: "foo", comparison: {identical_text: true}
+  };
+  await panel._restoreBackup();
+  assert.equal(calls.length, 0);
+});
+
+
+test("Successful Apply invalidates cached backups so new snapshots become visible", async () => {
+  const calls = [];
+  const {panel} = makePanel(async message => {
+    calls.push(message.type);
+    if (message.type === "ha_voice_label_sync/apply_preview")
+      return {output_path: "/config/google_entities.yaml", bytes_written: 77,
+        backup_path: "/config/.hvls_backups/new.bak"};
+    return preview();
+  });
+  panel._review = {preview_sha256: "a".repeat(64), production_sha256: null};
+  panel._backupList = [{id: "old.bak"}];
+  panel._backupReview = {backup_id: "old.bak"};
+  panel._selectedBackup = "old.bak";
+  await panel._applyPreview();
+  assert.equal(panel._backupList, null);
+  assert.equal(panel._backupReview, null);
+  assert.equal(panel._selectedBackup, null);
+  assert.ok(calls.includes("ha_voice_label_sync/apply_preview"));
+});
+
+test("Opening Backups fetches live list even when it was already cached", () => {
+  const {panel} = makePanel(async () => ({}));
+  const panels = {};
+  const buttons = ["summary", "entities", "preview", "backups"].map(tab => ({
+    dataset: {tab}, classList: {toggle() {}}, setAttribute() {},
+  }));
+  panel.querySelector = selector => {
+    if (selector.startsWith("#")) return panels[selector] ||= {hidden: true};
+    return null;
+  };
+  panel.querySelectorAll = () => buttons;
+  let loads = 0;
+  panel._backupList = [{id: "cached.bak"}];
+  panel._loadBackups = () => {loads++};
+  panel._activateTab("backups");
+  assert.equal(loads, 1);
+});
+
+
+test("Preview change rows expose native HA More Info for added, removed and modified entities", () => {
+  const start = source.indexOf("  _renderPreviewChanges(result) {");
+  const end = source.indexOf("  _renderAnalysis(result) {", start);
+  const block = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(block, /const entityId = typeof item === "string" \? item : item\.entity_id/);
+  assert.match(block, /entityButton\.type = "button"/);
+  assert.match(block, /entityButton\.className = "entity-more-info"/);
+  assert.match(block, /entityButton\.setAttribute\("aria-label"/);
+  assert.match(block, /entityButton\.addEventListener\("click"/);
+  assert.match(block, /this\._openEntityDetails\(entityId\)/);
+  assert.doesNotMatch(block, /_setEntityLabel\(/);
+  assert.doesNotMatch(block, /apply_preview/);
+});
+
+test("Statistics room rows expand to matching entities including unassigned ones", () => {
+  const start = source.indexOf('for (const [type, title, values] of [["domain"');
+  const end = source.indexOf('if (type === "domain") {\n        const excluded', start);
+  const section = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(section, /const details = document\.createElement\("details"\)/);
+  assert.match(section, /type === "domain"/);
+  assert.match(section, /entity\.domain === name/);
+  assert.match(section, /\(entity\.room \|\| this\._t\("noArea"\)\) === name/);
+  assert.match(section, /this\._openEntityDetails\(entity\.entity_id\)/);
+  assert.match(section, /details\.appendChild\(list\)/);
+  assert.doesNotMatch(section, /_setEntityLabel|set_entity_label/);
+});
+
+test("Statistics lists the unassigned room bucket last without changing domain order", () => {
+  const start = source.indexOf('for (const [type, title, values] of [["domain"');
+  const end = source.indexOf('const row = document.createElement("div");', start);
+  const block = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(block, /if \(type === "area"\)/);
+  assert.match(block, /name === "Sans pièce"/);
+  assert.match(block, /entries\.splice\(entries\.indexOf\(unassigned\), 1\)/);
+  assert.match(block, /entries\.push\(unassigned\)/);
+  assert.match(block, /for \(const \[name, count\] of entries\)/);
 });
