@@ -70,7 +70,9 @@ def list_backups(output_path: Path) -> dict:
             path = _get_backup(output_path, backup_id)
             stat = path.stat()
             content = _read_yaml(path)
-            analyze_preview(content, None)  # Validate candidate before offering it.
+            analysis = analyze_preview(content, None)
+            if not analysis["summary"]["total"]:
+                continue  # Never offer an empty YAML snapshot for restoration.
         except (OSError, BackupRestoreError, PreviewFormatError):
             continue
         result.append({
@@ -79,6 +81,7 @@ def list_backups(output_path: Path) -> dict:
                 timespec="seconds"
             ),
             "size": stat.st_size,
+            "entities_count": analysis["summary"]["total"],
             "sha256": preview_digest(content),
         })
     return {"backups": result}
@@ -100,6 +103,8 @@ def review_backup(output_path: Path, backup_id: str) -> dict:
         raise BackupRestoreError(f"Invalid backup YAML: {exc}") from exc
     if analysis["comparison"].get("status") != "ok":
         raise BackupRestoreError("Cannot restore while production YAML is invalid.")
+    if not analysis["summary"]["total"]:
+        raise BackupRestoreError("Refusing to restore an empty YAML backup.")
     return {
         "backup_id": backup_id,
         "backup_sha256": preview_digest(candidate),
