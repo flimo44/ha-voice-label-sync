@@ -1236,7 +1236,7 @@ class HVLSPreviewPanel extends HTMLElement {
     } finally {
       this._entityWritePending = false;
       this.querySelectorAll(".entity-hvls-checkbox").forEach(
-        (control) => { control.disabled = false; }
+        (control) => { control.disabled = control.dataset.ineligible === "true"; }
       );
     }
   }
@@ -1411,7 +1411,9 @@ class HVLSPreviewPanel extends HTMLElement {
           checkbox.type = "checkbox";
           checkbox.className = "entity-hvls-checkbox";
           checkbox.checked = entity.has_label === true;
-          checkbox.disabled = Boolean(this._entityWritePending);
+          const ineligibleToAdd = entity.eligible !== true && entity.has_label !== true;
+          checkbox.dataset.ineligible = String(ineligibleToAdd);
+          checkbox.disabled = Boolean(this._entityWritePending) || ineligibleToAdd;
           checkbox.setAttribute(
             "aria-label",
             this._tf("hvlsLabelAria", {entity: entity.entity_id})
