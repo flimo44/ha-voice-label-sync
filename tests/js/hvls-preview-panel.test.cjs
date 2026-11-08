@@ -930,3 +930,17 @@ test("Statistics lists the unassigned room bucket last without changing domain o
   assert.match(block, /entries\.push\(unassigned\)/);
   assert.match(block, /for \(const \[name, count\] of entries\)/);
 });
+
+
+test("Statistics signals only actionable pending Preview changes", () => {
+  const start = source.indexOf('const pendingCount = comparison.added.length +');
+  const end = source.indexOf('const counters = document.createElement("div");', start);
+  assert.ok(start >= 0 && end > start);
+  const block = source.slice(start, end);
+  assert.match(block, /comparison\.removed\.length \+ comparison\.modified\.length/);
+  assert.match(block, /pendingCount > 0 && this\._review/);
+  assert.match(block, /preview-pending-alert/);
+  assert.match(block, /this\._activateTab\("preview"\)/);
+  assert.doesNotMatch(block, /_applyPreview\(/);
+  assert.match(source, /prefers-reduced-motion:reduce/);
+});
