@@ -398,7 +398,9 @@ def _configured_output(hass: HomeAssistant) -> Path:
         path = Path(hass.config.config_dir) / path
     config_root = Path(hass.config.config_dir).resolve()
     if not path.resolve().is_relative_to(config_root):
-        raise BackupRestoreError("Production output must be inside the HA config directory.")
+        raise BackupRestoreError(
+            "Production output must be inside the HA config directory."
+        )
     if path.is_symlink():
         raise BackupRestoreError("Production output cannot be a symbolic link.")
     return path
@@ -436,7 +438,9 @@ async def websocket_review_backup(
     """Compare a selected backup with the current production file."""
     try:
         path = _configured_output(hass)
-        result = await hass.async_add_executor_job(review_backup, path, msg["backup_id"])
+        result = await hass.async_add_executor_job(
+            review_backup, path, msg["backup_id"]
+        )
     except (BackupRestoreError, OSError, ValueError) as exc:
         connection.send_error(msg["id"], "backup_review_failed", str(exc))
         return
