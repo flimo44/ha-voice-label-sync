@@ -590,3 +590,72 @@ test("Preview YAML translation targets only the real YAML section", () => {
   assert.match(source, /querySelector\("#previewYamlDetails > summary"\)/);
   assert.doesNotMatch(source, /#tab-preview details:not\(#rawDiffDetails\) summary/);
 });
+
+test("Eligible unlabelled filter is distinct from all unlabelled entities", () => {
+  const { panel } = makePanel(async () => preview());
+  const eligible = { eligible: true, has_label: false };
+  const ineligible = { eligible: false, has_label: false };
+  const labeled = { eligible: true, has_label: true };
+  assert.equal(panel._entityMatchesFilter(eligible, "eligible_no"), true);
+  assert.equal(panel._entityMatchesFilter(ineligible, "eligible_no"), false);
+  assert.equal(panel._entityMatchesFilter(labeled, "eligible_no"), false);
+  assert.equal(panel._entityMatchesFilter(ineligible, "no"), true);
+  assert.equal(panel._entityMatchesFilter(ineligible, "ineligible"), true);
+  assert.equal(panel._entityMatchesFilter(eligible, "ineligible"), false);
+});
+
+test("Exclusions tab hidden only when diagnostic count is confirmed zero", () => {
+  const { panel } = makePanel(async () => preview());
+  const button = {
+    hidden: false, textContent: "", attributes: { "aria-selected": "false" },
+    getAttribute(key) { return this.attributes[key]; },
+  };
+  const otherTabs = {
+    summary: { hidden: false, textContent: "" },
+    entities: { hidden: false, textContent: "" },
+    preview: { hidden: false, textContent: "" },
+  };
+  panel.querySelector = selector => {
+    const match = selector.match(/data-tab="([^"]+)"/);
+    return match ? (match[1] === "exclusions" ? button : otherTabs[match[1]]) : null;
+  };
+  panel._syncExclusionsTab(null);
+  assert.equal(button.hidden, false);
+  panel._syncExclusionsTab({ entities: [{entity_id: "sensor.old"}] });
+  assert.equal(button.hidden, false);
+  assert.match(button.textContent, /Entités exclues \(1\)/);
+  panel._syncExclusionsTab({ entities: [] });
+  assert.equal(button.hidden, true);
+  assert.equal(otherTabs.entities.textContent, "2 · Gestion des entités HVLS");
+  panel._syncExclusionsTab({status: "error"});
+  assert.equal(button.hidden, true);
+});
+
+test("Removing the final exclusion navigates to entity manager", () => {
+  const { panel } = makePanel(async () => preview());
+  const button = {
+    hidden: false, textContent: "",
+    getAttribute: key => key === "aria-selected" ? "true" : null,
+  };
+  const tabs = {
+    summary: { hidden: false, textContent: "" },
+    entities: { hidden: false, textContent: "" },
+    preview: { hidden: false, textContent: "" },
+  };
+  panel.querySelector = selector => {
+    const match = selector.match(/data-tab="([^"]+)"/);
+    return match ? (match[1] === "exclusions" ? button : tabs[match[1]]) : null;
+  };
+  let switched = null;
+  panel._activateTab = tab => { switched = tab; };
+  panel._syncExclusionsTab({entities: []});
+  assert.equal(switched, "entities");
+  assert.equal(button.hidden, true);
+});
+
+test("Entity filter options and exclusions tab count are translated", () => {
+  assert.match(source, /option value="eligible_no"/);
+  assert.match(source, /option value="ineligible"/);
+  assert.match(source, /this\._updateTabLabels\(\)/);
+  assert.match(source, /this\._syncExclusionsTab\(result\.exclusions\)/);
+});
