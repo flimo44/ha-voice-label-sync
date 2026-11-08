@@ -1159,6 +1159,7 @@ class HVLSPreviewPanel extends HTMLElement {
           border-bottom: 3px solid transparent;
           padding: 12px 14px;
         }
+        .hvls-tab[hidden] { display: none !important; }
         .hvls-tab.active {
           color: var(--primary-color);
           border-bottom-color: var(--primary-color);
