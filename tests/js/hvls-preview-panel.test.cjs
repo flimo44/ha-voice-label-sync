@@ -486,3 +486,29 @@ test("Preview contains the Copy YAML and Apply actions, not the header", () => {
   assert.match(header, /id="refresh"/);
   assert.match(header, /id="settings"/);
 });
+
+test("Preview diff view groups changes before YAML and Apply", () => {
+  const previewStart = source.indexOf('<section id="tab-preview"');
+  const changes = source.indexOf('id="previewChanges"', previewStart);
+  const yaml = source.indexOf('id="content"', previewStart);
+  const apply = source.indexOf('id="apply"', previewStart);
+  assert.ok(previewStart >= 0 && changes > previewStart);
+  assert.ok(changes < yaml && yaml < apply);
+  assert.match(source, /_renderPreviewChanges\(result\)/);
+  assert.doesNotMatch(source, /this\._addGroup\(panel, this\._t\("entitiesAdded"\)/);
+});
+
+test("Preview diff uses backend comparison and explains removals", () => {
+  assert.match(source, /comparison\.added/);
+  assert.match(source, /comparison\.removed/);
+  assert.match(source, /comparison\.modified/);
+  assert.match(source, /removalNote:/);
+  assert.match(source, /fieldBefore:/);
+  assert.match(source, /fieldAfter:/);
+});
+
+test("Preview differences show an explicit state when production is absent", () => {
+  assert.match(source, /comparison\.status === "missing"/);
+  assert.match(source, /this\._t\("firstProduction"\)/);
+  assert.match(source, /this\._t\("noChanges"\)/);
+});
