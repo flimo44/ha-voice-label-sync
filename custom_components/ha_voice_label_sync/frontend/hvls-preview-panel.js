@@ -57,7 +57,7 @@ const HVLS_TRANSLATIONS = {
     metricRooms: "Pièces",
     byDomain: "Par domaine",
     byArea: "Par pièce",
-    disabledDomains: "Domaines non activés",
+    disabledDomains: "Domaines exclus de la sélection HVLS",
     noDisabledDomains: "Aucun domaine non activé détecté.",
     labeledOnly: "Entités étiquetées HVLS uniquement.",
     comparisonTitle: "Diff Preview / Production",
@@ -167,7 +167,7 @@ const HVLS_TRANSLATIONS = {
     metricRooms: "Areas",
     byDomain: "By domain",
     byArea: "By area",
-    disabledDomains: "Domains not enabled",
+    disabledDomains: "Domains excluded from HVLS selection",
     noDisabledDomains: "No disabled domains detected.",
     labeledOnly: "Only HVLS-labeled entities.",
     comparisonTitle: "Preview / Production diff",
@@ -926,40 +926,36 @@ class HVLSPreviewPanel extends HTMLElement {
             (unsupported[entity.domain] || 0) + 1;
         }
 
-        const subtitle = document.createElement("h3");
-        subtitle.textContent = this._t("disabledDomains");
-        subtitle.style.marginTop = "20px";
-        section.appendChild(subtitle);
-
         const entries = Object.entries(unsupported)
           .sort(([a], [b]) => a.localeCompare(b));
 
-        if (entries.length === 0) {
-          const empty = document.createElement("p");
-          empty.className = "diagnostic-note";
-          empty.textContent = this._t("noDisabledDomains");
-          section.appendChild(empty);
+        // No empty diagnostic section in Statistics. Do not imply that every
+        // HA domain is supported merely because no labeled entity is excluded.
+        if (entries.length > 0) {
+          const subtitle = document.createElement("h3");
+          subtitle.textContent = this._t("disabledDomains");
+          subtitle.style.marginTop = "20px";
+          section.appendChild(subtitle);
+
+          for (const [name, count] of entries) {
+            const row = document.createElement("div");
+            row.className = "breakdown-row";
+
+            const label = document.createElement("span");
+            label.textContent = name;
+
+            const total = document.createElement("strong");
+            total.textContent = String(count);
+
+            row.append(label, total);
+            section.appendChild(row);
+          }
+
+          const note = document.createElement("p");
+          note.className = "diagnostic-note";
+          note.textContent = this._t("labeledOnly");
+          section.appendChild(note);
         }
-
-        for (const [name, count] of entries) {
-          const row = document.createElement("div");
-          row.className = "breakdown-row";
-
-          const label = document.createElement("span");
-          label.textContent = name;
-
-          const total = document.createElement("strong");
-          total.textContent = String(count);
-
-          row.append(label, total);
-          section.appendChild(row);
-        }
-
-        const note = document.createElement("p");
-        note.className = "diagnostic-note";
-        note.textContent =
-          this._t("labeledOnly");
-        section.appendChild(note);
       }
 
       breakdown.appendChild(section);
