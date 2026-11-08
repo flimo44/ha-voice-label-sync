@@ -178,15 +178,21 @@ The user journey is **Select backup → Review differences → Confirm restore**
 - [x] Never modify Home Assistant entity labels or registries.
 - [x] Keep a restore error or success message and advise restarting HA to reload Google Assistant YAML.
 
+## Additional user-validated interface refinements
+
+- [x] Refresh backup history after applying a Preview and when returning to Backups.
+- [x] Open HA native entity details from entity-level Preview changes.
+- [x] Expand Statistics by room and keep the unassigned room bucket last.
+
 ## Quality gates
 
 - [x] Python regression tests (path traversal, symlinks, empty YAML, changing inputs, safety copy).
 - [x] Frontend interaction regression tests added.
 - [x] GitHub Python, Package, Hassfest and HACS validation passed on the development branch.
-- [ ] Run local Node.js frontend test suite and inspect the UI in desktop/mobile HA.
-- [ ] Test a **full restore workflow on a copy** of the production YAML, including rollback.
+- [x] Run Node.js frontend regression suite and inspect the UI in Home Assistant desktop (mobile layout still to be checked).
+- [x] Test a complete restore and rollback on isolated YAML files, then perform several successful restores in the real Home Assistant UI.
 - [ ] Confirm that the resulting production YAML is accepted on HA reboot.
-- [ ] Refresh release documentation and screenshots, bump manifest to beta.4, then publish as a pre-release.
+- [x] Bump integration manifest to beta.4 and document release changes; publish as a GitHub pre-release after merge.
 
 This work belongs to branch `feat/v1-beta4-backup-restore`; **do not publish or merge until end-to-end restore validation**.
 
