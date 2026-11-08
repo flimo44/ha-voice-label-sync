@@ -917,7 +917,19 @@ class HVLSPreviewPanel extends HTMLElement {
       const heading = document.createElement("h3");
       heading.textContent = title;
       section.appendChild(heading);
-      for (const [name, count] of Object.entries(values || {})) {
+      // "Sans pièce" is a fallback bucket, not a real room: list it last.
+      // Keep the original ordering of actual rooms and domains unchanged.
+      const entries = Object.entries(values || {});
+      if (type === "area") {
+        const unassigned = entries.find(([name]) =>
+          name === "Sans pièce" || name === this._t("noArea")
+        );
+        if (unassigned) {
+          entries.splice(entries.indexOf(unassigned), 1);
+          entries.push(unassigned);
+        }
+      }
+      for (const [name, count] of entries) {
         const row = document.createElement("div");
         row.className = "breakdown-row";
         const label = document.createElement("span");
