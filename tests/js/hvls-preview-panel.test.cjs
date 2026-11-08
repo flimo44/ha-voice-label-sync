@@ -337,3 +337,85 @@ test("Mobile menu is rendered with an accessible label", () => {
   assert.match(source, /id="menuToggle"[^>]*aria-label=/);
   assert.match(source, /class="menu-toggle"[^>]*type="button"/);
 });
+
+test("Global refresh reloads entities, regenerates Preview and does not apply", async () => {
+  const calls = [];
+  const { panel, controls } = makePanel(async message => {
+    calls.push(message.type);
+    if (message.type === "ha_voice_label_sync/get_entities") return {};
+    if (message.type === "ha_voice_label_sync/generate_preview") {
+      assert.equal(controls.apply.disabled, true);
+      return { generated: true, entity_count: 12 };
+    }
+    return preview(true);
+  });
+  panel._loadEntities = async () => {
+    calls.push("ha_voice_label_sync/get_entities");
+    return true;
+  };
+
+  await panel._loadPreview();
+  await panel._refreshAll();
+
+  assert.deepEqual(calls, [
+    "ha_voice_label_sync/get_preview",
+    "ha_voice_label_sync/get_entities",
+    "ha_voice_label_sync/generate_preview",
+    "ha_voice_label_sync/get_preview",
+  ]);
+  assert.equal(controls.apply.disabled, false);
+  assert.equal(controls.refresh.disabled, false);
+  assert.equal(calls.includes("ha_voice_label_sync/apply_preview"), false);
+});
+
+test("Global refresh blocks overlapping refresh and Apply", async () => {
+  const pending = deferred();
+  const calls = [];
+  const { panel, controls } = makePanel(async message => {
+    calls.push(message.type);
+    return preview(true);
+  });
+  await panel._loadPreview();
+  panel._loadEntities = () => pending.promise;
+
+  const task = panel._refreshAll();
+  assert.equal(controls.refresh.disabled, true);
+  assert.equal(controls.apply.disabled, true);
+  await panel._refreshAll();
+  await panel._applyPreview();
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_preview"]);
+
+  pending.resolve(true);
+  await task;
+  assert.deepEqual(calls, [
+    "ha_voice_label_sync/get_preview",
+    "ha_voice_label_sync/generate_preview",
+    "ha_voice_label_sync/get_preview",
+  ]);
+});
+
+test("Failed registry refresh refuses to reuse an old approved Preview", async () => {
+  const calls = [];
+  const { panel, controls } = makePanel(async message => {
+    calls.push(message.type);
+    return preview(true);
+  });
+  await panel._loadPreview();
+  panel._loadEntities = async () => {
+    panel._entityLoadError = "Registry failed";
+    return false;
+  };
+  await panel._refreshAll();
+
+  assert.equal(controls.apply.disabled, true);
+  assert.equal(controls.refresh.disabled, false);
+  assert.equal(panel._review, null);
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_preview"]);
+  assert.match(panel.status, /Registry failed/);
+});
+
+test("Global refresh is an accessible compact icon action", () => {
+  assert.match(source, /id="refresh" class="secondary icon-action" type="button"/);
+  assert.match(source, /id="refresh"[^>]*aria-label=/);
+  assert.match(source, /this\._refreshAll\(\)/);
+});
