@@ -584,3 +584,9 @@ test("Preview clearly reports missing production and identical configurations", 
   });
   assert.match(flattenText(container), /Aucun changement d’entité/);
 });
+
+test("Preview YAML translation targets only the real YAML section", () => {
+  assert.match(source, /id="previewYamlDetails"/);
+  assert.match(source, /querySelector\("#previewYamlDetails > summary"\)/);
+  assert.doesNotMatch(source, /#tab-preview details:not\(#rawDiffDetails\) summary/);
+});
