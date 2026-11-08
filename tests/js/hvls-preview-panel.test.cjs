@@ -40,6 +40,8 @@ function makePanel(callWS, confirm = () => true) {
           appendChild(child) { this.children.push(child); },
           append(...children) { this.children.push(...children); },
           replaceChildren(...children) { this.children = children; },
+          setAttribute(name, value) { this[name] = value; },
+          addEventListener(name, callback) { this["on_" + name] = callback; },
         };
       },
     },
