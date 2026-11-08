@@ -5,6 +5,7 @@ const HVLS_TRANSLATIONS = {
     copy: "Copier YAML",
     apply: "Appliquer le Preview",
     settings: "Paramètres",
+    menu: "Ouvrir le menu Home Assistant",
     tabStats: "Statistiques",
     tabExclusions: "Entités exclues",
     tabEntities: "Gestion des entités HVLS",
@@ -101,6 +102,7 @@ const HVLS_TRANSLATIONS = {
     copy: "Copy YAML",
     apply: "Apply Preview",
     settings: "Settings",
+    menu: "Open Home Assistant menu",
     tabStats: "Statistics",
     tabExclusions: "Excluded entities",
     tabEntities: "HVLS Entity Management",
@@ -217,6 +219,12 @@ class HVLSPreviewPanel extends HTMLElement {
   }
 
   _translateStatic() {
+    const menuToggle = this.querySelector("#menuToggle");
+    if (menuToggle) {
+      menuToggle.setAttribute("aria-label", this._t("menu"));
+      menuToggle.title = this._t("menu");
+    }
+
     const texts = {
       generate: "generate",
       refresh: "refresh",
@@ -305,6 +313,7 @@ class HVLSPreviewPanel extends HTMLElement {
     }
     this._loadBrandIcon();
     this._translateStatic();
+    this._syncMenuVisibility();
     if (oldLanguage && oldLanguage !== this._language) {
       if (this._lastAnalysis) this._renderAnalysis(this._lastAnalysis);
       if (this._entityCatalog && !this._entityLoading && !this._entityWritePending) {
@@ -318,6 +327,25 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  set narrow(narrow) {
+    this._narrow = Boolean(narrow);
+    this._syncMenuVisibility();
+  }
+
+  _syncMenuVisibility() {
+    const menu = this.querySelector("#menuToggle");
+    if (menu) {
+      menu.hidden = !(this._narrow || this._hass?.dockedSidebar === "always_hidden");
+    }
+  }
+
+  _toggleMenu() {
+    this.dispatchEvent(new Event("hass-toggle-menu", {
+      bubbles: true,
+      composed: true
+    }));
+  }
+
   set panel(panel) {
     this._panel = panel;
   }
@@ -326,6 +354,7 @@ class HVLSPreviewPanel extends HTMLElement {
     if (!this._initialized) {
       this._initialized = true;
       this._render();
+      this._syncMenuVisibility();
     }
   }
 
@@ -765,6 +794,24 @@ class HVLSPreviewPanel extends HTMLElement {
           gap: 12px;
           min-width: 0;
         }
+        .menu-toggle {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 44px;
+          height: 44px;
+          padding: 0;
+          font-size: 26px;
+          line-height: 1;
+          flex-shrink: 0;
+          background: transparent;
+          color: var(--primary-text-color);
+        }
+        .menu-toggle[hidden] { display: none; }
+        .menu-toggle:focus-visible {
+          outline: 2px solid var(--primary-color);
+          outline-offset: 2px;
+        }
         .hvls-brand img {
           width: 44px;
           height: 44px;
@@ -1032,6 +1079,8 @@ class HVLSPreviewPanel extends HTMLElement {
       <div class="container">
         <div class="header">
           <div class="hvls-brand">
+            <button id="menuToggle" class="menu-toggle" type="button" hidden
+              aria-label="${this._t("menu")}" title="${this._t("menu")}">☰</button>
             <img id="hvlsBrandIcon" alt="" hidden>
             <h1>HA Voice Label Sync</h1>
           </div>
@@ -1131,6 +1180,8 @@ class HVLSPreviewPanel extends HTMLElement {
         this._activateTab(button.dataset.tab);
       });
     });
+    this.querySelector("#menuToggle").addEventListener("click", () => this._toggleMenu());
+    this._syncMenuVisibility();
     this.querySelector("#generate").addEventListener("click", () => this._generatePreview());
     this.querySelector("#refresh").addEventListener("click", () => this._loadPreview());
     this.querySelector("#copy").addEventListener("click", () => this._copyPreview());
