@@ -886,3 +886,19 @@ test("Opening Backups fetches live list even when it was already cached", () => 
   panel._activateTab("backups");
   assert.equal(loads, 1);
 });
+
+
+test("Preview change rows expose native HA More Info for added, removed and modified entities", () => {
+  const start = source.indexOf("  _renderPreviewChanges(result) {");
+  const end = source.indexOf("  _renderAnalysis(result) {", start);
+  const block = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(block, /const entityId = typeof item === "string" \? item : item\.entity_id/);
+  assert.match(block, /entityButton\.type = "button"/);
+  assert.match(block, /entityButton\.className = "entity-more-info"/);
+  assert.match(block, /entityButton\.setAttribute\("aria-label"/);
+  assert.match(block, /entityButton\.addEventListener\("click"/);
+  assert.match(block, /this\._openEntityDetails\(entityId\)/);
+  assert.doesNotMatch(block, /_setEntityLabel\(/);
+  assert.doesNotMatch(block, /apply_preview/);
+});
