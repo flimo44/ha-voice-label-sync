@@ -33,6 +33,13 @@ function makePanel(callWS, confirm = () => true) {
       },
     },
     window: { confirm },
+    Event: class {
+      constructor(type, options = {}) {
+        this.type = type;
+        this.bubbles = options.bubbles;
+        this.composed = options.composed;
+      }
+    },
     console,
   });
 
@@ -296,4 +303,37 @@ test("Ineligible previously labelled entity can be cleaned up", async () => {
   assert.equal(calls[0].enabled, false);
   assert.equal(calls[0].expected_enabled, true);
   assert.equal(checkbox.disabled, false);
+});
+
+test("Mobile menu follows the native Home Assistant narrow property", () => {
+  const { panel } = makePanel(async () => preview());
+  const menu = { hidden: true };
+  panel.querySelector = selector => selector === "#menuToggle" ? menu : null;
+
+  panel.narrow = true;
+  assert.equal(menu.hidden, false);
+
+  panel.narrow = false;
+  assert.equal(menu.hidden, true);
+
+  panel._hass.dockedSidebar = "always_hidden";
+  panel._syncMenuVisibility();
+  assert.equal(menu.hidden, false);
+});
+
+test("Mobile menu dispatches Home Assistant sidebar toggle event", () => {
+  const { panel } = makePanel(async () => preview());
+  let dispatched;
+  panel.dispatchEvent = event => { dispatched = event; };
+
+  panel._toggleMenu();
+
+  assert.equal(dispatched.type, "hass-toggle-menu");
+  assert.equal(dispatched.bubbles, true);
+  assert.equal(dispatched.composed, true);
+});
+
+test("Mobile menu is rendered with an accessible label", () => {
+  assert.match(source, /id="menuToggle"[^>]*aria-label=/);
+  assert.match(source, /class="menu-toggle"[^>]*type="button"/);
 });
