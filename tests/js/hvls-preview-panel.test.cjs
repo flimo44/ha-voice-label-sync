@@ -918,3 +918,15 @@ test("Statistics room rows expand to matching entities including unassigned ones
   assert.match(section, /details\.appendChild\(list\)/);
   assert.doesNotMatch(section, /_setEntityLabel|set_entity_label/);
 });
+
+test("Statistics lists the unassigned room bucket last without changing domain order", () => {
+  const start = source.indexOf('for (const [type, title, values] of [["domain"');
+  const end = source.indexOf('const row = document.createElement("div");', start);
+  const block = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(block, /if \(type === "area"\)/);
+  assert.match(block, /name === "Sans pièce"/);
+  assert.match(block, /entries\.splice\(entries\.indexOf\(unassigned\), 1\)/);
+  assert.match(block, /entries\.push\(unassigned\)/);
+  assert.match(block, /for \(const \[name, count\] of entries\)/);
+});
