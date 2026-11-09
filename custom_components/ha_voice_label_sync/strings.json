@@ -23,6 +23,9 @@
     },
     "abort": {
       "already_configured": "HA Voice Label Sync is already configured."
+    },
+    "error": {
+      "label_setup_failed": "Could not create or resolve the Home Assistant label. Check label names and permissions."
     }
   },
   "options": {
@@ -60,6 +63,9 @@
         "title": "Check Google Assistant",
         "description": "{configuration}"
       }
+    },
+    "error": {
+      "label_setup_failed": "Could not create or resolve the Home Assistant label. Check label names and permissions."
     }
   }
 }
