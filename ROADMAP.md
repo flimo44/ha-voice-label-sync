@@ -198,6 +198,29 @@ This work belongs to branch `feat/v1-beta4-backup-restore`; **do not publish or 
 
 ---
 
+# v1.0.0-beta.5 — Guided Pending Changes and Quick Removal
+
+Goal: make the next action obvious and allow a quick, safe removal of an entity from the HVLS selection without leaving Statistics.
+
+## Guided workflow
+- [x] Show an attention banner in Statistics when a valid, actionable Preview differs from production.
+- [x] Display the number of pending entity changes and offer a direct link to the Preview tab.
+- [x] Hide the banner when there are no differences or no reviewed Preview available.
+- [x] Respect reduced-motion preferences for the subtle visual highlight.
+
+## Quick entity removal
+- [x] Offer an HVLS checkbox alongside each selected entity in Statistics by domain and by room.
+- [x] Use the live Home Assistant registry catalog as the source of truth for the checkbox.
+- [x] Reuse the existing confirmation, concurrency protection and label-update workflow.
+- [x] Refresh statistics and regenerate the Preview after removal, without auto-applying production changes.
+
+## Validation
+- [x] Real-world Home Assistant validation of removal, Preview diff warning and warning disappearance after Apply.
+- [x] Automated JavaScript regression coverage for the banner and quick removal.
+- [ ] Final GitHub Python, JavaScript, Package, Hassfest and HACS checks on the beta.5 release branch.
+
+---
+
 # v0.4 — Voice Assistant Platform
 
 Goal:

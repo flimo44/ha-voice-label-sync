@@ -77,6 +77,8 @@ const HVLS_TRANSLATIONS = {
     noDisabledDomains: "Aucun domaine non activé détecté.",
     labeledOnly: "Entités étiquetées HVLS uniquement.",
     comparisonTitle: "Diff Preview / Production",
+    pendingChanges: "{count} changement(s) à examiner avant application",
+    pendingAction: "Ouvrir le Preview",
     comparisonMissing: "Comparaison impossible : fichier de production absent.",
     comparisonFailed: "Comparaison impossible ({status}) : {reason}",
     unreadableFile: "fichier illisible",
@@ -203,6 +205,8 @@ const HVLS_TRANSLATIONS = {
     noDisabledDomains: "No disabled domains detected.",
     labeledOnly: "Only HVLS-labeled entities.",
     comparisonTitle: "Preview / Production diff",
+    pendingChanges: "{count} change(s) to review before applying",
+    pendingAction: "Open Preview",
     comparisonMissing: "Cannot compare: production file is missing.",
     comparisonFailed: "Cannot compare ({status}): {reason}",
     unreadableFile: "unreadable file",
@@ -960,8 +964,8 @@ class HVLSPreviewPanel extends HTMLElement {
             const item = document.createElement("div");
             item.className = "domain-entity-item";
 
-            // Reuse the native HA More Info event; do not navigate away from
-            // the Statistics tab or change the entity's HVLS label.
+            // The entity name opens HA More Info; a separate checkbox
+            // removes its HVLS label using the existing confirmed workflow.
             const entityButton = document.createElement("button");
             entityButton.type = "button";
             entityButton.className = "entity-more-info";
@@ -981,7 +985,36 @@ class HVLSPreviewPanel extends HTMLElement {
             entityButton.addEventListener("click", () => {
               this._openEntityDetails(entity.entity_id);
             });
-            item.appendChild(entityButton);
+            const itemRow = document.createElement("div");
+            itemRow.className = "stats-entity-row";
+            itemRow.appendChild(entityButton);
+
+            // Statistics are derived from the last Preview, which can lag
+            // behind live HA. Never act on a Preview-only label assumption.
+            const catalogEntity = (this._entityCatalog?.entities || []).find(
+              (current) => current.entity_id === entity.entity_id
+            );
+            if (catalogEntity?.has_label === true) {
+              const control = document.createElement("label");
+              control.className = "entity-hvls-control";
+              const checkbox = document.createElement("input");
+              checkbox.type = "checkbox";
+              checkbox.className = "entity-hvls-checkbox";
+              checkbox.checked = true;
+              checkbox.dataset.ineligible = "false";
+              checkbox.disabled = Boolean(this._entityWritePending);
+              checkbox.setAttribute("aria-label", this._tf("hvlsLabelAria", {
+                entity: entity.entity_id
+              }));
+              checkbox.addEventListener("change", () => {
+                this._setEntityLabel(catalogEntity, checkbox);
+              });
+              const caption = document.createElement("span");
+              caption.textContent = "HVLS";
+              control.append(checkbox, caption);
+              itemRow.appendChild(control);
+            }
+            item.appendChild(itemRow);
             list.appendChild(item);
           }
 
@@ -1048,6 +1081,24 @@ class HVLSPreviewPanel extends HTMLElement {
         : this._tf("comparisonFailed", {status: comparison.status, reason: comparison.reason || this._t("unreadableFile")});
       panel.appendChild(warning);
       return;
+    }
+    const pendingCount = comparison.added.length +
+      comparison.removed.length + comparison.modified.length;
+    // A visible alert is shown only for a valid, actionable Preview.
+    // No notification is emitted or applied automatically.
+    if (pendingCount > 0 && this._review) {
+      const alert = document.createElement("div");
+      alert.className = "preview-pending-alert";
+      alert.setAttribute("role", "status");
+      const message = document.createElement("strong");
+      message.textContent = this._tf("pendingChanges", {count: pendingCount});
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "secondary";
+      action.textContent = this._t("pendingAction");
+      action.addEventListener("click", () => this._activateTab("preview"));
+      alert.append(message, action);
+      panel.appendChild(alert);
     }
     const counters = document.createElement("div");
     counters.className = "metrics";
@@ -1172,6 +1223,11 @@ class HVLSPreviewPanel extends HTMLElement {
         .domain-entity-item:last-child {
           border-bottom: none;
         }
+        .stats-entity-row {
+          display:flex; align-items:center; justify-content:space-between; gap:8px;
+        }
+        .stats-entity-row > .entity-more-info { flex:1; min-width:0; }
+        .stats-entity-row > .entity-hvls-control { flex-shrink:0; }
         .domain-entity-item strong {
           font-size: 13px;
         }
@@ -1416,6 +1472,21 @@ class HVLSPreviewPanel extends HTMLElement {
           font-size: 12px;
         }
 
+        .preview-pending-alert {
+          display:flex; align-items:center; justify-content:space-between;
+          flex-wrap:wrap; gap:12px; padding:12px 16px; margin:12px 0;
+          border:2px solid #c62828; border-radius:10px;
+          background:rgba(198,40,40,.12); color:var(--primary-text-color);
+          animation:hvls-pending-pulse 2.6s ease-in-out infinite;
+        }
+        .preview-pending-alert strong { color:#ef5350; }
+        @keyframes hvls-pending-pulse {
+          0%,100% { border-color:#c62828; }
+          50% { border-color:#ef9a9a; }
+        }
+        @media (prefers-reduced-motion:reduce) {
+          .preview-pending-alert { animation:none; }
+        }
         .preview-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; margin-top:16px; }
         .preview-yaml-tools { display:flex; align-items:center; justify-content:flex-end; margin:8px 0; }
         .preview-change-group {
@@ -1596,6 +1667,9 @@ class HVLSPreviewPanel extends HTMLElement {
       this._entityLoadError = null;
       this._entityLimit = 100;
       this._renderEntities();
+      // Statistics may have loaded before the registry catalog.
+      // Render removal controls only from the current HA label state.
+      if (this._lastAnalysis) this._renderAnalysis(this._lastAnalysis);
       return true;
     } catch (error) {
       this._entityCatalog = null;
