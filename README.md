@@ -71,7 +71,7 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 
 ## 📸 Screenshots
 
-> **Screenshot update pending:** screenshots below may show older versions. Beta.5 has **Statistics, Entity Management, Preview and Backups**, plus an optional Excluded entities tab, expandable area/domain views, a pending-changes alert and protected restoration.
+> **Screenshot update pending:** screenshots below show new version Beta.5 and has **Statistics, Entity Management, Preview and Backups**, plus an optional Excluded entities tab, expandable area/domain views, a alert and protected restoration.
 
 ### Home Assistant configuration
 
@@ -83,11 +83,25 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 
 ### Preview panel
 
-<img width="819" height="883" alt="image" src="https://github.com/user-attachments/assets/547e82c5-a907-43b0-851f-72e50faff4ec" />
 
-![HVLS preview panel](assets/screenshots/image.png)
+
+<img width="616" height="735" alt="image" src="https://github.com/user-attachments/assets/36cf9a77-c9cf-4d2c-bf75-5f1316d06f00" />
+
+<img width="629" height="1027" alt="image" src="https://github.com/user-attachments/assets/70e171f4-8b3d-4c3e-b2ef-6dca06a21689" />
+
+
+
+<img width="635" height="1001" alt="image" src="https://github.com/user-attachments/assets/7523bb42-8ec3-4d1b-9daa-939d4c3c1b43" />
+
+
+<img width="633" height="670" alt="image" src="https://github.com/user-attachments/assets/d8e07d72-36f8-42e9-8402-6cf891ecce91" />
+
 
 <img width="380" height="367" alt="HVLS Preview (earlier version)" src="https://github.com/user-attachments/assets/fe6f447c-d318-45b3-ba2c-3767eb046063" />
+
+
+
+
 
 ### Generated YAML
 
