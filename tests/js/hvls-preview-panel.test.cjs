@@ -703,7 +703,7 @@ test("Entity details use their own keyboard-accessible button, not the HVLS chec
   assert.match(source, /entityButton\.append\(name, description\)/);
 });
 
-test("Statistics domain entities open native HA details without changing HVLS labels", () => {
+test("Statistics domain entities open native HA details separately from label removal", () => {
   const start = source.indexOf('const entities = (stats.entities || []).filter(');
   const end = source.indexOf('details.appendChild(list);', start);
   const block = source.slice(start, end);
@@ -713,7 +713,9 @@ test("Statistics domain entities open native HA details without changing HVLS la
   assert.match(block, /entityButton\.setAttribute\("aria-label"/);
   assert.match(block, /this\._openEntityDetails\(entity\.entity_id\)/);
   assert.match(block, /entityButton\.append\(friendlyName, info\)/);
-  assert.doesNotMatch(block, /_setEntityLabel|set_entity_label/);
+  assert.match(block, /this\._setEntityLabel\(catalogEntity, checkbox\)/);
+  assert.match(block, /catalogEntity\?\.has_label === true/);
+  assert.match(block, /checkbox\.className = "entity-hvls-checkbox"/);
 });
 
 test("Eligibility explanations distinguish Home Assistant state from Google exposure", () => {
@@ -916,7 +918,7 @@ test("Statistics room rows expand to matching entities including unassigned ones
   assert.match(section, /\(entity\.room \|\| this\._t\("noArea"\)\) === name/);
   assert.match(section, /this\._openEntityDetails\(entity\.entity_id\)/);
   assert.match(section, /details\.appendChild\(list\)/);
-  assert.doesNotMatch(section, /_setEntityLabel|set_entity_label/);
+  assert.match(section, /this\._setEntityLabel\(catalogEntity, checkbox\)/);
 });
 
 test("Statistics lists the unassigned room bucket last without changing domain order", () => {
@@ -943,4 +945,19 @@ test("Statistics signals only actionable pending Preview changes", () => {
   assert.match(block, /this\._activateTab\("preview"\)/);
   assert.doesNotMatch(block, /_applyPreview\(/);
   assert.match(source, /prefers-reduced-motion:reduce/);
+});
+
+test("Statistics quick removal uses current HA labels and the confirmed existing workflow", () => {
+  const start = source.indexOf("const catalogEntity = (this._entityCatalog?.entities || []).find(");
+  const end = source.indexOf("item.appendChild(itemRow);", start);
+  const block = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(block, /catalogEntity\?\.has_label === true/);
+  assert.match(block, /checkbox\.checked = true/);
+  assert.match(block, /checkbox\.dataset\.ineligible = "false"/);
+  assert.match(block, /checkbox\.disabled = Boolean\(this\._entityWritePending\)/);
+  assert.match(block, /checkbox\.addEventListener\("change"/);
+  assert.match(block, /this\._setEntityLabel\(catalogEntity, checkbox\)/);
+  assert.doesNotMatch(block, /set_entity_label|apply_preview/);
+  assert.match(source, /if \(this\._lastAnalysis\) this\._renderAnalysis\(this\._lastAnalysis\)/);
 });
