@@ -10,7 +10,8 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
+from .const import CONF_LABEL, DEFAULT_LABEL, DOMAIN
+from .label_setup import ensure_configured_label
 from .services import async_register_services
 from .websocket import async_register_websocket_api
 
@@ -72,6 +73,10 @@ async def async_setup_entry(
     entry: ConfigEntry,
 ) -> bool:
     """Set up HVLS from a config entry."""
+    # Also repair V1 installations configured before label auto-provisioning.
+    settings = {**entry.data, **entry.options}
+    ensure_configured_label(hass, settings.get(CONF_LABEL, DEFAULT_LABEL))
+
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {}
 

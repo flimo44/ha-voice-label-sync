@@ -31,6 +31,8 @@ from .const import (
     NAME,
 )
 from .google_config import check_entity_config, read_google_config
+from .label_setup import ensure_configured_label
+from .label_update import LabelUpdateError
 
 
 def build_schema(
@@ -96,6 +98,15 @@ class HVLSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(DOMAIN)
             self._abort_if_unique_id_configured()
 
+            try:
+                ensure_configured_label(self.hass, user_input[CONF_LABEL])
+            except (LabelUpdateError, ValueError, OSError):
+                return self.async_show_form(
+                    step_id="user",
+                    data_schema=build_schema(user_input),
+                    errors={"base": "label_setup_failed"},
+                )
+
             return self.async_create_entry(
                 title=NAME,
                 data={
@@ -140,6 +151,14 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Manage HVLS options."""
         if user_input is not None:
+            try:
+                ensure_configured_label(self.hass, user_input[CONF_LABEL])
+            except (LabelUpdateError, ValueError, OSError):
+                return self.async_show_form(
+                    step_id="settings",
+                    data_schema=build_schema(user_input),
+                    errors={"base": "label_setup_failed"},
+                )
             return self.async_create_entry(
                 title="",
                 data={
