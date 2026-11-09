@@ -23,6 +23,9 @@
     },
     "abort": {
       "already_configured": "HA Voice Label Sync est déjà configuré."
+    },
+    "error": {
+      "label_setup_failed": "Impossible de créer ou de retrouver l’étiquette Home Assistant. Vérifiez les étiquettes existantes et les autorisations."
     }
   },
   "options": {
@@ -60,6 +63,9 @@
         "title": "Check Google Assistant",
         "description": "{configuration}"
       }
+    },
+    "error": {
+      "label_setup_failed": "Impossible de créer ou de retrouver l’étiquette Home Assistant. Vérifiez les étiquettes existantes et les autorisations."
     }
   }
 }
