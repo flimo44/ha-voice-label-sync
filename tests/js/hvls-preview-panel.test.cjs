@@ -961,3 +961,49 @@ test("Statistics quick removal uses current HA labels and the confirmed existing
   assert.doesNotMatch(block, /set_entity_label|apply_preview/);
   assert.match(source, /if \(this\._lastAnalysis\) this\._renderAnalysis\(this\._lastAnalysis\)/);
 });
+
+
+test("Production status distinguishes reviewed additions, modifications and unchanged entities", () => {
+  const {panel} = makePanel(async () => ({}));
+  panel._review = {preview_sha256: "a".repeat(64), production_sha256: "b".repeat(64)};
+  const result = {
+    available: true,
+    comparison: {
+      status: "ok",
+      added: ["switch.pending"],
+      modified: [{entity_id: "switch.changed", fields: {name: {before: "A", after: "B"}}}],
+      removed: ["switch.removed"],
+      unchanged: 1,
+    },
+  };
+  assert.equal(panel._productionStatus("switch.pending", result), "pending");
+  assert.equal(panel._productionStatus("switch.changed", result), "modified");
+  assert.equal(panel._productionStatus("switch.saved", result), "validated");
+});
+
+test("Production status never implies validation without a current actionable comparison", () => {
+  const {panel} = makePanel(async () => ({}));
+  const result = {
+    available: true,
+    comparison: {status: "ok", added: [], modified: []},
+  };
+  assert.equal(panel._productionStatus("switch.saved", result), "unknown");
+  panel._review = {preview_sha256: "a".repeat(64), production_sha256: null};
+  assert.equal(panel._productionStatus("switch.saved", {...result, available: false}), "unknown");
+  assert.equal(panel._productionStatus("switch.saved", {...result, comparison: {status: "missing"}}), "unknown");
+  assert.equal(panel._productionStatus("switch.saved", {...result, comparison: {status: "invalid"}}), "unknown");
+  assert.equal(panel._productionStatus("switch.saved", {...result, comparison: {status: "ok", added: []}}), "unknown");
+});
+
+test("Statistics production indicators are informational and do not apply or change labels", () => {
+  const start = source.indexOf('const status = productionStatuses.get(entity.entity_id)');
+  const end = source.indexOf("item.appendChild(itemRow);", start);
+  assert.ok(start > -1 && end > start);
+  const block = source.slice(start, end);
+  assert.match(block, /production-status--/);
+  assert.match(block, /indicator\.title = this\._t\(statusKey\)/);
+  assert.match(block, /indicator\.setAttribute\("aria-label"/);
+  assert.doesNotMatch(block, /addEventListener|apply_preview|_setEntityLabel/);
+  assert.match(source, /\.production-status--validated/);
+  assert.match(source, /\.production-status--pending/);
+});
