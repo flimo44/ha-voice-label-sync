@@ -4,9 +4,41 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by Keep a Changelog.
 
-# Changelog
-
 ## [Unreleased]
+
+## [1.0.0] - 2026-11-09
+
+### Stable V1 release
+- Mature Home Assistant UI built around **Select → Review → Apply**, with Statistics, HVLS Entity Management, Preview, Backups and conditional Excluded entities navigation.
+- Live Home Assistant registry catalog: domain and room grouping, search/filter, eligibility explanations, label changes with confirmation, and native HA More Info links.
+- Pending-changes warning in Statistics, with direct navigation to Preview. HVLS label changes regenerate Preview but **never automatically overwrite production YAML**.
+- Read-only production status markers beside selected entities in Statistics: green for present unchanged in production, amber for unapplied additions/changes, neutral when comparison is unavailable; tooltips and FR/EN descriptions.
+- Entity-level Preview-versus-production differences (added/removed/modified/unchanged), explicit reviewed Apply, SHA-256 freshness checks, safe YAML writes and optional normal backups.
+- Backup history browser, directional comparison and administrator-confirmed restore with mandatory safety backup, checksum checks and atomic replacement. Restoring YAML never changes HA labels or registries.
+- Updated README, screenshots and HACS installation guidance; frontend cache-busting and localization improvements.
+
+### Verification
+- PR #96 production status markers merged and tested in Home Assistant: pending indicators turn green after applying and refreshing Preview.
+- Python, JavaScript, package, Hassfest and HACS CI checks passing on `main` prior to release preparation.
+- Native integration depends on the separately versioned Python core `ha-voice-label-sync==0.3.5`; this release does **not** publish a new PyPI core.
+- Google Assistant setup, connection and Google Home device synchronization remain manual; the guided setup wizard is planned for V2.
+
+## [1.0.0-beta.5] - 2026-11-09
+
+### Added
+- Pending Preview-change warning in Statistics, linking to Preview.
+- Quick removal of the HVLS label from Statistics domain/area lists with the confirmed safe label workflow.
+
+## [1.0.0-beta.4] - 2026-11-09
+
+### Added
+- Backup history, production comparison, protected restoration and compulsory safety copy.
+- Statistics by room and native More Info links in Preview changes.
+
+## [1.0.0-beta.3] - 2026-11-08
+
+### Improved
+- Refined V1 panel navigation, live entity management and visual Preview-review workflow.
 
 ## [1.0.0-beta.2] - 2026-11-08
 
