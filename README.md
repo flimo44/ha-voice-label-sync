@@ -90,7 +90,8 @@ The screenshots illustrate the **V1 interface** developed and tested through bet
 
 ### HVLS panel — V1
 
-<img width="616" height="735" alt="HA Voice Label Sync beta.5 panel screenshot 1 of 4" src="https://github.com/user-attachments/assets/36cf9a77-c9cf-4d2c-bf75-5f1316d06f00" />
+<img width="834" height="859" alt="image" src="https://github.com/user-attachments/assets/462a6515-bb11-495c-a791-b4973bbda94b" />
+
 
 <img width="629" height="1027" alt="HA Voice Label Sync beta.5 panel screenshot 2 of 4" src="https://github.com/user-attachments/assets/70e171f4-8b3d-4c3e-b2ef-6dca06a21689" />
 
