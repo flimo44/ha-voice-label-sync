@@ -79,6 +79,10 @@ const HVLS_TRANSLATIONS = {
     comparisonTitle: "Diff Preview / Production",
     pendingChanges: "{count} changement(s) à examiner avant application",
     pendingAction: "Ouvrir le Preview",
+    productionValidated: "Déjà présente dans le YAML de production",
+    productionPending: "Ajout en attente d’application au YAML de production",
+    productionModified: "Présente en production, modifications en attente d’application",
+    productionUnknown: "Statut de production inconnu : actualisez le Preview",
     comparisonMissing: "Comparaison impossible : fichier de production absent.",
     comparisonFailed: "Comparaison impossible ({status}) : {reason}",
     unreadableFile: "fichier illisible",
@@ -207,6 +211,10 @@ const HVLS_TRANSLATIONS = {
     comparisonTitle: "Preview / Production diff",
     pendingChanges: "{count} change(s) to review before applying",
     pendingAction: "Open Preview",
+    productionValidated: "Already present in the production YAML",
+    productionPending: "Pending addition to the production YAML",
+    productionModified: "Present in production, pending changes",
+    productionUnknown: "Production status unknown: refresh Preview",
     comparisonMissing: "Cannot compare: production file is missing.",
     comparisonFailed: "Cannot compare ({status}): {reason}",
     unreadableFile: "unreadable file",
@@ -894,6 +902,25 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  _productionStatus(entityId, result) {
+    const comparison = result?.comparison;
+    // A missing, invalid or unreviewable comparison is not proof of
+    // production presence. Do not show a green badge in that case.
+    if (!result?.available || !this._review || comparison?.status !== "ok" ||
+        !Array.isArray(comparison.added) ||
+        !Array.isArray(comparison.modified)) {
+      return "unknown";
+    }
+    const hasEntity = (entries) => entries.some(
+      (item) => (typeof item === "string" ? item : item?.entity_id) === entityId
+    );
+    if (hasEntity(comparison.added)) return "pending";
+    if (hasEntity(comparison.modified)) return "modified";
+    // This list is made from Preview entities. If an entity is neither
+    // added nor modified, it is already represented in production.
+    return "validated";
+  }
+
   _renderAnalysis(result) {
     const panel = this.querySelector("#analysis");
     panel.replaceChildren();
@@ -907,6 +934,9 @@ class HVLSPreviewPanel extends HTMLElement {
     if (!result.available || !result.summary) return;
 
     const stats = result.summary;
+    const productionStatuses = new Map((stats.entities || []).map(
+      (entity) => [entity.entity_id, this._productionStatus(entity.entity_id, result)]
+    ));
     const metrics = document.createElement("div");
     metrics.className = "metrics";
     this._addMetric(metrics, this._t("metricEntities"), stats.total);
@@ -1013,6 +1043,21 @@ class HVLSPreviewPanel extends HTMLElement {
               caption.textContent = "HVLS";
               control.append(checkbox, caption);
               itemRow.appendChild(control);
+
+              const status = productionStatuses.get(entity.entity_id) || "unknown";
+              const statusKey = {
+                validated: "productionValidated",
+                pending: "productionPending",
+                modified: "productionModified",
+                unknown: "productionUnknown",
+              }[status];
+              const indicator = document.createElement("span");
+              indicator.className = `production-status production-status--${status}`;
+              indicator.textContent = status === "validated" ? "✓" : status === "unknown" ? "?" : "•";
+              indicator.title = this._t(statusKey);
+              indicator.setAttribute("role", "img");
+              indicator.setAttribute("aria-label", this._t(statusKey));
+              itemRow.appendChild(indicator);
             }
             item.appendChild(itemRow);
             list.appendChild(item);
@@ -1228,6 +1273,17 @@ class HVLSPreviewPanel extends HTMLElement {
         }
         .stats-entity-row > .entity-more-info { flex:1; min-width:0; }
         .stats-entity-row > .entity-hvls-control { flex-shrink:0; }
+        .production-status {
+          display:inline-flex; align-items:center; justify-content:center;
+          width:15px; min-width:15px; height:15px;
+          border-radius:50%; font-size:12px; font-weight:700;
+          line-height:1; flex-shrink:0;
+        }
+        .production-status--validated { color:var(--success-color, #238455); }
+        .production-status--pending, .production-status--modified {
+          color:var(--warning-color, #d89a22);
+        }
+        .production-status--unknown { color:var(--secondary-text-color); }
         .domain-entity-item strong {
           font-size: 13px;
         }
