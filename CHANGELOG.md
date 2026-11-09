@@ -6,6 +6,13 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-10
+
+### Fixed
+- Automatically create the configured Home Assistant label when missing during initial setup, options updates, or startup of an existing integration.
+- Reuse existing labels without duplicates and reject ambiguous or invalid label names; display localized errors during configuration.
+- Add first-run regression tests for default/custom labels, existing labels, ambiguity, and creation failures.
+
 ## [1.0.0] - 2026-11-09
 
 ### Stable V1 release
