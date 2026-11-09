@@ -16,30 +16,37 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 >
 > HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. Set up and verify Google Assistant before using HVLS.
 
-**Latest release:** `v0.3.10` (stable). Check [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for the latest published version.  
+**Latest V1 pre-release:** [`v1.0.0-beta.5`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.0-beta.5). **Previous beta:** [`v1.0.0-beta.4`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.0-beta.4). **Previous stable channel:** `v0.3.10`.  
 **Python core dependency:** `ha-voice-label-sync==0.3.5` (separate from the Home Assistant integration version).
 
 > [!NOTE]
-> HVLS remains under active development and has not yet reached v1.0. Its Home Assistant integration and standalone PyPI core have independent version numbers. Feedback and issue reports are welcome.
+> HVLS is in its **V1 beta phase** and has not yet published a stable v1.0 release. Its Home Assistant integration and standalone PyPI core have independent version numbers. Feedback and issue reports are welcome.
 
 ## 🧪 V1 beta releases
 
-**`v1.0.0-beta.3` is being prepared for publication as a pre-release.** It introduces the streamlined three-tab interface, mobile navigation, integrated entity management, automatic Preview refresh, visual diffs and clearer exclusion details. Select a pre-release in HACS after beta.3 is published; the current stable channel remains independent. The Home Assistant integration version is independent of the Python core (`ha-voice-label-sync==0.3.5`); no new PyPI release is required for these frontend changes.
+### v1.0.0-beta.5 — Guided workflow and quick removal
 
-### What's ready for V1
+- **Pending changes alert:** when a valid, actionable Preview differs from production, Statistics displays a prominent warning with the number of entity changes awaiting review and a direct **Open Preview** action.
+- **Quick HVLS removal:** in Statistics, expand a domain or area and uncheck **HVLS** beside a selected entity. The same confirmation and concurrency-safe registry update used by Entity Management applies. Both views refresh after successful removal.
+- **Automatic Preview refresh:** after a label change, HVLS reloads the current Home Assistant registry, regenerates the Preview and updates statistics. **It never automatically applies production changes.**
+- The visual warning respects reduced-motion accessibility preferences.
 
-- Three main tabs: **Statistics**, **HVLS Entity Management**, **Preview**. The **Excluded entities** tab appears only when there are exclusions.
-- Complete entity catalog with search, eligibility and labeling filters, supported/unsupported domain grouping and per-domain pagination.
-- Open an entity's native Home Assistant More Info dialog from entity lists or Statistics.
-- Add or remove the HVLS label with confirmation; other labels are preserved. HVLS regenerates the Preview after a successful label change.
-- Refresh the catalog, Preview, statistics and differences with the compact refresh action. **This never applies changes to production.**
-- Review grouped entity-level changes, exclusions and the full YAML Preview before selecting **Apply changes**.
-- Protected explicit Apply with checksum freshness checks, optional backups and safe production writes.
-- Responsive desktop/mobile interface with FR/EN text and accessible eligibility explanations.
+### v1.0.0-beta.4 — Backup browsing and protected restoration
 
-**Important:** Changing labels in the entity manager regenerates the **Preview only**; it never applies the configuration to production. Review changes in the Preview tab and explicitly choose **Apply changes**. HVLS does not perform Google Cloud project setup or Google Home pairing.
+- **Backups** tab with timestamps, file sizes and entity counts.
+- Select a backup to review directional differences with production, including added, removed, modified and unchanged entities, with field-level detail.
+- Explicit administrator-only restore, SHA-256 validation of backup and production, **mandatory pre-restore safety backup**, YAML validation and atomic replacement.
+- Restoring changes **only** the generated Google Assistant YAML, never Home Assistant entity labels or registries.
+- Expand Statistics by domain **and** by area; the **Without area** bucket is last.
+- Open native Home Assistant entity details from Statistics, Entity Management or Preview change lists.
 
-The step-by-step Google Assistant setup wizard, including staged validation of DNS/HTTPS, Google Cloud credentials and Google Home linking, is **planned for V2** and is **not part of V1**.
+### V1 panel at a glance
+
+Four main tabs: **Statistics**, **HVLS Entity Management**, **Preview**, **Backups**. **Excluded entities** appears as an additional tab only when needed.
+
+**Select → Review → Apply → Restore if needed.** You can select or deselect entities using the native HA label, inspect differences and explicitly apply the reviewed Preview. Applying changes to production remains separate from editing labels. The backup history provides a recovery path if necessary.
+
+The guided Google Assistant cloud project, DNS/HTTPS and Google Home setup wizard remains **planned for V2**; it is not implemented in these beta releases.
 
 ## ✨ Why HVLS?
 
@@ -52,6 +59,9 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 - ⚙️ Open the integration configuration from the Preview panel
 - 🎨 Identify Preview generation and production application with distinct blue and green actions
 - 📊 Compare the Preview with the current production YAML (added, removed, modified, unchanged)
+- 🚨 Highlight pending changes with a shortcut to the Preview tab
+- ☑️ Remove labeled entities directly from Statistics (by domain or area), with confirmation
+- 🗃️ Browse, compare and safely restore previous production YAML backups
 - ✅ Apply a reviewed Preview with SHA-256 change detection
 - 💾 Preserve the previous configuration with optional automatic backups and retention
 - ⚡ Trigger Preview or direct generation through native Home Assistant actions
@@ -61,7 +71,7 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 
 ## 📸 Screenshots
 
-> **Screenshot update pending:** the images below may show earlier versions. In beta.3 the panel has a compact refresh action, three principal tabs, and the **Apply changes** action inside Preview. New beta.3 screenshots will replace the older ones before the stable V1 release.
+> **Screenshot update pending:** screenshots below may show older versions. Beta.5 has **Statistics, Entity Management, Preview and Backups**, plus an optional Excluded entities tab, expandable area/domain views, a pending-changes alert and protected restoration.
 
 ### Home Assistant configuration
 
@@ -90,7 +100,7 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 **HA Voice Label Sync is listed in the HACS catalog and can be discovered through the Home Assistant Marketplace where available.** A custom repository is not required for a standard installation.
 
 1. Open **Marketplace / HACS** in Home Assistant and search for **HA Voice Label Sync**.
-2. Download the latest **published** release (check [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases)).
+2. Select a published release. For the latest V1 beta, enable beta/pre-release versions in HACS where supported and select **`v1.0.0-beta.5`** (see [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases)).
 3. Restart Home Assistant.
 4. Go to **Settings → Devices & services → Add integration**.
 5. Search for **HA Voice Label Sync**, add it and configure its options.
@@ -129,38 +139,45 @@ This is an example: retain your actual project settings, credentials and other G
 > [!IMPORTANT]
 > Applying a generated `entity_config` file does **not**, by itself, guarantee that Google Home has received the new device list. Reload the Google Assistant integration if available in your installation (or restart Home Assistant), then request a Google device sync if necessary. HVLS does not yet automate this end-to-end.
 
-## 🧭 Recommended workflow: Preview → Review → Apply
+## 🧭 Recommended workflow: Select → Review → Apply
 
 ```text
-🏷️ Add the google_assistant label to eligible entities
+🏷️ Select eligible entities with the HVLS label in HA or Entity Management
                    ↓
-🛠️ Generate Preview (HVLS panel)
+🔄 Refresh or generate the Preview from live HA registries
                    ↓
-🔍 Review additions, removals, changes and exclusions
+🚨 Statistics highlights pending differences, if any
                    ↓
-✅ Apply the reviewed Preview (with confirmation)
+🔍 Open Preview and review additions, removals and changes
                    ↓
-💾 Backup and atomic production write
+✅ Explicitly confirm Apply Preview
                    ↓
-🔄 Reload Google Assistant where supported (or restart Home Assistant)
+💾 Back up production (when enabled) and write atomically
                    ↓
-🎤 Request a Google Home device sync if needed
+🔄 Reload Google Assistant or restart HA, then sync Google Home if needed
 ```
 
-The Preview panel offers four workflow actions plus a **Settings** shortcut:
+### Backup history and safe restore
+
+The **Backups** tab lists snapshots stored in a `.hvls_backups` directory beside the configured production YAML. Selecting a backup displays the changes **that would happen if it were restored**. The selected backup is checked against the current production configuration.
+
+Restore is restricted to administrators and requires explicit confirmation. HVLS validates YAML and both SHA-256 fingerprints, **always makes a safety copy of the current production**, and replaces the YAML atomically. It does **not** modify HA labels or registries. After restoration, reload Google Assistant or restart Home Assistant and sync devices if necessary. A backup identical to production cannot be restored.
+
+The panel offers the following actions plus a **Settings** shortcut:
 
 | Action | What it does |
 | --- | --- |
 | **Generate Preview** | Regenerates `/config/.hvls/preview.yaml` using the current HA registries, then refreshes the panel. Does not write the production file. |
-| **Refresh** | Reloads existing Preview, comparisons and current diagnostics without generating a new YAML file. |
+| **Refresh** | Reloads the live HA entity catalog, regenerates Preview YAML and refreshes statistics and differences. Does **not** apply to production. |
 | **Copy YAML** | Copies the generated Preview content. |
 | **Apply Preview** | Requests confirmation, checks the reviewed Preview and production SHA-256 fingerprints, then writes to the configured production path, with a backup when enabled. |
+| **Backups** | Lists backups, previews restoration differences and safely restores a selected production YAML with explicit confirmation. |
 | **Settings** | Opens the Home Assistant integration details/configuration page. |
 
-The panel also shows entity counts, breakdowns by domain and room, labeled entities from **non-enabled domains**, exclusion diagnostics, and a Preview/Production comparison. **Generate Preview** is blue and **Apply Preview** is green to distinguish preparation from production changes. The sidebar and page title both use **HA Voice Label Sync**.
+The panel displays entity counts, expandable breakdowns by domain and area, excluded-domain diagnostics and a Preview/Production comparison. Entity names open HA's native More Info dialog; in Statistics, the **HVLS** checkbox allows quick removal with confirmation. A warning highlights unapplied changes and links to Preview. **Apply Preview** remains an explicit, separate production action.
 
 > [!WARNING]
-> **Apply Preview changes the configured production file.** Read the differences first. HACS rollback restores integration code, **not** previously generated YAML. Automatic backups are stored under `/config/.hvls_backups/` for the default production output directory, when enabled.
+> **Apply Preview and Restore change the configured production YAML.** Review the diff first. HACS rollback restores integration code, **not** generated YAML. Ordinary automatic backups are optional; a restore **always creates a safety backup of the current production**. With the default output directory, backups are under `/config/.hvls_backups/`.
 
 ### Native Home Assistant actions
 
@@ -240,7 +257,7 @@ An entity is also skipped when it:
 
 The Preview panel shows included-entity counts **by domain and room**. Under **Non-enabled domains**, it groups *labeled* entities excluded because their domain is not enabled; the **Excluded entities** diagnostic lists labeled exclusions and their reasons. Entities without the selected label are not included in these exclusion statistics.
 
-> **Note:** These are the selection rules shown in the local `src/hvls/engine.py` and `custom_components/ha_voice_label_sync/services.py` excerpts. Before publishing this documentation, verify that the installed `ha-voice-label-sync==0.3.5` package uses the same rules, since it is a separately versioned dependency.
+> **Note:** The native integration depends on the separately versioned Python core `ha-voice-label-sync==0.3.5`. Review package and integration rules again when updating eligibility in a future release.
 
 ## 🏠 Home Assistant integration features
 
@@ -248,8 +265,8 @@ The Preview panel shows included-entity counts **by domain and room**. Under **N
 - Separate **HVLS settings** and **Check Google Assistant** options
 - Live entity, device, area and label registries
 - Preview generation and direct generation actions
-- WebSocket Preview, diagnostics and reviewed Apply operations
-- SHA-256 guards, serialized HVLS workflows, atomic writes and configurable backups
+- WebSocket Preview, diagnostics, reviewed Apply, backup browsing and safe Restore operations
+- SHA-256 guards, serialized HVLS workflows, atomic writes, optional ordinary backups and mandatory pre-restore safety copies
 - English and French translations
 - Python/JavaScript regression tests and GitHub Actions validation
 
@@ -303,9 +320,9 @@ Future backends may share the label-driven workflow. Only Google Assistant YAML 
 
 ## 🧪 Tests and releases
 
-A prior `v0.3.5-beta.6` snapshot passed **82 Python tests** and **8 JavaScript tests**. More recent UI and cache changes passed their respective checks, including GitHub CI (HACS validation, Hassfest, package validation and Python checks). These historical test counts are not claimed as the current suite totals.
+The beta.5 branch passed **137 Python tests** and **51 JavaScript tests**, plus HACS validation, Hassfest and package checks in GitHub CI. Additional end-to-end workflows were tested on a real Home Assistant installation.
 
-See [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for tagged versions and changelogs. See release notes for the exact status of each version; v1.0 has not yet been announced.
+See [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for tagged versions and changelogs. Check the release notes for each version; **v1.0.0-beta.5 is a pre-release**, and V1 stable is not yet published.
 
 ## 🧩 Recent interface changes
 
@@ -318,9 +335,13 @@ See [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) f
 
 ### v0.3.10 — Frontend cache-busting change
 
-The frontend panel now computes a shortened SHA-256 hash of `hvls-preview-panel.js` at Home Assistant setup time and appends it to the script URL (for example `?v=<hash>`). Changing the JS changes the URL on the next integration setup, reducing the chance of stale browser assets. Confirm this version is published before presenting it as an installed feature.
+The frontend panel now computes a shortened SHA-256 hash of `hvls-preview-panel.js` at Home Assistant setup time and appends it to the script URL (for example `?v=<hash>`). Changing the JS changes the URL on the next integration setup, reducing the chance of stale browser assets. This behavior is available since the published v0.3.10 release.
 
 > This reduces HTTP caching problems but does not force an already open browser tab to hot-reload its JavaScript. After upgrades, a Home Assistant restart and page reload may still be needed.
+
+### v1.0.0-beta.4 and beta.5 — Recovery and guided workflows
+
+Beta.4 added backup browsing and protected restore, more detailed Preview views and expandable statistics by area. Beta.5 added the pending-Preview alert and quick HVLS checkbox removal from Statistics.
 
 ## 🛣️ Roadmap after V1
 
