@@ -16,13 +16,20 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 >
 > HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. Set up and verify Google Assistant before using HVLS.
 
-**Latest V1 pre-release:** [`v1.0.0-beta.5`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.0-beta.5). **Previous beta:** [`v1.0.0-beta.4`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.0-beta.4). **Previous stable channel:** `v0.3.10`.  
+**Latest version:** `v1.0.0` (stable release candidate; see [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for publication status). **Previous tested beta:** [`v1.0.0-beta.5`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.0-beta.5).  
 **Python core dependency:** `ha-voice-label-sync==0.3.5` (separate from the Home Assistant integration version).
 
 > [!NOTE]
-> HVLS is in its **V1 beta phase** and has not yet published a stable v1.0 release. Its Home Assistant integration and standalone PyPI core have independent version numbers. Feedback and issue reports are welcome.
+> The V1 stable candidate has completed beta development. Install only a **published** release from GitHub/HACS; this README may be updated before the final release is published. Its Home Assistant integration and standalone PyPI core have independent version numbers. Feedback and issue reports are welcome.
 
-## 🧪 V1 beta releases
+## ✨ V1 stable highlights
+
+- **At-a-glance production status:** green ✓ for entities already present unchanged in production YAML, amber dot for pending additions or modifications and neutral ? when the comparison cannot be trusted. These indicators do **not** confirm Google Home synchronization.
+- **Guided Preview / Production workflow:** visible pending-changes warning and explicit, checksum-protected Apply.
+- **Safe recovery:** browse historical backups, review differences, and restore after creating a mandatory safety copy.
+- **Live entity selection:** manage the HVLS label, inspect eligibility and open HA entity details without leaving the integration.
+
+## 🧪 V1 beta release history
 
 ### v1.0.0-beta.5 — Guided workflow and quick removal
 
@@ -71,7 +78,7 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 
 ## 📸 Screenshots
 
-The screenshots below illustrate **HA Voice Label Sync v1.0.0-beta.5**, including its Statistics, Entity Management, Preview and Backups workflow.
+The screenshots illustrate the **V1 interface** developed and tested through beta.5, including Statistics, Entity Management, Preview and Backups. Some screenshots predate the final production-status indicators.
 
 ### Home Assistant configuration
 
@@ -81,7 +88,7 @@ The screenshots below illustrate **HA Voice Label Sync v1.0.0-beta.5**, includin
 
 <img width="463" height="449" alt="HA Voice Label Sync settings in Home Assistant" src="https://github.com/user-attachments/assets/54282313-2b09-4f0b-b556-913fcaef69db" />
 
-### HVLS panel — beta.5
+### HVLS panel — V1
 
 <img width="616" height="735" alt="HA Voice Label Sync beta.5 panel screenshot 1 of 4" src="https://github.com/user-attachments/assets/36cf9a77-c9cf-4d2c-bf75-5f1316d06f00" />
 
@@ -103,7 +110,7 @@ The screenshots below illustrate **HA Voice Label Sync v1.0.0-beta.5**, includin
 **HA Voice Label Sync is listed in the HACS catalog and can be discovered through the Home Assistant Marketplace where available.** A custom repository is not required for a standard installation.
 
 1. Open **Marketplace / HACS** in Home Assistant and search for **HA Voice Label Sync**.
-2. Select a published release. For the latest V1 beta, enable beta/pre-release versions in HACS where supported and select **`v1.0.0-beta.5`** (see [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases)).
+2. Select the latest **published stable** V1 release when available (see [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases)); HACS pre-release selection is only needed if you intentionally want a beta.
 3. Restart Home Assistant.
 4. Go to **Settings → Devices & services → Add integration**.
 5. Search for **HA Voice Label Sync**, add it and configure its options.
@@ -323,9 +330,9 @@ Future backends may share the label-driven workflow. Only Google Assistant YAML 
 
 ## 🧪 Tests and releases
 
-The beta.5 branch passed **137 Python tests** and **51 JavaScript tests**, plus HACS validation, Hassfest and package checks in GitHub CI. Additional end-to-end workflows were tested on a real Home Assistant installation.
+Before V1 release preparation, the main branch passed Python, JavaScript, HACS validation, Hassfest and package checks. End-to-end label, Preview/Apply and restore workflows were also tested in Home Assistant; the release candidate adds production status regression tests.
 
-See [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for tagged versions and changelogs. Check the release notes for each version; **v1.0.0-beta.5 is a pre-release**, and V1 stable is not yet published.
+See [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for the latest tagged and published version and [CHANGELOG.md](CHANGELOG.md) for details. The v1.0.0 stable release is distinct from the earlier beta.5 pre-release.
 
 ## 🧩 Recent interface changes
 
@@ -348,7 +355,7 @@ Beta.4 added backup browsing and protected restore, more detailed Preview views 
 
 ## 🛣️ Roadmap after V1
 
-- **V1 stable:** complete beta feedback, documentation, installation verification and any regression fixes.
+- **V1 maintenance:** monitor early feedback, installation compatibility and regression reports after the stable release.
 - **V2:** guided Google Assistant setup with a step-by-step checklist and verified prerequisites (external DNS/HTTPS, Google Cloud project, service account, Home Assistant and Google Home connection).
 - **Under investigation:** safer automation of Google Assistant reload and Google Home device synchronization after Apply; not implemented in V1.
 
