@@ -964,8 +964,8 @@ class HVLSPreviewPanel extends HTMLElement {
             const item = document.createElement("div");
             item.className = "domain-entity-item";
 
-            // Reuse the native HA More Info event; do not navigate away from
-            // the Statistics tab or change the entity's HVLS label.
+            // The entity name opens HA More Info; a separate checkbox
+            // removes its HVLS label using the existing confirmed workflow.
             const entityButton = document.createElement("button");
             entityButton.type = "button";
             entityButton.className = "entity-more-info";
@@ -985,7 +985,36 @@ class HVLSPreviewPanel extends HTMLElement {
             entityButton.addEventListener("click", () => {
               this._openEntityDetails(entity.entity_id);
             });
-            item.appendChild(entityButton);
+            const itemRow = document.createElement("div");
+            itemRow.className = "stats-entity-row";
+            itemRow.appendChild(entityButton);
+
+            // Statistics are derived from the last Preview, which can lag
+            // behind live HA. Never act on a Preview-only label assumption.
+            const catalogEntity = (this._entityCatalog?.entities || []).find(
+              (current) => current.entity_id === entity.entity_id
+            );
+            if (catalogEntity?.has_label === true) {
+              const control = document.createElement("label");
+              control.className = "entity-hvls-control";
+              const checkbox = document.createElement("input");
+              checkbox.type = "checkbox";
+              checkbox.className = "entity-hvls-checkbox";
+              checkbox.checked = true;
+              checkbox.dataset.ineligible = "false";
+              checkbox.disabled = Boolean(this._entityWritePending);
+              checkbox.setAttribute("aria-label", this._tf("hvlsLabelAria", {
+                entity: entity.entity_id
+              }));
+              checkbox.addEventListener("change", () => {
+                this._setEntityLabel(catalogEntity, checkbox);
+              });
+              const caption = document.createElement("span");
+              caption.textContent = "HVLS";
+              control.append(checkbox, caption);
+              itemRow.appendChild(control);
+            }
+            item.appendChild(itemRow);
             list.appendChild(item);
           }
 
@@ -1194,6 +1223,11 @@ class HVLSPreviewPanel extends HTMLElement {
         .domain-entity-item:last-child {
           border-bottom: none;
         }
+        .stats-entity-row {
+          display:flex; align-items:center; justify-content:space-between; gap:8px;
+        }
+        .stats-entity-row > .entity-more-info { flex:1; min-width:0; }
+        .stats-entity-row > .entity-hvls-control { flex-shrink:0; }
         .domain-entity-item strong {
           font-size: 13px;
         }
@@ -1633,6 +1667,9 @@ class HVLSPreviewPanel extends HTMLElement {
       this._entityLoadError = null;
       this._entityLimit = 100;
       this._renderEntities();
+      // Statistics may have loaded before the registry catalog.
+      // Render removal controls only from the current HA label state.
+      if (this._lastAnalysis) this._renderAnalysis(this._lastAnalysis);
       return true;
     } catch (error) {
       this._entityCatalog = null;
