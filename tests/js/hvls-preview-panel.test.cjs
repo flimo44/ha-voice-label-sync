@@ -1095,3 +1095,112 @@ test("Migration backend failures show a sanitized message without writing", asyn
   assert.match(controls.migrationStatus.textContent, /indisponible/);
   assert.equal(controls.migrationAnalyze.disabled, false);
 });
+
+
+test("Protected baseline preparation alone never calls initialization", async () => {
+  const requests = [];
+  const {panel} = makePanel(async request => {
+    requests.push(request);
+    return {
+      status: "awaiting_explicit_confirmation",
+      confirmation_token: "one-use-secret",
+      source_files: 2,
+      explicit_entities: 3,
+      implicit_exposure_warning: false,
+    };
+  });
+  const controls = {
+    migrationPrepareBaseline: {disabled: false},
+    migrationConfirmBaseline: {disabled: true, hidden: true},
+    migrationBaselineStatus: {textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  await panel._prepareMigrationBaseline();
+  assert.deepEqual(requests.map(r => r.type), [
+    "ha_voice_label_sync/prepare_migration_baseline",
+  ]);
+  assert.equal(panel._baselineChallenge, "one-use-secret");
+  assert.equal(controls.migrationConfirmBaseline.hidden, false);
+  assert.match(controls.migrationBaselineStatus.textContent, /2/);
+});
+
+test("Cancelled baseline confirmation makes no filesystem-write request", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {};
+  }, () => false);
+  panel._baselineChallenge = "secret";
+  panel._baselinePrepared = {source_files: 2, explicit_entities: 3};
+  panel.querySelector = () => null;
+  await panel._confirmMigrationBaseline();
+  assert.equal(calls.length, 0);
+  assert.equal(panel._baselineChallenge, "secret");
+});
+
+test("Confirmed baseline uses one-time token and refreshes review", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {
+      status: "baseline_and_journal_verified",
+      baseline_verified: true,
+      journal_phase: "baseline_ready",
+      journal_revision: 0,
+    };
+  });
+  let refreshes = 0;
+  panel._loadMigrationReview = async () => { refreshes++; };
+  const controls = {
+    migrationPrepareBaseline: {disabled: false},
+    migrationConfirmBaseline: {disabled: false, hidden: false},
+    migrationBaselineStatus: {textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._baselineChallenge = "reviewed-secret";
+  panel._baselinePrepared = {source_files: 2, explicit_entities: 3};
+  await panel._confirmMigrationBaseline();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].type, "ha_voice_label_sync/initialize_migration_baseline");
+  assert.equal(calls[0].confirmation_token, "reviewed-secret");
+  assert.equal(calls[0].confirmed, true);
+  assert.equal(refreshes, 1);
+  assert.equal(panel._baselineChallenge, null);
+  assert.equal(controls.migrationConfirmBaseline.disabled, true);
+  assert.equal(controls.migrationConfirmBaseline.hidden, true);
+  assert.match(controls.migrationBaselineStatus.textContent, /Sauvegarde vérifiée/);
+  await panel._confirmMigrationBaseline();
+  assert.equal(calls.length, 1, "token cannot be reused by a second click");
+});
+
+test("Baseline initialization failure never exposes backend private error", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    throw new Error("PRIVATE_YAML_SECRET");
+  });
+  panel._baselineChallenge = "one-use";
+  panel._baselinePrepared = {source_files: 2, explicit_entities: 2};
+  const controls = {
+    migrationPrepareBaseline: {disabled: false},
+    migrationConfirmBaseline: {disabled: false, hidden: false},
+    migrationBaselineStatus: {textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  await panel._confirmMigrationBaseline();
+  assert.equal(calls.length, 1);
+  assert.match(controls.migrationBaselineStatus.textContent, /refusée/);
+  assert.doesNotMatch(controls.migrationBaselineStatus.textContent, /PRIVATE_YAML_SECRET/);
+  assert.equal(panel._baselineChallenge, null);
+});
+
+test("Migration tab contains no automatic confirmed initialization", () => {
+  const start = source.indexOf('if (tab === "migration"');
+  const tabEnd = source.indexOf("\n  }", start);
+  assert.ok(start > -1 && tabEnd > start);
+  const block = source.slice(start, tabEnd);
+  assert.match(block, /_loadMigrationReview\(\)/);
+  assert.doesNotMatch(block, /_prepareMigrationBaseline|_confirmMigrationBaseline/);
+  assert.match(source, /window\.confirm\(this\._tf\("migrationBaselineConfirm"/);
+  assert.doesNotMatch(source, /setTimeout\([^)]*initialize_migration_baseline/);
+});
