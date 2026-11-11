@@ -310,6 +310,10 @@ def preview_metadata_overlay(
     generated = {key: dict(value) for key, value in original_generated.items()}
     rows: list[dict[str, Any]] = []
     count = 0
+    # Never silently expose an entity present in an existing HVLS selection
+    # but absent from the explicit import decisions. This is a global preview
+    # hold: the generated YAML cannot be treated as migration-safe.
+    unreviewed_generated = sorted(set(generated) - set(selections))
     for entity_id in sorted(selections):
         manual = metadata_rows.get(entity_id)
         problems = []
@@ -353,6 +357,13 @@ def preview_metadata_overlay(
             "reasons": problems,
         })
 
+    for entity_id in unreviewed_generated:
+        rows.append({
+            "entity_id": entity_id,
+            "status": "needs_review",
+            "fields_preserved": [],
+            "reasons": ["generated_entity_not_approved_for_migration"],
+        })
     # A manual entity not selected for import needs a separate Keep/Disable/
     # Remove decision. A future cutover must prove effective exposure parity.
     unresolved = sorted(set(metadata_rows) - set(selections))
@@ -366,7 +377,7 @@ def preview_metadata_overlay(
     # Do not claim this preview includes all effective GA exposed entities.
     # The manual excluded entities stay out of the generated result; this
     # module does not create an automatic expose:false replacement either.
-    if not generated:
+    if not generated or unreviewed_generated:
         output = None
     else:
         output = yaml.safe_dump(
@@ -390,6 +401,7 @@ def preview_metadata_overlay(
             "metadata_fields_preserved": count,
             "needs_review": sum(r["status"] == "needs_review" for r in rows),
             "manual_entries_not_imported": len(unresolved),
+            "unreviewed_generated_entities": len(unreviewed_generated),
         },
         "entities": rows,
         "read_only": True,
