@@ -116,6 +116,75 @@ async def websocket_get_migration_review(
     connection.send_result(msg["id"], result)
 
 
+WS_TYPE_MIGRATION_BASELINE_PREPARE = f"{DOMAIN}/prepare_migration_baseline"
+WS_TYPE_MIGRATION_BASELINE_INITIALIZE = f"{DOMAIN}/initialize_migration_baseline"
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_TYPE_MIGRATION_BASELINE_PREPARE}
+)
+async def websocket_prepare_migration_baseline(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Admin review of source backup scope; never writes protected files."""
+    try:
+        from .migration_initialize import prepare_admin_baseline
+
+        user_id = connection.user.id
+        result = await prepare_admin_baseline(hass, user_id=user_id)
+    except Exception:
+        # Never echo YAML, secrets, tokens or file paths in error messages.
+        connection.send_error(
+            msg["id"],
+            "migration_baseline_prepare_unavailable",
+            "Protected source preparation unavailable. No files were created.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_TYPE_MIGRATION_BASELINE_INITIALIZE,
+        vol.Required("confirmation_token"): str,
+        vol.Required("confirmed"): bool,
+    }
+)
+async def websocket_initialize_migration_baseline(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Explicit one-use admin authorization for protected baseline+journal."""
+    try:
+        from .migration_initialize import initialize_admin_baseline
+
+        user_id = connection.user.id
+        result = await initialize_admin_baseline(
+            hass,
+            user_id=user_id,
+            confirmation_token=msg["confirmation_token"],
+            confirmed=msg["confirmed"],
+        )
+    except Exception:
+        # An interrupted operation may have created the immutable backup.
+        # Never claim that the filesystem was left entirely untouched.
+        connection.send_error(
+            msg["id"],
+            "migration_baseline_initialization_unavailable",
+            "Initialization incomplete. Inspect the protected baseline and "
+            "journal before preparing a fresh confirmation.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
 WS_TYPE_GET_PREVIEW = f"{DOMAIN}/get_preview"
 
 
@@ -564,6 +633,8 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_get_preview)
     websocket_api.async_register_command(hass, websocket_get_migration_diagnostic)
     websocket_api.async_register_command(hass, websocket_get_migration_review)
+    websocket_api.async_register_command(hass, websocket_prepare_migration_baseline)
+    websocket_api.async_register_command(hass, websocket_initialize_migration_baseline)
     websocket_api.async_register_command(hass, websocket_get_entities)
     websocket_api.async_register_command(hass, websocket_set_entity_label)
     websocket_api.async_register_command(hass, websocket_apply_preview)
