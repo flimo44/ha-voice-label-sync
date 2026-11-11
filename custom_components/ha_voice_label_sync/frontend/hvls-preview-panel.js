@@ -11,6 +11,32 @@ const HVLS_TRANSLATIONS = {
     tabEntities: "Gestion des entités HVLS",
     tabPreview: "Preview",
     tabBackups: "Sauvegardes",
+    tabMigration: "Migration",
+    migrationIntro: "Revue de migration Google Assistant — aucune modification de HA, des labels ou du YAML.",
+    migrationAnalyze: "Actualiser la simulation (lecture seule)",
+    migrationLoading: "Analyse de migration en lecture seule…",
+    migrationEmpty: "Ouvrez cette section pour vérifier la configuration Google Assistant.",
+    migrationFailed: "Revue indisponible : {error}",
+    migrationBaseline: "Sauvegarde source protégée",
+    migrationBaselineMissing: "non vérifiée — simulation complète indisponible",
+    migrationBaselineOk: "vérifiée",
+    migrationStatus: "État de la revue",
+    migrationToRecheck: "Décisions locales modifiées : relancez l’analyse.",
+    migrationDecisions: "Décisions provisoires (non enregistrées)",
+    migrationNoChoice: "À examiner",
+    migrationImport: "Importer",
+    migrationKeep: "Conserver",
+    migrationDisable: "Désactiver",
+    migrationRemove: "Retirer",
+    migrationRetain: "Conserver les personnalisations",
+    migrationDiscard: "Abandonner après revue",
+    migrationMetadataChoice: "Personnalisations",
+    migrationAcknowledge: "J’ai pris connaissance du changement",
+    migrationSensitive: "Confirmer l’exposition sensible",
+    migrationBefore: "Avant (projection)",
+    migrationAfter: "Après (hypothèse)",
+    migrationReasons: "Motifs / état",
+    migrationMore: "Afficher 100 entités supplémentaires",
     backupIntro: "Choisissez une sauvegarde pour voir ses différences avec la production. Seul le YAML Google Assistant sera restauré, jamais les étiquettes Home Assistant.",
     backupLoading: "Chargement des sauvegardes…",
     backupEmpty: "Aucune sauvegarde disponible.",
@@ -143,6 +169,32 @@ const HVLS_TRANSLATIONS = {
     tabEntities: "HVLS Entity Management",
     tabPreview: "Preview",
     tabBackups: "Backups",
+    tabMigration: "Migration",
+    migrationIntro: "Google Assistant migration review — does not modify HA, labels or YAML.",
+    migrationAnalyze: "Refresh simulation (read-only)",
+    migrationLoading: "Running read-only migration assessment…",
+    migrationEmpty: "Open this section to review Google Assistant configuration.",
+    migrationFailed: "Review unavailable: {error}",
+    migrationBaseline: "Protected source backup",
+    migrationBaselineMissing: "not verified — complete simulation unavailable",
+    migrationBaselineOk: "verified",
+    migrationStatus: "Review status",
+    migrationToRecheck: "Local decisions changed: run the review again.",
+    migrationDecisions: "Provisional decisions (not saved)",
+    migrationNoChoice: "To review",
+    migrationImport: "Import",
+    migrationKeep: "Keep",
+    migrationDisable: "Disable",
+    migrationRemove: "Remove",
+    migrationRetain: "Retain manual customizations",
+    migrationDiscard: "Discard after review",
+    migrationMetadataChoice: "Customizations",
+    migrationAcknowledge: "I acknowledge this change",
+    migrationSensitive: "Acknowledge sensitive exposure",
+    migrationBefore: "Before (projected)",
+    migrationAfter: "After (hypothetical)",
+    migrationReasons: "Reasons / status",
+    migrationMore: "Show 100 more entities",
     backupIntro: "Select a backup to compare it with current production. Only the Google Assistant YAML file is restored, never Home Assistant labels.",
     backupLoading: "Loading backups…",
     backupEmpty: "No backups available.",
@@ -360,6 +412,12 @@ class HVLSPreviewPanel extends HTMLElement {
     if (backupIntro) backupIntro.textContent = this._t("backupIntro");
     const restore = this.querySelector("#restoreBackup");
     if (restore) restore.textContent = this._t("backupRestore");
+    const migrationIntro = this.querySelector("#migrationIntro");
+    if (migrationIntro) migrationIntro.textContent = this._t("migrationIntro");
+    const migrationAnalyze = this.querySelector("#migrationAnalyze");
+    if (migrationAnalyze) migrationAnalyze.textContent = this._t("migrationAnalyze");
+    const migrationMore = this.querySelector("#migrationMore");
+    if (migrationMore) migrationMore.textContent = this._t("migrationMore");
     const nav = this.querySelector(".hvls-tabs");
     if (nav) nav.setAttribute("aria-label", this._t("tabsLabel"));
   }
@@ -371,6 +429,7 @@ class HVLSPreviewPanel extends HTMLElement {
       ["entities", "tabEntities"],
       ["preview", "tabPreview"],
       ["backups", "tabBackups"],
+      ["migration", "tabMigration"],
     ];
     let number = 0;
     for (const [tab, key] of tabs) {
@@ -430,6 +489,7 @@ class HVLSPreviewPanel extends HTMLElement {
       if (this._statusKey) this._setStatusKey(this._statusKey, this._statusValues);
       this._renderBackups();
       this._renderBackupDiff();
+      this._renderMigrationReview();
       if (this._entityLoadError) {
         const entityStatus = this.querySelector("#entityStatus");
         if (entityStatus) entityStatus.textContent = this._tf("entitiesLoadFailed", {error: this._entityLoadError});
@@ -1174,6 +1234,13 @@ class HVLSPreviewPanel extends HTMLElement {
         .container { max-width:1200px; margin:0 auto; }
         .header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
         h1 { margin:0; font-size:28px; font-weight:500; }
+        .migration-scroll { overflow-x: auto; max-width: 100%; }
+        .migration-table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+        .migration-table th, .migration-table td { padding: 8px; text-align: left; border-bottom: 1px solid var(--divider-color); vertical-align: top; }
+        .migration-controls { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+        .migration-controls select { max-width: 220px; font: inherit; }
+        .migration-controls label { display: flex; gap: 4px; align-items: center; }
+        .migration-review-note { color: var(--secondary-text-color); }
         .hvls-brand {
           display: flex;
           align-items: center;
@@ -1605,6 +1672,10 @@ class HVLSPreviewPanel extends HTMLElement {
             data-tab="backups" role="tab" aria-selected="false">
             5 · Sauvegardes
           </button>
+          <button class="hvls-tab" type="button"
+            data-tab="migration" role="tab" aria-selected="false">
+            6 · Migration
+          </button>
         </nav>
 
         <section id="tab-summary" class="hvls-tab-panel" role="tabpanel">
@@ -1662,6 +1733,19 @@ class HVLSPreviewPanel extends HTMLElement {
           <button id="apply" type="button" disabled>${this._t("apply")}</button>
         </div>
         </section>
+        <section id="tab-migration" class="hvls-tab-panel" role="tabpanel" hidden>
+          <h2>${this._t("tabMigration")}</h2>
+          <p id="migrationIntro" class="diagnostic-note">${this._t("migrationIntro")}</p>
+          <button id="migrationAnalyze" type="button" class="secondary">
+            ${this._t("migrationAnalyze")}
+          </button>
+          <p id="migrationStatus" role="status">${this._t("migrationEmpty")}</p>
+          <div id="migrationSummary" class="migration-review-note"></div>
+          <div id="migrationRows" class="migration-scroll"></div>
+          <button id="migrationMore" type="button" class="secondary" hidden>
+            ${this._t("migrationMore")}
+          </button>
+        </section>
         <section id="tab-backups" class="hvls-tab-panel" role="tabpanel" hidden>
           <h2>${this._t("tabBackups")}</h2>
           <p id="backupIntro" class="diagnostic-note">${this._t("backupIntro")}</p>
@@ -1698,6 +1782,11 @@ class HVLSPreviewPanel extends HTMLElement {
     this.querySelector("#copy").addEventListener("click", () => this._copyPreview());
     this.querySelector("#apply").addEventListener("click", () => this._applyPreview());
     this.querySelector("#restoreBackup").addEventListener("click", () => this._restoreBackup());
+    this.querySelector("#migrationAnalyze").addEventListener("click", () => this._loadMigrationReview());
+    this.querySelector("#migrationMore").addEventListener("click", () => {
+      this._migrationLimit = (this._migrationLimit || 100) + 100;
+      this._renderMigrationReview();
+    });
     this.querySelector("#settings").addEventListener("click", () => {
       window.location.assign("/config/integrations/integration/ha_voice_label_sync");
     });
@@ -2291,6 +2380,213 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  async _loadMigrationReview() {
+    if (!this._hass || this._migrationLoading) return;
+    this._migrationDecisions ||= Object.create(null);
+    this._migrationLoading = true;
+    const requestId = (this._migrationRequestId || 0) + 1;
+    this._migrationRequestId = requestId;
+    const button = this.querySelector("#migrationAnalyze");
+    const status = this.querySelector("#migrationStatus");
+    if (button) button.disabled = true;
+    if (status) status.textContent = this._t("migrationLoading");
+    try {
+      // This endpoint is admin-only and read-only. Decisions live solely in
+      // this panel's memory, never in a HA service or migration journal.
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/get_migration_review",
+        decisions: {...this._migrationDecisions},
+      });
+      if (requestId !== this._migrationRequestId) return;
+      this._migrationReport = result;
+      this._migrationError = null;
+      this._migrationDirty = false;
+    } catch (_error) {
+      if (requestId !== this._migrationRequestId) return;
+      // Do not display arbitrary backend exception text in the admin UI.
+      this._migrationError = "migration_review_unavailable";
+      this._migrationReport = null;
+    } finally {
+      if (requestId === this._migrationRequestId) {
+        this._migrationLoading = false;
+        if (button) button.disabled = false;
+        this._renderMigrationReview();
+      }
+    }
+  }
+
+  _setMigrationChoice(entityId, field, value) {
+    this._migrationDecisions ||= Object.create(null);
+    const current = {...(this._migrationDecisions[entityId] || {})};
+    if (field === "action" && !value) {
+      delete this._migrationDecisions[entityId];
+    } else {
+      current[field] = value;
+      this._migrationDecisions[entityId] = current;
+    }
+    this._migrationDirty = true;
+    this._renderMigrationReview();
+  }
+
+  _renderMigrationReview() {
+    const status = this.querySelector("#migrationStatus");
+    const summary = this.querySelector("#migrationSummary");
+    const content = this.querySelector("#migrationRows");
+    const more = this.querySelector("#migrationMore");
+    if (!status || !summary || !content || !more) return;
+    content.replaceChildren();
+    const report = this._migrationReport;
+    if (!report) {
+      summary.textContent = "";
+      more.hidden = true;
+      if (!this._migrationLoading) {
+        status.textContent = this._migrationError
+          ? this._tf("migrationFailed", {error: this._migrationError})
+          : this._t("migrationEmpty");
+      }
+      return;
+    }
+
+    const diag = report.diagnostic || {};
+    const plan = report.preflight || {};
+    const simulation = report.simulation;
+    const baseline = report.protected_baseline_status === "verified"
+      ? this._t("migrationBaselineOk")
+      : this._t("migrationBaselineMissing");
+    status.textContent = this._migrationDirty
+      ? this._t("migrationToRecheck")
+      : `${this._t("migrationStatus")}: ${simulation?.status || diag.review_status || "unknown"}`;
+    const total = Array.isArray(diag.entities) ? diag.entities.length : 0;
+    const needReview = plan.summary?.needs_review ?? total;
+    const stageable = plan.summary?.proposed_label_additions ?? 0;
+    summary.textContent =
+      `${this._t("migrationBaseline")}: ${baseline}. ` +
+      `${this._t("migrationDecisions")}: ${total}; ` +
+      `needs_review=${needReview}; proposed_label_additions=${stageable}. ` +
+      "apply_allowed=false; cutover_allowed=false.";
+
+    if (!Array.isArray(diag.entities)) {
+      more.hidden = true;
+      return;
+    }
+    this._migrationDecisions ||= Object.create(null);
+    const plans = new Map((plan.entities || []).map(item => [item.entity_id, item]));
+    const simulations = new Map((simulation?.entities || []).map(
+      item => [item.entity_id, item]
+    ));
+    const table = document.createElement("table");
+    table.className = "migration-table";
+    const head = document.createElement("thead");
+    const tr = document.createElement("tr");
+    for (const heading of [
+      "Entity ID", this._t("migrationBefore"), this._t("migrationAfter"),
+      this._t("migrationDecisions"), this._t("migrationReasons")
+    ]) {
+      const th = document.createElement("th");
+      th.textContent = heading;
+      tr.append(th);
+    }
+    head.append(tr);
+    table.append(head);
+    const body = document.createElement("tbody");
+    const max = Math.min(diag.entities.length, this._migrationLimit || 100);
+    for (const entity of diag.entities.slice(0, max)) {
+      const entityId = entity.entity_id;
+      const proposal = plans.get(entityId);
+      const simulated = simulations.get(entityId);
+      const choice = this._migrationDecisions[entityId] || {};
+      const row = document.createElement("tr");
+      for (const value of [
+        entityId,
+        entity.disk_ha_sync_projection || "unknown",
+        simulated?.hypothetical_after || "unknown",
+      ]) {
+        const cell = document.createElement("td");
+        cell.textContent = String(value);
+        row.append(cell);
+      }
+      const controlCell = document.createElement("td");
+      const controls = document.createElement("div");
+      controls.className = "migration-controls";
+      const action = document.createElement("select");
+      action.setAttribute("aria-label", `Migration decision: ${entityId}`);
+      for (const [value, key] of [
+        ["", "migrationNoChoice"],
+        ["import", "migrationImport"],
+        ["keep", "migrationKeep"],
+        ["disable", "migrationDisable"],
+        ["remove", "migrationRemove"],
+      ]) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = this._t(key);
+        action.append(option);
+      }
+      action.value = choice.action || "";
+      action.addEventListener("change", () => {
+        this._setMigrationChoice(entityId, "action", action.value);
+      });
+      controls.append(action);
+
+      if (entity.customization_fields_present?.length) {
+        const metadata = document.createElement("select");
+        metadata.setAttribute("aria-label", `${this._t("migrationMetadataChoice")}: ${entityId}`);
+        for (const [value, label] of [
+          ["", "migrationMetadataChoice"],
+          ["retain_manual_yaml", "migrationRetain"],
+          ["discard_after_review", "migrationDiscard"],
+        ]) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = this._t(label);
+          metadata.append(option);
+        }
+        metadata.value = choice.metadata_policy || "";
+        metadata.addEventListener("change", () => {
+          this._setMigrationChoice(entityId, "metadata_policy", metadata.value || null);
+        });
+        controls.append(metadata);
+      }
+
+      const addCheck = (key, text, enabled) => {
+        if (!enabled) return;
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = choice[key] === true;
+        input.addEventListener("change", () => {
+          this._setMigrationChoice(entityId, key, input.checked);
+        });
+        const span = document.createElement("span");
+        span.textContent = text;
+        label.append(input, span);
+        controls.append(label);
+      };
+      addCheck("acknowledge_change", this._t("migrationAcknowledge"),
+        ["disable", "remove"].includes(choice.action) ||
+        choice.metadata_policy === "discard_after_review");
+      addCheck("acknowledge_sensitive_exposure", this._t("migrationSensitive"),
+        ["lock", "cover", "alarm_control_panel"].includes(entityId.split(".")[0]) &&
+        choice.action === "import");
+
+      controlCell.append(controls);
+      row.append(controlCell);
+      const reasonsCell = document.createElement("td");
+      const reasons = [
+        ...(proposal?.reasons || []),
+        ...(simulated?.reasons || []),
+      ];
+      reasonsCell.textContent = reasons.length
+        ? [...new Set(reasons)].join(", ")
+        : proposal?.status || entity.category || "unknown";
+      row.append(reasonsCell);
+      body.append(row);
+    }
+    table.append(body);
+    content.append(table);
+    more.hidden = max >= diag.entities.length;
+  }
+
   _activateTab(tab) {
     const panels = {
       summary: "#tab-summary",
@@ -2298,6 +2594,7 @@ class HVLSPreviewPanel extends HTMLElement {
       entities: "#entityManager",
       preview: "#tab-preview",
       backups: "#tab-backups",
+      migration: "#tab-migration",
     };
 
     if (!Object.hasOwn(panels, tab)) return;
@@ -2315,6 +2612,9 @@ class HVLSPreviewPanel extends HTMLElement {
     });
     // Read the live filesystem each time the Backups tab is opened.
     if (tab === "backups") this._loadBackups();
+    if (tab === "migration" && !this._migrationReport && !this._migrationLoading) {
+      this._loadMigrationReview();
+    }
   }
 
   _setStatus(message) {
