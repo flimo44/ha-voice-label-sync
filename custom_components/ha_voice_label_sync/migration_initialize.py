@@ -206,15 +206,20 @@ async def initialize_admin_baseline(
 
     async with get_workflow_lock(hass):
         pending = hass.data.setdefault(DOMAIN, {}).get(_PENDING_KEY, {})
-        proof = pending.pop(user_id, None)
-        if (
-            not isinstance(proof, dict)
-            or not secrets.compare_digest(
-                confirmation_token, proof.get("challenge", "")
-            )
-            or time.monotonic() >= proof.get("expires", 0)
-        ):
+        proof = pending.get(user_id)
+        if not isinstance(proof, dict):
             raise MigrationInitializationError("confirmation_expired_or_invalid")
+        if time.monotonic() >= proof.get("expires", 0):
+            pending.pop(user_id, None)
+            raise MigrationInitializationError("confirmation_expired_or_invalid")
+        if not secrets.compare_digest(
+            confirmation_token, proof.get("challenge", "")
+        ):
+            # A stale/mistyped token does not consume a separate, valid
+            # confirmation from the same administrator.
+            raise MigrationInitializationError("confirmation_expired_or_invalid")
+        # A valid one-use challenge is consumed before any filesystem work.
+        pending.pop(user_id, None)
         if len(hass.config_entries.async_entries(DOMAIN)) != 1:
             raise MigrationInitializationError("integration_not_uniquely_configured")
 
