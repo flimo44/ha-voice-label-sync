@@ -22,7 +22,7 @@ MAX_FILE_BYTES = 1024 * 1024
 MAX_TOTAL_BYTES = 2 * 1024 * 1024
 MAX_FILES = 8
 _SHA = re.compile(r"^[0-9a-f]{64}$")
-_STORE = ("storage", "hvls_migration")
+_STORE_DIR = "hvls_migration"
 _BASELINE = "baseline"
 
 
@@ -132,7 +132,7 @@ def storage_directory(config_dir: str | Path, *, create: bool = False) -> Path:
             pass
     if ha_storage.is_symlink() or not ha_storage.is_dir():
         raise BaselineError("ha_storage_unavailable")
-    target = ha_storage / _STORE[1]
+    target = ha_storage / _STORE_DIR
     _private_directory(target, create=create)
     return target
 
@@ -240,7 +240,8 @@ def _verified_baseline(storage: Path) -> dict[str, Any]:
         raise BaselineError("baseline_manifest_invalid") from exc
     files = manifest.get("files") if isinstance(manifest, dict) else None
     if (
-        manifest.get("schema_version") != 1
+        not isinstance(manifest, dict)
+        or manifest.get("schema_version") != 1
         or manifest.get("purpose") != "manual_ga_pre_migration"
         or not isinstance(files, list)
         or not 1 <= len(files) <= MAX_FILES
