@@ -145,10 +145,10 @@ def project_manual_google_exposure(
         }
 
     default_enabled = flag == "true"
-    # Legacy discovery shorthand: default_all_supported actually means
+    # Legacy discovery shorthand: default_exposed_domains actually means
     # exposed_domains was omitted. HA then uses DEFAULT_EXPOSED_DOMAINS,
     # a bounded list, not all supported domains.
-    if rules.get("rule_type") == "default_all_supported":
+    if rules.get("rule_type") == "default_exposed_domains":
         allowed = (
             frozenset(default_exposed_domains)
             if default_exposed_domains is not None
