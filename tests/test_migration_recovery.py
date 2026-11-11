@@ -50,7 +50,9 @@ def modules(monkeypatch):
 
 
 def _prepare(tmp_path, modules, *, include=True):
-    (tmp_path / "configuration.yaml").write_bytes(SOURCE if include else b"google_assistant:\n  expose_by_default: false\n")
+    (tmp_path / "configuration.yaml").write_bytes(
+        SOURCE if include else b"google_assistant:\n  expose_by_default: false\n"
+    )
     if include:
         (tmp_path / "google_entity.yaml").write_bytes(INCLUDED)
     report = modules["migration_discovery"].discover_google_assistant(tmp_path)
@@ -91,10 +93,15 @@ def test_exact_raw_yaml_snapshot_and_idempotence(tmp_path, modules):
     assert first["verified"]
     assert len(first["files"]) == 2
     storage = tmp_path / ".storage" / "hvls_migration"
-    assert (storage / "baseline" / "files" / "configuration.yaml").read_bytes() == SOURCE
-    assert (storage / "baseline" / "files" / "google_entity.yaml").read_bytes() == INCLUDED
+    assert (
+        storage / "baseline" / "files" / "configuration.yaml"
+    ).read_bytes() == SOURCE
+    assert (
+        storage / "baseline" / "files" / "google_entity.yaml"
+    ).read_bytes() == INCLUDED
     assert os.stat(storage).st_mode & 0o077 == 0
-    assert os.stat(storage / "baseline" / "files" / "configuration.yaml").st_mode & 0o077 == 0
+    copied_main = storage / "baseline" / "files" / "configuration.yaml"
+    assert os.stat(copied_main).st_mode & 0o077 == 0
     assert first["manifest_sha256"] == hashlib.sha256(
         (storage / "baseline" / "manifest.json").read_bytes()
     ).hexdigest()
@@ -109,7 +116,8 @@ def test_snapshot_protects_original_after_changes(tmp_path, modules):
     (tmp_path / "google_entity.yaml").write_text("light.other: {}\n")
     assert baseline.verify_baseline(tmp_path) == saved
     with pytest.raises(baseline.BaselineError, match="baseline_already_exists"):
-        baseline.capture_baseline(tmp_path, modules["migration_discovery"].discover_google_assistant(tmp_path))
+        fresh = modules["migration_discovery"].discover_google_assistant(tmp_path)
+        baseline.capture_baseline(tmp_path, fresh)
     with pytest.raises(baseline.BaselineError, match="source_changed_since_discovery"):
         baseline.capture_baseline(tmp_path, discovery)
 
@@ -134,7 +142,9 @@ def test_bad_and_unresolved_source_cannot_create_baseline(tmp_path, modules):
     assert not (tmp_path / ".storage").exists()
 
 
-@pytest.mark.parametrize("unsafe", ["../secrets.yaml", "/tmp/out.yaml", "a\\b.yaml", "a//b.yaml"])
+@pytest.mark.parametrize(
+    "unsafe", ["../secrets.yaml", "/tmp/out.yaml", "a\\\\b.yaml", "a//b.yaml"]
+)
 def test_path_traversal_refused(tmp_path, modules, unsafe):
     discovery = _prepare(tmp_path, modules)
     discovery["source"]["locations"][0]["path"] = unsafe
