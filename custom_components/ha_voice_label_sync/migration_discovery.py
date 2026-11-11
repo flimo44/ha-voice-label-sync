@@ -11,8 +11,13 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from yaml.events import AliasEvent, MappingEndEvent, MappingStartEvent
-from yaml.events import SequenceEndEvent, SequenceStartEvent
+from yaml.events import (
+    AliasEvent,
+    MappingEndEvent,
+    MappingStartEvent,
+    SequenceEndEvent,
+    SequenceStartEvent,
+)
 from yaml.nodes import MappingNode, ScalarNode, SequenceNode
 
 MAX_FILE_BYTES = 1024 * 1024
@@ -131,7 +136,10 @@ class _SourceReader:
             if size > MAX_FILE_BYTES or self.total_bytes + size > MAX_TOTAL_BYTES:
                 raise DiscoveryProblem("yaml_file_too_large")
             raw = resolved.read_bytes()
-            if len(raw) > MAX_FILE_BYTES or self.total_bytes + len(raw) > MAX_TOTAL_BYTES:
+            if (
+                len(raw) > MAX_FILE_BYTES
+                or self.total_bytes + len(raw) > MAX_TOTAL_BYTES
+            ):
                 raise DiscoveryProblem("yaml_file_too_large")
             document = _bounded_parse(raw.decode("utf-8"))
         except (OSError, UnicodeError) as exc:
@@ -183,7 +191,11 @@ def _entity_details(
 
     if "expose" in options:
         try:
-            intent = "expose" if _scalar_bool(options["expose"], "expose") else "exclude"
+            intent = (
+                "expose"
+                if _scalar_bool(options["expose"], "expose")
+                else "exclude"
+            )
         except DiscoveryProblem:
             intent = "unknown"
             reasons.append("invalid_expose_value")
