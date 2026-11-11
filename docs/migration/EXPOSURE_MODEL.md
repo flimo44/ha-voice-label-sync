@@ -11,7 +11,7 @@ The rules below were cross-checked in Home Assistant Core versions **2026.10.2**
 - [HA state-based supported-traits filtering](https://github.com/home-assistant/core/blob/2026.11.0/homeassistant/components/google_assistant/helpers.py)
 - [Google SYNC enumeration](https://github.com/home-assistant/core/blob/2026.11.0/homeassistant/components/google_assistant/smart_home.py)
 
-**Subtlety corrected:** if YAML omits exposed_domains, Home Assistant applies its *default list of domains* (not every possible Google-compatible domain). An explicitly empty exposed_domains list means no implicit domains. The previous PR #106 discovery label default_exposed_domains is a shorthand **not** to be interpreted literally; the new projection requires the real HA default-domain list, supplied by the caller. It refuses to guess otherwise.
+**Subtlety corrected:** if YAML omits exposed_domains, Home Assistant applies its *default list of domains* (not every possible Google-compatible domain). An explicitly empty exposed_domains list means no implicit domains. The initial discovery label was misleading and has now been renamed to default_exposed_domains. The projection requires the actual default-domain list supplied by the caller; it refuses to guess otherwise.
 
 ## Two stages of truth
 
