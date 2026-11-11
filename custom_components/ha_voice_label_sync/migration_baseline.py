@@ -193,7 +193,11 @@ def _expected_sources(discovery: dict[str, Any]) -> list[tuple[str, str]]:
             raise BaselineError("source_inventory_invalid")
         relative = _relative(location.get("path")).as_posix()
         digest = location.get("digest_sha256")
-        if relative in seen or not isinstance(digest, str) or not _SHA.fullmatch(digest):
+        if (
+            relative in seen
+            or not isinstance(digest, str)
+            or not _SHA.fullmatch(digest)
+        ):
             raise BaselineError("source_inventory_invalid")
         seen.add(relative)
         result.append((relative, digest))
