@@ -16,5 +16,8 @@
   "requirements": [
     "ha-voice-label-sync==0.3.5"
   ],
-  "version": "1.0.1"
+  "version": "1.0.1",
+  "after_dependencies": [
+    "google_assistant"
+  ]
 }
