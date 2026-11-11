@@ -40,6 +40,42 @@ from .preview_guard import PreviewChangedError, preview_digest
 from .services import DEFAULT_DOMAINS, async_run_workflow
 from .workflow_lock import get_workflow_lock
 
+WS_TYPE_MIGRATION_DIAGNOSTIC = f"{DOMAIN}/get_migration_diagnostic"
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_TYPE_MIGRATION_DIAGNOSTIC}
+)
+async def websocket_get_migration_diagnostic(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Read-only migration report for HA administrators; never a cutover API."""
+    if not hass.config_entries.async_entries(DOMAIN):
+        connection.send_error(
+            msg["id"], "not_configured", "HVLS is not configured."
+        )
+        return
+
+    try:
+        # Defer import: older V1 WebSocket tests load only legacy modules.
+        from .migration_diagnostic import build_admin_migration_diagnostic
+
+        report = await build_admin_migration_diagnostic(hass)
+    except Exception:
+        # Do not leak YAML, file paths, attributes or secret-bearing errors.
+        connection.send_error(
+            msg["id"], "migration_diagnostic_unavailable",
+            "Migration diagnostic is unavailable; no changes were made.",
+        )
+        return
+
+    connection.send_result(msg["id"], report)
+
+
 WS_TYPE_GET_PREVIEW = f"{DOMAIN}/get_preview"
 
 
@@ -486,6 +522,7 @@ async def websocket_restore_backup(
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register the HVLS WebSocket API."""
     websocket_api.async_register_command(hass, websocket_get_preview)
+    websocket_api.async_register_command(hass, websocket_get_migration_diagnostic)
     websocket_api.async_register_command(hass, websocket_get_entities)
     websocket_api.async_register_command(hass, websocket_set_entity_label)
     websocket_api.async_register_command(hass, websocket_apply_preview)
