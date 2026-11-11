@@ -60,6 +60,19 @@ def _policy_view(policy: Mapping[str, Any]) -> dict[str, Any]:
                 ],
             }
         )
+    raw_summary = policy.get("summary")
+    summary = (
+        {
+            key: raw_summary[key]
+            for key in (
+                "disk_entries", "loaded_entries", "unchanged", "changed",
+                "added_on_disk", "removed_on_disk", "unknown",
+            )
+            if key in raw_summary and type(raw_summary[key]) is int
+        }
+        if isinstance(raw_summary, Mapping)
+        else None
+    )
     return {
         "status": _code(policy.get("status")),
         "reason": _code(policy.get("reason")) if policy.get("reason") else None,
@@ -74,7 +87,7 @@ def _policy_view(policy: Mapping[str, Any]) -> dict[str, Any]:
             if name in {"expose_by_default", "exposed_domains"}
         ],
         "differences": differences,
-        "summary": policy.get("summary"),
+        "summary": summary,
         "source_freshness_verified": False,
         "google_home_state_verified": False,
     }
@@ -144,13 +157,21 @@ def compose_admin_diagnostic(
             else []
         )
         if disk is None:
-            category = "implicit_rule"
+            category = (
+                "implicitly_exposed"
+                if projected_exposure == "exposed"
+                else "runtime_without_yaml_entry"
+            )
         elif intent == "exclude":
             category = "explicitly_excluded"
         elif (
             not blocked
-            and policy_view["status"] == "match_compared_fields"
-            and snapshot.get("status") == "complete"
+            and policy_view["status"] in {
+                "match_compared_fields", "partial_unknown", "drift_detected"
+            }
+            and not policy_view["rule_changes"]
+            and entity_id not in drift_by_id
+            and snapshot.get("status") in {"complete", "partial"}
             and projected_exposure == "exposed"
             and projected is not None
             and projected.get("registry_present") is True
@@ -182,7 +203,8 @@ def compose_admin_diagnostic(
         "candidate_for_review",
         "needs_review",
         "explicitly_excluded",
-        "implicit_rule",
+        "implicitly_exposed",
+        "runtime_without_yaml_entry",
     )}
     for item in entities:
         counts[item["category"]] += 1
