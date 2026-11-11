@@ -76,6 +76,46 @@ async def websocket_get_migration_diagnostic(
     connection.send_result(msg["id"], report)
 
 
+WS_TYPE_MIGRATION_REVIEW = f"{DOMAIN}/get_migration_review"
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_TYPE_MIGRATION_REVIEW,
+        vol.Required("decisions"): dict,
+    }
+)
+async def websocket_get_migration_review(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Private read-only migration assessment, never a staging action."""
+    if not hass.config_entries.async_entries(DOMAIN):
+        connection.send_error(
+            msg["id"], "not_configured", "HVLS is not configured."
+        )
+        return
+    try:
+        # Lazily import: V1 WebSocket clients do not load migration modules.
+        from .migration_review_api import async_build_admin_review
+
+        result = await async_build_admin_review(hass, msg["decisions"])
+    except Exception:
+        # Do not expose raw YAML, private override values, or filesystem paths
+        # through untrusted exception messages. Never change any HA state.
+        connection.send_error(
+            msg["id"],
+            "migration_review_unavailable",
+            "Migration review is unavailable. No changes were made.",
+        )
+        return
+
+    connection.send_result(msg["id"], result)
+
+
 WS_TYPE_GET_PREVIEW = f"{DOMAIN}/get_preview"
 
 
@@ -523,6 +563,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register the HVLS WebSocket API."""
     websocket_api.async_register_command(hass, websocket_get_preview)
     websocket_api.async_register_command(hass, websocket_get_migration_diagnostic)
+    websocket_api.async_register_command(hass, websocket_get_migration_review)
     websocket_api.async_register_command(hass, websocket_get_entities)
     websocket_api.async_register_command(hass, websocket_set_entity_label)
     websocket_api.async_register_command(hass, websocket_apply_preview)
