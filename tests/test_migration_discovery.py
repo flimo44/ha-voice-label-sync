@@ -306,3 +306,39 @@ def test_unresolved_default_exposure_is_a_global_blocker(tmp_path: Path) -> None
     result = discovery.discover_google_assistant(tmp_path)
     assert "invalid_expose_by_default" in result["global_blockers"]
     assert "default_exposure" not in json.dumps(result)
+
+
+def test_implicit_default_does_not_claim_a_complete_entity_count(
+    tmp_path: Path,
+) -> None:
+    prepare_case(tmp_path, "S04")
+    report = discovery.discover_google_assistant(tmp_path)
+    assert report["rules"]["rule_type"] == "default_all_supported"
+    assert report["counts"]["current_exposure_unknown"] is None
+
+
+def test_yaml_merge_key_is_not_silently_ignored(tmp_path: Path) -> None:
+    (tmp_path / "configuration.yaml").write_text(
+        "defaults: &defaults\n"
+        "  expose_by_default: false\n"
+        "google_assistant:\n"
+        "  <<: *defaults\n"
+        "  entity_config:\n"
+        "    switch.salon:\n"
+        "      expose: true\n",
+        encoding="utf-8",
+    )
+    report = discovery.discover_google_assistant(tmp_path)
+    assert "unsupported_yaml_merge" in report["global_blockers"]
+
+
+def test_cloud_include_is_not_mistaken_for_new_configuration(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "configuration.yaml").write_text(
+        "cloud: !include cloud_settings.yaml\n",
+        encoding="utf-8",
+    )
+    report = discovery.discover_google_assistant(tmp_path)
+    assert report["mode"] == "unsupported"
+    assert "unresolved_cloud_configuration" in report["global_blockers"]
