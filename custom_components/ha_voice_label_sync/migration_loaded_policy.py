@@ -27,6 +27,10 @@ _MAX_ENTRIES = 20_000
 class PolicyComparisonError(ValueError):
     """Safe machine-readable error; never includes YAML or secret contents."""
 
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
 
 def _unavailable(code: str) -> dict[str, Any]:
     return {
@@ -206,19 +210,18 @@ def compare_disk_and_loaded_policy(
         fields: list[str] = []
         if disk is None:
             status = "removed_on_disk"
+        elif (normalized_disk := _disk_entry(disk)) is None:
+            # An invalid entry remains uncertain even if not yet loaded.
+            status = "unknown"
         elif loaded is None:
             status = "added_on_disk"
         else:
-            normalized_disk = _disk_entry(disk)
-            if normalized_disk is None:
-                status = "unknown"
-            else:
-                fields = [
-                    field
-                    for field in _FIELDS
-                    if normalized_disk[field] != loaded[field]
-                ]
-                status = "changed" if fields else "unchanged"
+            fields = [
+                field
+                for field in _FIELDS
+                if normalized_disk[field] != loaded[field]
+            ]
+            status = "changed" if fields else "unchanged"
         counts[status] += 1
         if status != "unchanged":
             differences.append(
