@@ -1007,3 +1007,91 @@ test("Statistics production indicators are informational and do not apply or cha
   assert.match(source, /\.production-status--validated/);
   assert.match(source, /\.production-status--pending/);
 });
+
+
+test("Migration tab exposes a review-only action and no cutover button", () => {
+  assert.match(source, /data-tab="migration"/);
+  assert.match(source, /id="tab-migration"/);
+  assert.match(source, /id="migrationAnalyze"/);
+  assert.match(source, /ha_voice_label_sync\\/get_migration_review/);
+  const tabStart = source.indexOf('<section id="tab-migration"');
+  const tabEnd = source.indexOf('<section id="tab-backups"', tabStart);
+  assert.ok(tabStart >= 0 && tabEnd > tabStart);
+  const markup = source.slice(tabStart, tabEnd);
+  assert.doesNotMatch(markup, /id="apply"|id="restoreBackup"/);
+  assert.doesNotMatch(markup, /set_entity_label|apply_preview/);
+});
+
+test("Migration review loads only diagnostic and never calls write APIs", async () => {
+  const requests = [];
+  const {panel} = makePanel(async request => {
+    requests.push(request);
+    return {
+      protected_baseline_status: "not_verified",
+      diagnostic: {review_status: "pending_review", entities: [
+        {entity_id: "light.good", disk_ha_sync_projection: "exposed",
+          category: "candidate_for_review", customization_fields_present: []},
+      ]},
+      preflight: {
+        entities: [
+          {entity_id: "light.good", status: "needs_review",
+            reasons: ["decision_required"]},
+        ],
+        summary: {needs_review: 1, proposed_label_additions: 0},
+      },
+      simulation: null,
+      read_only: true, apply_allowed: false, cutover_allowed: false,
+    };
+  });
+  const controls = {
+    migrationAnalyze: {disabled: false},
+    migrationStatus: {textContent: ""},
+    migrationSummary: {textContent: ""},
+    migrationRows: {
+      children: [], replaceChildren(...children) { this.children = children; },
+      append(child) { this.children.push(child); },
+    },
+    migrationMore: {hidden: false},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  await panel._loadMigrationReview();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].type, "ha_voice_label_sync/get_migration_review");
+  assert.equal(Object.keys(requests[0].decisions).length, 0);
+  assert.match(controls.migrationSummary.textContent, /non vérifiée/);
+  assert.match(controls.migrationSummary.textContent, /apply_allowed=false/);
+  assert.match(controls.migrationStatus.textContent, /pending_review/);
+  assert.equal(controls.migrationAnalyze.disabled, false);
+  assert.equal(controls.migrationRows.children.length, 1);
+  panel._setMigrationChoice("light.good", "action", "import");
+  assert.equal(panel._migrationDecisions["light.good"].action, "import");
+  assert.equal(requests.length, 1, "changing a choice never sends a write");
+  assert.match(controls.migrationStatus.textContent, /relancez l’analyse/);
+  await panel._loadMigrationReview();
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].decisions["light.good"].action, "import");
+  assert.equal(requests[1].type, "ha_voice_label_sync/get_migration_review");
+});
+
+test("Migration backend failures show a sanitized message without writing", async () => {
+  const requests = [];
+  const {panel} = makePanel(async request => {
+    requests.push(request);
+    throw new Error("private YAML secret value");
+  });
+  const controls = {
+    migrationAnalyze: {disabled: false},
+    migrationStatus: {textContent: ""},
+    migrationSummary: {textContent: ""},
+    migrationRows: {
+      replaceChildren() {}, append() {},
+    },
+    migrationMore: {hidden: false},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  await panel._loadMigrationReview();
+  assert.equal(requests.length, 1);
+  assert.doesNotMatch(controls.migrationStatus.textContent, /private YAML/);
+  assert.match(controls.migrationStatus.textContent, /indisponible/);
+  assert.equal(controls.migrationAnalyze.disabled, false);
+});
