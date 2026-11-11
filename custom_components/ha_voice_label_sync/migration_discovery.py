@@ -113,6 +113,13 @@ class _SourceReader:
             raise DiscoveryProblem("include_outside_config")
         if resolved.suffix.lower() not in {".yaml", ".yml"}:
             raise DiscoveryProblem("unsupported_include_type")
+        if kind != "main" and (
+            resolved.name.lower() in {"secrets.yaml", "secrets.yml"}
+            or any(term in resolved.name.lower() for term in (
+                "credential", "password", "private_key", "service_account", "token"
+            ))
+        ):
+            raise DiscoveryProblem("sensitive_file_reference")
         if resolved in self._read_paths:
             raise DiscoveryProblem("recursive_or_repeated_include")
         if len(self._read_paths) >= MAX_FILES:
@@ -318,10 +325,12 @@ def discover_google_assistant(config_dir: str | Path) -> dict[str, Any]:
 
         if expose_by_default:
             report["rules"]["rule_type"] = (
-                "domain_limited" if report["rules"]["exposed_domains"]
+                "domain_limited" if domains_node is not None
                 else "default_all_supported"
             )
-            report["rules"]["implicit_exposure_may_change_with_new_entities"] = True
+            report["rules"]["implicit_exposure_may_change_with_new_entities"] = (
+                domains_node is None or bool(report["rules"]["exposed_domains"])
+            )
             report["source"]["warnings"].append("implicit_exposure_enabled")
         else:
             report["rules"]["rule_type"] = "explicit_only"
