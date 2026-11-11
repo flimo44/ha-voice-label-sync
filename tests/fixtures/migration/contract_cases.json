@@ -57,7 +57,7 @@
       },
       "expected": {
         "parseable": true,
-        "rule": "default_all_supported",
+        "rule": "default_exposed_domains",
         "gate": "pending_review",
         "diagnostics": [
           "implicit_default_exposure"
