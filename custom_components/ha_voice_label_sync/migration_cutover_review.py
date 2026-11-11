@@ -83,6 +83,8 @@ def _simulate_candidate(
 
     anomalies: dict[str, list[str]] = {}
     simulated: list[str] = []
+    if any(not isinstance(entity_id, str) for entity_id in decisions):
+        raise CutoverReviewError("decision_entity_id_invalid")
     for entity_id, choice in sorted(decisions.items()):
         if not isinstance(choice, Mapping) or choice.get("action") != "import":
             continue
@@ -220,9 +222,14 @@ def _compare_entities(
             "decision": action,
             "projected_before": original,
             "hypothetical_after": after,
-            "metadata_fields_present": list(
-                item.get("customization_fields_present", [])
-            ),
+            "metadata_fields_present": [
+                field for field in ("name", "room", "aliases")
+                if field in (
+                    item.get("customization_fields_present")
+                    if isinstance(item.get("customization_fields_present"), list)
+                    else []
+                )
+            ],
             "reasons": sorted(set(reasons)),
             "status": "needs_review" if reasons else "preview_consistent",
             "google_home_state": "unknown",
@@ -279,6 +286,16 @@ def build_readonly_migration_review(
         if captured["baseline_manifest_sha256"] != expected_baseline_manifest_sha256:
             raise CutoverReviewError("baseline_changed_between_reads")
         baseline_verified = True
+        diagnostic_by_id = {
+            row["entity_id"]: row for row in diagnostic["entities"]
+        }
+        captured_ids = set(captured["entities"])
+        explicit_ids = {
+            entity_id for entity_id, row in diagnostic_by_id.items()
+            if row.get("yaml_exposure_intent") in {"expose", "exclude"}
+        }
+        if captured_ids != explicit_ids:
+            reasons.append("protected_entity_inventory_mismatch")
         selections = [
             row["entity_id"] for row in stage_plan["entities"]
             if row["decision"] == "import"
@@ -291,8 +308,6 @@ def build_readonly_migration_review(
 
     if overlay is None or overlay.get("content") is None:
         reasons.append("candidate_yaml_not_complete")
-    elif overlay["summary"]["unreviewed_generated_entities"]:
-        reasons.append("unapproved_generated_exposure")
     rows = _compare_entities(diagnostic, decisions, stage_plan, overlay, anomalies)
     if not rows:
         reasons.append("empty_exposure_inventory")
