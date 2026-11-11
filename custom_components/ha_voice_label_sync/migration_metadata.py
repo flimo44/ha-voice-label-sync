@@ -103,6 +103,15 @@ def _text(node: Any, *, field: str) -> str:
         or "\x00" in node.value
     ):
         raise MetadataError(f"invalid_{field}")
+    # HA's YAML loader resolves plain booleans, numbers and null to typed
+    # values. BaseLoader does not; never pretend they were literal strings.
+    if node.style is None:
+        try:
+            interpreted = yaml.safe_load(node.value)
+        except yaml.YAMLError as exc:
+            raise MetadataError(f"invalid_{field}") from exc
+        if not isinstance(interpreted, str):
+            raise MetadataError(f"ambiguous_{field}_scalar")
     return node.value
 
 
@@ -301,8 +310,8 @@ def preview_metadata_overlay(
         raise MetadataError("import_selection_invalid")
     selections = list(import_entity_ids)
     if (
-        len(selections) != len(set(selections))
-        or any(not isinstance(v, str) or not _ENTITY.fullmatch(v) for v in selections)
+        any(not isinstance(v, str) or not _ENTITY.fullmatch(v) for v in selections)
+        or len(selections) != len(set(selections))
     ):
         raise MetadataError("import_selection_invalid")
 
@@ -328,6 +337,8 @@ def preview_metadata_overlay(
                 problems.append("explicitly_excluded")
             elif manual.get("status") != "supported":
                 problems.append("unsupported_manual_entity_options")
+            elif manual.get("exposure_intent") != "expose":
+                problems.append("unknown_manual_exposure")
             elif not isinstance(manual.get("metadata"), Mapping):
                 problems.append("manual_metadata_invalid")
         if problems:
@@ -338,6 +349,29 @@ def preview_metadata_overlay(
             override = manual["metadata"] if manual is not None else {}
             if set(override) - _METADATA:
                 problems.append("unsupported_metadata_fields")
+            for field, value in override.items():
+                if field in ("name", "room"):
+                    if (
+                        not isinstance(value, str)
+                        or not value
+                        or len(value) > MAX_TEXT_CHARS
+                        or "\x00" in value
+                    ):
+                        problems.append("invalid_imported_metadata")
+                elif field == "aliases":
+                    if (
+                        not isinstance(value, list)
+                        or len(value) > MAX_ALIASES
+                        or any(
+                            not isinstance(alias, str)
+                            or not alias
+                            or len(alias) > MAX_TEXT_CHARS
+                            or "\x00" in alias
+                            for alias in value
+                        )
+                    ):
+                        problems.append("invalid_imported_aliases")
+            if problems:
                 status = "needs_review"
                 generated.pop(entity_id, None)
             else:
