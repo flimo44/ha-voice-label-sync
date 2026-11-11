@@ -234,3 +234,75 @@ def test_missing_config_is_not_silently_treated_as_new(tmp_path: Path) -> None:
     result = discovery.discover_google_assistant(tmp_path)
     assert result["cutover_status"] == "blocked"
     assert "include_missing" in result["global_blockers"]
+
+
+def test_empty_exposed_domains_does_not_mean_all_domains(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "configuration.yaml").write_text(
+        "google_assistant:\n"
+        "  expose_by_default: true\n"
+        "  exposed_domains: []\n",
+        encoding="utf-8",
+    )
+    result = discovery.discover_google_assistant(tmp_path)
+    assert result["rules"]["rule_type"] == "domain_limited"
+    assert result["rules"]["exposed_domains"] == []
+    assert not result["rules"]["implicit_exposure_may_change_with_new_entities"]
+
+
+def test_secret_include_path_is_refused_without_reading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "configuration.yaml").write_text(
+        "google_assistant:\n"
+        "  entity_config: !include secrets.yaml\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "secrets.yaml").write_text(
+        "password: never-read-this\n", encoding="utf-8"
+    )
+    original = Path.read_bytes
+
+    def guarded_read(path: Path):
+        if path.name == "secrets.yaml":
+            raise AssertionError("Attempted to read secrets.yaml")
+        return original(path)
+
+    monkeypatch.setattr(Path, "read_bytes", guarded_read)
+    result = discovery.discover_google_assistant(tmp_path)
+    assert "sensitive_file_reference" in result["global_blockers"]
+    assert "never-read-this" not in json.dumps(result)
+
+
+def test_unknown_expose_value_is_a_local_anomaly(tmp_path: Path) -> None:
+    (tmp_path / "configuration.yaml").write_text(
+        "google_assistant:\n"
+        "  expose_by_default: false\n"
+        "  entity_config:\n"
+        "    switch.valid:\n"
+        "      expose: true\n"
+        "    switch.invalid:\n"
+        "      expose: certainly\n",
+        encoding="utf-8",
+    )
+    result = discovery.discover_google_assistant(tmp_path)
+    assert result["cutover_status"] == "pending_review"
+    assert result["global_blockers"] == []
+    invalid = next(x for x in result["entities"] if x["entity_id"] == "switch.invalid")
+    assert invalid["yaml_exposure_intent"] == "unknown"
+    assert "invalid_expose_value" in invalid["reasons"]
+
+
+def test_unresolved_default_exposure_is_a_global_blocker(tmp_path: Path) -> None:
+    (tmp_path / "configuration.yaml").write_text(
+        "google_assistant:\n"
+        "  expose_by_default: !secret default_exposure\n"
+        "  entity_config:\n"
+        "    light.salon:\n"
+        "      expose: true\n",
+        encoding="utf-8",
+    )
+    result = discovery.discover_google_assistant(tmp_path)
+    assert "invalid_expose_by_default" in result["global_blockers"]
+    assert "default_exposure" not in json.dumps(result)
