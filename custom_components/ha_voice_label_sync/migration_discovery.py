@@ -342,7 +342,7 @@ def discover_google_assistant(config_dir: str | Path) -> dict[str, Any]:
         if expose_by_default:
             report["rules"]["rule_type"] = (
                 "domain_limited" if domains_node is not None
-                else "default_all_supported"
+                else "default_exposed_domains"
             )
             report["rules"]["implicit_exposure_may_change_with_new_entities"] = (
                 domains_node is None or bool(report["rules"]["exposed_domains"])
