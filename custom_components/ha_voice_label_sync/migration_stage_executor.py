@@ -19,7 +19,6 @@ from .migration_baseline import (
     verify_baseline,
 )
 from .migration_journal import (
-    JournalError,
     mark_label_applied,
     read_journal,
     record_label_intent,
