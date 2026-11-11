@@ -23,8 +23,8 @@ from .migration_baseline import (
     storage_directory,
 )
 
-MAX_JOURNAL_BYTES = 4 * 1024 * 1024
-MAX_OPERATIONS = 5000
+MAX_JOURNAL_BYTES = 1024 * 1024
+MAX_OPERATIONS = 2000
 _SHA = re.compile(r"^[0-9a-f]{64}$")
 _IDENTIFIER = re.compile(r"^[a-zA-Z0-9_.:-]{1,128}$")
 _ENTITY = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
@@ -65,7 +65,7 @@ def _validated(data: Any, baseline_sha: str) -> dict[str, Any]:
     if data["schema_version"] != 1 or data["baseline_manifest_sha256"] != baseline_sha:
         raise JournalError("journal_baseline_mismatch")
     _check_revision(data["revision"])
-    if data["phase"] not in _PHASES:
+    if not isinstance(data["phase"], str) or data["phase"] not in _PHASES:
         raise JournalError("journal_invalid_phase")
     operations = data["operations"]
     if not isinstance(operations, list) or len(operations) > MAX_OPERATIONS:
@@ -88,6 +88,7 @@ def _validated(data: Any, baseline_sha: str) -> dict[str, Any]:
             or type(operation["expected_before"]) is not bool
             or type(operation["expected_after"]) is not bool
             or operation["expected_before"] == operation["expected_after"]
+            or not isinstance(operation["status"], str)
             or operation["status"] not in _OP_STATES
             or op_id in identifiers
             or entity_id in entities
