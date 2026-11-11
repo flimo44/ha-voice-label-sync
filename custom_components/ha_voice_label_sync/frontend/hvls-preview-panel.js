@@ -12,7 +12,7 @@ const HVLS_TRANSLATIONS = {
     tabPreview: "Preview",
     tabBackups: "Sauvegardes",
     tabMigration: "Migration",
-    migrationIntro: "Revue de migration Google Assistant — aucune modification de HA, des labels ou du YAML.",
+    migrationIntro: "Les simulations ne modifient ni HA, ni labels, ni YAML. La sauvegarde et le journal sont créés uniquement après votre confirmation.",
     migrationAnalyze: "Actualiser la simulation (lecture seule)",
     migrationLoading: "Analyse de migration en lecture seule…",
     migrationEmpty: "Ouvrez cette section pour vérifier la configuration Google Assistant.",
@@ -37,6 +37,16 @@ const HVLS_TRANSLATIONS = {
     migrationAfter: "Après (hypothèse)",
     migrationReasons: "Motifs / état",
     migrationMore: "Afficher 100 entités supplémentaires",
+    migrationBaselinePrepare: "Examiner la sauvegarde protégée",
+    migrationBaselinePrepared: "Fichiers à protéger : {files} · Entités déclarées : {entities}. Autorisation valable 5 minutes.",
+    migrationBaselineConfirmAction: "Confirmer la sauvegarde",
+    migrationBaselineConfirm: "Créer maintenant une copie protégée des {files} fichiers YAML Google Assistant ({entities} entités déclarées) et initialiser le journal HVLS ? Aucun label, fichier de production ou réglage Google Assistant ne sera modifié.",
+    migrationBaselinePreparing: "Vérification des fichiers source en lecture seule…",
+    migrationBaselineInitializing: "Création et vérification de la sauvegarde et du journal…",
+    migrationBaselineSuccess: "Sauvegarde vérifiée. Journal : {phase} (révision {revision}). Les labels et le YAML sont inchangés.",
+    migrationBaselinePartial: "Sauvegarde vérifiée, mais journal indisponible : examen manuel requis. Aucun changement des labels ou du YAML.",
+    migrationBaselineError: "Préparation ou initialisation refusée. Revérifiez le diagnostic et les fichiers protégés.",
+    migrationBaselineWarning: "Attention : exposition implicite possible. La sauvegarde ne valide pas l’exposition Google.",
     backupIntro: "Choisissez une sauvegarde pour voir ses différences avec la production. Seul le YAML Google Assistant sera restauré, jamais les étiquettes Home Assistant.",
     backupLoading: "Chargement des sauvegardes…",
     backupEmpty: "Aucune sauvegarde disponible.",
@@ -170,7 +180,7 @@ const HVLS_TRANSLATIONS = {
     tabPreview: "Preview",
     tabBackups: "Backups",
     tabMigration: "Migration",
-    migrationIntro: "Google Assistant migration review — does not modify HA, labels or YAML.",
+    migrationIntro: "Simulation does not change HA, labels or YAML. The protected backup and journal are created only after explicit confirmation.",
     migrationAnalyze: "Refresh simulation (read-only)",
     migrationLoading: "Running read-only migration assessment…",
     migrationEmpty: "Open this section to review Google Assistant configuration.",
@@ -195,6 +205,16 @@ const HVLS_TRANSLATIONS = {
     migrationAfter: "After (hypothetical)",
     migrationReasons: "Reasons / status",
     migrationMore: "Show 100 more entities",
+    migrationBaselinePrepare: "Review protected backup",
+    migrationBaselinePrepared: "Source files: {files} · Explicit entries: {entities}. Confirmation expires in 5 minutes.",
+    migrationBaselineConfirmAction: "Confirm backup creation",
+    migrationBaselineConfirm: "Create a protected copy of {files} Google Assistant YAML files ({entities} explicit entries) and initialize the HVLS journal? No labels, production YAML or loaded Google Assistant settings will change.",
+    migrationBaselinePreparing: "Checking current source files without modifying them…",
+    migrationBaselineInitializing: "Creating and verifying protected backup and journal…",
+    migrationBaselineSuccess: "Protected backup verified. Journal: {phase} (revision {revision}). Labels and YAML unchanged.",
+    migrationBaselinePartial: "Protected backup verified, but journal unavailable: manual review required. No labels or YAML changed.",
+    migrationBaselineError: "Preparation or initialization refused. Recheck diagnostic and protected files.",
+    migrationBaselineWarning: "Warning: implicit exposure is possible. Backing up does not verify Google exposure.",
     backupIntro: "Select a backup to compare it with current production. Only the Google Assistant YAML file is restored, never Home Assistant labels.",
     backupLoading: "Loading backups…",
     backupEmpty: "No backups available.",
@@ -416,6 +436,10 @@ class HVLSPreviewPanel extends HTMLElement {
     if (migrationIntro) migrationIntro.textContent = this._t("migrationIntro");
     const migrationAnalyze = this.querySelector("#migrationAnalyze");
     if (migrationAnalyze) migrationAnalyze.textContent = this._t("migrationAnalyze");
+    const migrationPrepare = this.querySelector("#migrationPrepareBaseline");
+    if (migrationPrepare) migrationPrepare.textContent = this._t("migrationBaselinePrepare");
+    const migrationConfirm = this.querySelector("#migrationConfirmBaseline");
+    if (migrationConfirm) migrationConfirm.textContent = this._t("migrationBaselineConfirmAction");
     const migrationMore = this.querySelector("#migrationMore");
     if (migrationMore) migrationMore.textContent = this._t("migrationMore");
     const nav = this.querySelector(".hvls-tabs");
@@ -1739,6 +1763,16 @@ class HVLSPreviewPanel extends HTMLElement {
           <button id="migrationAnalyze" type="button" class="secondary">
             ${this._t("migrationAnalyze")}
           </button>
+          <div class="migration-controls">
+            <button id="migrationPrepareBaseline" type="button" class="secondary">
+              ${this._t("migrationBaselinePrepare")}
+            </button>
+            <button id="migrationConfirmBaseline" type="button" disabled hidden>
+              ${this._t("migrationBaselineConfirmAction")}
+            </button>
+          </div>
+          <p id="migrationBaselineStatus" role="status" class="diagnostic-note"></p>
+
           <p id="migrationStatus" role="status">${this._t("migrationEmpty")}</p>
           <div id="migrationSummary" class="migration-review-note"></div>
           <div id="migrationRows" class="migration-scroll"></div>
@@ -1783,6 +1817,8 @@ class HVLSPreviewPanel extends HTMLElement {
     this.querySelector("#apply").addEventListener("click", () => this._applyPreview());
     this.querySelector("#restoreBackup").addEventListener("click", () => this._restoreBackup());
     this.querySelector("#migrationAnalyze").addEventListener("click", () => this._loadMigrationReview());
+    this.querySelector("#migrationPrepareBaseline").addEventListener("click", () => this._prepareMigrationBaseline());
+    this.querySelector("#migrationConfirmBaseline").addEventListener("click", () => this._confirmMigrationBaseline());
     this.querySelector("#migrationMore").addEventListener("click", () => {
       this._migrationLimit = (this._migrationLimit || 100) + 100;
       this._renderMigrationReview();
@@ -2377,6 +2413,87 @@ class HVLSPreviewPanel extends HTMLElement {
         status.textContent = this._tf("backupRestoreFailed", {error: this._restoreError});
         this._restoreError = null;
       }
+    }
+  }
+
+  _migrationBaselineControls() {
+    const prepare = this.querySelector("#migrationPrepareBaseline");
+    const confirm = this.querySelector("#migrationConfirmBaseline");
+    if (prepare) prepare.disabled = this._baselineBusy === true;
+    if (confirm) {
+      confirm.hidden = !this._baselineChallenge;
+      confirm.disabled = this._baselineBusy === true || !this._baselineChallenge;
+    }
+  }
+
+  async _prepareMigrationBaseline() {
+    if (!this._hass || this._baselineBusy) return;
+    this._baselineBusy = true;
+    this._baselineChallenge = null;
+    this._baselinePrepared = null;
+    this._migrationBaselineControls();
+    const status = this.querySelector("#migrationBaselineStatus");
+    if (status) status.textContent = this._t("migrationBaselinePreparing");
+    try {
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/prepare_migration_baseline",
+      });
+      if (result?.status !== "awaiting_explicit_confirmation" ||
+          typeof result.confirmation_token !== "string") {
+        throw new Error("preflight_unavailable");
+      }
+      this._baselineChallenge = result.confirmation_token;
+      this._baselinePrepared = result;
+      if (status) {
+        status.textContent = this._tf("migrationBaselinePrepared", {
+          files: result.source_files, entities: result.explicit_entities,
+        }) + (result.implicit_exposure_warning
+          ? " " + this._t("migrationBaselineWarning") : "");
+      }
+    } catch (_error) {
+      if (status) status.textContent = this._t("migrationBaselineError");
+    } finally {
+      this._baselineBusy = false;
+      this._migrationBaselineControls();
+    }
+  }
+
+  async _confirmMigrationBaseline() {
+    const prepared = this._baselinePrepared;
+    const challenge = this._baselineChallenge;
+    if (!this._hass || !challenge || !prepared || this._baselineBusy) return;
+    const accepted = window.confirm(this._tf("migrationBaselineConfirm", {
+      files: prepared.source_files,
+      entities: prepared.explicit_entities,
+    }));
+    if (!accepted) return;
+    // Consume the browser copy immediately; multiple clicks cannot replay.
+    this._baselineChallenge = null;
+    this._baselinePrepared = null;
+    this._baselineBusy = true;
+    this._migrationBaselineControls();
+    const status = this.querySelector("#migrationBaselineStatus");
+    if (status) status.textContent = this._t("migrationBaselineInitializing");
+    try {
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/initialize_migration_baseline",
+        confirmation_token: challenge,
+        confirmed: true,
+      });
+      if (status) {
+        status.textContent = result.status === "baseline_and_journal_verified"
+          ? this._tf("migrationBaselineSuccess", {
+              phase: result.journal_phase,
+              revision: result.journal_revision,
+            })
+          : this._t("migrationBaselinePartial");
+      }
+      await this._loadMigrationReview();
+    } catch (_error) {
+      if (status) status.textContent = this._t("migrationBaselineError");
+    } finally {
+      this._baselineBusy = false;
+      this._migrationBaselineControls();
     }
   }
 
