@@ -265,11 +265,15 @@ def test_custom_google_metadata_preserved_but_staging_still_blocked(
 def test_unsupported_local_entity_keeps_other_preview_rows(
     tmp_path, modules
 ):
+    manual = (
+        b"light.good:\n  expose: true\n"
+        b"light.bad:\n  expose: true\n  device_type: unsupported\n"
+    )
     diag, sha = _prepare(tmp_path, modules, [
         _row("light.good"),
         _row("light.bad", before="unknown", category="needs_review",
              reasons=("unhandled_entity_option",)),
-    ])
+    ], manual=manual)
     result = _review(
         tmp_path, modules, diag, sha,
         _decisions("light.good", "light.bad"),
@@ -553,6 +557,91 @@ def test_diagnostic_duplicate_entities_fail_closed(
         _review(
             tmp_path, modules, diag, sha,
             _decisions("light.good"),
+            _registries("light.good"),
+            _facts("light.good"),
+        )
+
+
+
+def test_protected_baseline_entity_inventory_mismatch_is_global(
+    tmp_path, modules
+):
+    manual = b"light.good:\n  expose: true\nlock.excluded:\n  expose: false\n"
+    diag, sha = _prepare(
+        tmp_path, modules, [_row("light.good")], manual=manual
+    )
+    result = _review(
+        tmp_path, modules, diag, sha,
+        _decisions("light.good"),
+        _registries("light.good"),
+        _facts("light.good"),
+    )
+    assert "protected_entity_inventory_mismatch" in result["global_blockers"]
+    assert result["status"] == "global_review_blocked"
+    assert result["cutover_allowed"] is False
+
+
+def test_unselected_implicit_exposure_is_reported_as_loss(
+    tmp_path, modules
+):
+    manual = b"light.good:\n  expose: true\n"
+    diag, sha = _prepare(
+        tmp_path, modules,
+        [_row("light.good"), _row(
+            "light.implicit", intent="not_configured",
+            category="implicitly_exposed", reasons=("implicitly_exposed",),
+        )],
+        manual=manual,
+    )
+    result = _review(
+        tmp_path, modules, diag, sha,
+        _decisions("light.good"),
+        _registries("light.good", "light.implicit"),
+        _facts("light.good", "light.implicit"),
+    )
+    implicit = _by_id(result, "light.implicit")
+    assert implicit["hypothetical_after"] == "not_exposed"
+    assert "projected_exposure_would_be_lost" in implicit["reasons"]
+    assert result["status"] == "local_review_pending"
+    assert _by_id(result, "light.good")["status"] == "preview_consistent"
+
+
+def test_only_public_field_names_survive_corrupted_diagnostic(
+    tmp_path, modules
+):
+    manual = b"light.good:\n  expose: true\n"
+    diag, sha = _prepare(
+        tmp_path, modules, [_row("light.good")], manual=manual
+    )
+    diag["entities"][0]["customization_fields_present"] = [
+        "PRIVATE_NAME_DO_NOT_LEAK", "room"
+    ]
+    result = _review(
+        tmp_path, modules, diag, sha,
+        _decisions("light.good"),
+        _registries("light.good"),
+        _facts("light.good"),
+    )
+    assert "PRIVATE_NAME_DO_NOT_LEAK" not in json.dumps(result)
+    assert _by_id(result, "light.good")["metadata_fields_present"] == [
+        "room"
+    ]
+
+
+def test_malformed_nonstring_decision_identifier_fails_closed(
+    tmp_path, modules
+):
+    manual = b"light.good:\n  expose: true\n"
+    diag, sha = _prepare(
+        tmp_path, modules, [_row("light.good")], manual=manual
+    )
+    with pytest.raises(
+        modules["migration_cutover_review"].CutoverReviewError,
+        match="decision_entity_id_invalid",
+    ):
+        _review(
+            tmp_path, modules, diag, sha,
+            {12: {"action": "import"}},
             _registries("light.good"),
             _facts("light.good"),
         )
