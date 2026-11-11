@@ -2380,6 +2380,214 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  async _loadMigrationReview() {
+    if (!this._hass || this._migrationLoading) return;
+    this._migrationDecisions ||= Object.create(null);
+    this._migrationLoading = true;
+    const requestId = (this._migrationRequestId || 0) + 1;
+    this._migrationRequestId = requestId;
+    const button = this.querySelector("#migrationAnalyze");
+    const status = this.querySelector("#migrationStatus");
+    if (button) button.disabled = true;
+    if (status) status.textContent = this._t("migrationLoading");
+    try {
+      // This endpoint is admin-only and read-only. Decisions live solely in
+      // this panel's memory, never in a HA service or migration journal.
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/get_migration_review",
+        decisions: {...this._migrationDecisions},
+      });
+      if (requestId !== this._migrationRequestId) return;
+      this._migrationReport = result;
+      this._migrationError = null;
+      this._migrationDirty = false;
+      this._renderMigrationReview();
+    } catch (_error) {
+      if (requestId !== this._migrationRequestId) return;
+      // Do not display arbitrary backend exception text in the admin UI.
+      this._migrationError = "migration_review_unavailable";
+      this._migrationReport = null;
+      this._renderMigrationReview();
+    } finally {
+      if (requestId === this._migrationRequestId) {
+        this._migrationLoading = false;
+        if (button) button.disabled = false;
+      }
+    }
+  }
+
+  _setMigrationChoice(entityId, field, value) {
+    this._migrationDecisions ||= Object.create(null);
+    const current = {...(this._migrationDecisions[entityId] || {})};
+    if (field === "action" && !value) {
+      delete this._migrationDecisions[entityId];
+    } else {
+      current[field] = value;
+      this._migrationDecisions[entityId] = current;
+    }
+    this._migrationDirty = true;
+    this._renderMigrationReview();
+  }
+
+  _renderMigrationReview() {
+    const status = this.querySelector("#migrationStatus");
+    const summary = this.querySelector("#migrationSummary");
+    const content = this.querySelector("#migrationRows");
+    const more = this.querySelector("#migrationMore");
+    if (!status || !summary || !content || !more) return;
+    content.replaceChildren();
+    const report = this._migrationReport;
+    if (!report) {
+      summary.textContent = "";
+      more.hidden = true;
+      if (!this._migrationLoading) {
+        status.textContent = this._migrationError
+          ? this._tf("migrationFailed", {error: this._migrationError})
+          : this._t("migrationEmpty");
+      }
+      return;
+    }
+
+    const diag = report.diagnostic || {};
+    const plan = report.preflight || {};
+    const simulation = report.simulation;
+    const baseline = report.protected_baseline_status === "verified"
+      ? this._t("migrationBaselineOk")
+      : this._t("migrationBaselineMissing");
+    status.textContent = this._migrationDirty
+      ? this._t("migrationToRecheck")
+      : `${this._t("migrationStatus")}: ${simulation?.status || diag.review_status || "unknown"}`;
+    const total = Array.isArray(diag.entities) ? diag.entities.length : 0;
+    const needReview = plan.summary?.needs_review ?? total;
+    const stageable = plan.summary?.proposed_label_additions ?? 0;
+    summary.textContent =
+      `${this._t("migrationBaseline")}: ${baseline}. ` +
+      `${this._t("migrationDecisions")}: ${total}; ` +
+      `needs_review=${needReview}; proposed_label_additions=${stageable}. ` +
+      "apply_allowed=false; cutover_allowed=false.";
+
+    if (!Array.isArray(diag.entities)) {
+      more.hidden = true;
+      return;
+    }
+    this._migrationDecisions ||= Object.create(null);
+    const plans = new Map((plan.entities || []).map(item => [item.entity_id, item]));
+    const simulations = new Map((simulation?.entities || []).map(
+      item => [item.entity_id, item]
+    ));
+    const table = document.createElement("table");
+    table.className = "migration-table";
+    const head = document.createElement("thead");
+    const tr = document.createElement("tr");
+    for (const heading of [
+      "Entity ID", this._t("migrationBefore"), this._t("migrationAfter"),
+      this._t("migrationDecisions"), this._t("migrationReasons")
+    ]) {
+      const th = document.createElement("th");
+      th.textContent = heading;
+      tr.append(th);
+    }
+    head.append(tr);
+    table.append(head);
+    const body = document.createElement("tbody");
+    const max = Math.min(diag.entities.length, this._migrationLimit || 100);
+    for (const entity of diag.entities.slice(0, max)) {
+      const entityId = entity.entity_id;
+      const proposal = plans.get(entityId);
+      const simulated = simulations.get(entityId);
+      const choice = this._migrationDecisions[entityId] || {};
+      const row = document.createElement("tr");
+      for (const value of [
+        entityId,
+        entity.disk_ha_sync_projection || "unknown",
+        simulated?.hypothetical_after || "unknown",
+      ]) {
+        const cell = document.createElement("td");
+        cell.textContent = String(value);
+        row.append(cell);
+      }
+      const controlCell = document.createElement("td");
+      const controls = document.createElement("div");
+      controls.className = "migration-controls";
+      const action = document.createElement("select");
+      action.setAttribute("aria-label", `Migration decision: ${entityId}`);
+      for (const [value, key] of [
+        ["", "migrationNoChoice"],
+        ["import", "migrationImport"],
+        ["keep", "migrationKeep"],
+        ["disable", "migrationDisable"],
+        ["remove", "migrationRemove"],
+      ]) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = this._t(key);
+        action.append(option);
+      }
+      action.value = choice.action || "";
+      action.addEventListener("change", () => {
+        this._setMigrationChoice(entityId, "action", action.value);
+      });
+      controls.append(action);
+
+      if (entity.customization_fields_present?.length) {
+        const metadata = document.createElement("select");
+        metadata.setAttribute("aria-label", `${this._t("migrationMetadataChoice")}: ${entityId}`);
+        for (const [value, label] of [
+          ["", "migrationMetadataChoice"],
+          ["retain_manual_yaml", "migrationRetain"],
+          ["discard_after_review", "migrationDiscard"],
+        ]) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = this._t(label);
+          metadata.append(option);
+        }
+        metadata.value = choice.metadata_policy || "";
+        metadata.addEventListener("change", () => {
+          this._setMigrationChoice(entityId, "metadata_policy", metadata.value || null);
+        });
+        controls.append(metadata);
+      }
+
+      const addCheck = (key, text, enabled) => {
+        if (!enabled) return;
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = choice[key] === true;
+        input.addEventListener("change", () => {
+          this._setMigrationChoice(entityId, key, input.checked);
+        });
+        const span = document.createElement("span");
+        span.textContent = text;
+        label.append(input, span);
+        controls.append(label);
+      };
+      addCheck("acknowledge_change", this._t("migrationAcknowledge"),
+        ["disable", "remove"].includes(choice.action) ||
+        choice.metadata_policy === "discard_after_review");
+      addCheck("acknowledge_sensitive_exposure", this._t("migrationSensitive"),
+        ["lock", "cover", "alarm_control_panel"].includes(entityId.split(".")[0]) &&
+        choice.action === "import");
+
+      controlCell.append(controls);
+      row.append(controlCell);
+      const reasonsCell = document.createElement("td");
+      const reasons = [
+        ...(proposal?.reasons || []),
+        ...(simulated?.reasons || []),
+      ];
+      reasonsCell.textContent = reasons.length
+        ? [...new Set(reasons)].join(", ")
+        : proposal?.status || entity.category || "unknown";
+      row.append(reasonsCell);
+      body.append(row);
+    }
+    table.append(body);
+    content.append(table);
+    more.hidden = max >= diag.entities.length;
+  }
+
   _activateTab(tab) {
     const panels = {
       summary: "#tab-summary",
