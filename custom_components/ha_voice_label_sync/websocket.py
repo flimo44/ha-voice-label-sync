@@ -33,7 +33,6 @@ from .entity_catalog import build_entity_catalog
 from .entity_label_writer import update_entity_label
 from .ha_registries import get_live_registries
 from .label_update import LabelUpdateError, ensure_entity_eligible_for_addition
-from .migration_diagnostic import build_admin_migration_diagnostic
 from .preview_apply import apply_reviewed_preview
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_exclusions import analyze_exclusions
@@ -62,6 +61,9 @@ async def websocket_get_migration_diagnostic(
         return
 
     try:
+        # Defer import: older V1 WebSocket tests load only legacy modules.
+        from .migration_diagnostic import build_admin_migration_diagnostic
+
         report = await build_admin_migration_diagnostic(hass)
     except Exception:
         # Do not leak YAML, file paths, attributes or secret-bearing errors.
