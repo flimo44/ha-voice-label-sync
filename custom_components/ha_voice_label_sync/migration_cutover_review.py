@@ -178,7 +178,20 @@ def _compare_entities(
             "exposed" if entity_id in target else "not_exposed"
         )
         reasons = list(anomalies.get(entity_id, ()))
-        reasons.extend(overlay_by_id.get(entity_id, ()))
+        overlay_reasons = overlay_by_id.get(entity_id, ())
+        if (
+            action == "keep"
+            and item.get("yaml_exposure_intent") == "exclude"
+            and original == "not_exposed"
+            and after == "not_exposed"
+        ):
+            # Explicit expose:false is preserved by the proposed default-deny
+            # target. No exposure change or destructive removal is authorized.
+            overlay_reasons = [
+                code for code in overlay_reasons
+                if code != "manual_entry_requires_cutover_decision"
+            ]
+        reasons.extend(overlay_reasons)
         if original == "unknown":
             reasons.append("original_exposure_unknown")
         elif after == "unknown":
