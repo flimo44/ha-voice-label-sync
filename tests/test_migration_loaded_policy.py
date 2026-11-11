@@ -368,3 +368,21 @@ def test_comparison_never_writes_or_leaks_secrets(
     assert "service_account" not in text
     assert loaded == original
     assert report["cutover_allowed"] is False
+
+
+def test_invalid_new_disk_entity_remains_unknown_not_added(tmp_path: Path):
+    content = SOURCE_YAML + (
+        "    light.invalid_new:\n"
+        "      expose: invalid\n"
+    )
+    report = _compare(tmp_path, content=content)
+    assert report["status"] == "partial_unknown"
+    assert report["compared_fields_match"] is None
+    assert report["differences"] == [
+        {
+            "entity_id": "light.invalid_new",
+            "status": "unknown",
+            "changed_fields": [],
+        }
+    ]
+    assert report["summary"]["unchanged"] == 2
