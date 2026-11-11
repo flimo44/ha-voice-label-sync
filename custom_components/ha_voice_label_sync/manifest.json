@@ -1,6 +1,9 @@
 {
   "domain": "ha_voice_label_sync",
   "name": "HA Voice Label Sync",
+  "after_dependencies": [
+    "google_assistant"
+  ],
   "codeowners": [
     "@flimo44"
   ],
