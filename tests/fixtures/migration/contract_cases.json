@@ -1,0 +1,342 @@
+{
+  "schema_version": 1,
+  "notice": "These are reviewed-design expectations, not assertions against the not-yet-implemented migration analyzer. Real HA runtime semantics require independent verification.",
+  "cases": [
+    {
+      "id": "S01",
+      "title": "No prior manual configuration",
+      "files": {
+        "configuration.yaml": "homeassistant:\n  name: Demo\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "none",
+        "gate": "new_configuration",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "S02",
+      "title": "Simple include, explicit exposure and exclusion",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  project_id: example\n  expose_by_default: false\n  entity_config: !include ga_entities.yaml\n",
+        "ga_entities.yaml": "light.salon:\n  expose: true\n  name: Salon\nswitch.ancien:\n  expose: false\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "explicit_only",
+        "gate": "pending_review",
+        "diagnostics": [
+          "explicit_exclusion"
+        ],
+        "explicit_entities": 2
+      }
+    },
+    {
+      "id": "S03",
+      "title": "Inline map with custom name room and aliases",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  expose_by_default: false\n  entity_config:\n    light.bureau:\n      expose: true\n      name: Bureau pro\n      room: Bureau\n      aliases:\n        - Éclairage travail\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "explicit_only",
+        "gate": "pending_review",
+        "diagnostics": [
+          "inline_entity_config",
+          "custom_overrides"
+        ],
+        "explicit_entities": 1
+      }
+    },
+    {
+      "id": "S04",
+      "title": "Implicit default exposure when setting omitted",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  project_id: example\n  entity_config:\n    light.salon:\n      name: Salon\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "default_all_supported",
+        "gate": "pending_review",
+        "diagnostics": [
+          "implicit_default_exposure"
+        ],
+        "explicit_entities": 1
+      }
+    },
+    {
+      "id": "S05",
+      "title": "Domain-restricted implicit exposure and explicit exclusion",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  expose_by_default: true\n  exposed_domains:\n    - switch\n    - light\n  entity_config:\n    switch.portal:\n      expose: false\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "domain_limited",
+        "gate": "pending_review",
+        "diagnostics": [
+          "implicit_domain_exposure",
+          "explicit_exclusion"
+        ],
+        "explicit_entities": 1
+      }
+    },
+    {
+      "id": "S06",
+      "title": "exposed_domains ignored with default-deny",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  expose_by_default: false\n  exposed_domains:\n    - light\n  entity_config:\n    light.salon:\n      expose: true\n    light.placard:\n      expose: false\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "explicit_only",
+        "gate": "pending_review",
+        "diagnostics": [
+          "exposed_domains_inactive",
+          "explicit_exclusion"
+        ],
+        "explicit_entities": 2
+      }
+    },
+    {
+      "id": "S07",
+      "title": "Malformed YAML cannot be partially trusted",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  expose_by_default: false\n  entity_config: [broken\n"
+      },
+      "expected": {
+        "parseable": false,
+        "rule": "unknown",
+        "gate": "blocked",
+        "diagnostics": [
+          "yaml_syntax_error"
+        ]
+      }
+    },
+    {
+      "id": "S08",
+      "title": "Duplicate entity key in same YAML map",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  expose_by_default: false\n  entity_config:\n    light.salon:\n      expose: false\n    light.salon:\n      expose: true\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "explicit_only",
+        "gate": "blocked",
+        "diagnostics": [
+          "duplicate_mapping_key"
+        ]
+      }
+    },
+    {
+      "id": "S09",
+      "title": "Whole Google Assistant block included",
+      "files": {
+        "configuration.yaml": "google_assistant: !include google_assistant.yaml\n",
+        "google_assistant.yaml": "project_id: example\nexpose_by_default: false\nentity_config: !include ga_entities.yaml\n",
+        "ga_entities.yaml": "switch.ventilation:\n  expose: true\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "explicit_only",
+        "gate": "pending_review",
+        "diagnostics": [
+          "nested_include"
+        ],
+        "explicit_entities": 1
+      }
+    },
+    {
+      "id": "S10",
+      "title": "Package configuration via directory include",
+      "files": {
+        "configuration.yaml": "homeassistant:\n  packages: !include_dir_named packages\n",
+        "packages/voice.yaml": "google_assistant:\n  expose_by_default: false\n  entity_config:\n    light.bureau:\n      expose: true\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "explicit_only",
+        "gate": "pending_review",
+        "diagnostics": [
+          "package_source"
+        ],
+        "explicit_entities": 1
+      }
+    },
+    {
+      "id": "S11",
+      "title": "Missing referenced entity include",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  expose_by_default: false\n  entity_config: !include missing_entities.yaml\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "unknown",
+        "gate": "blocked",
+        "diagnostics": [
+          "include_missing"
+        ]
+      }
+    },
+    {
+      "id": "S12",
+      "title": "Include attempts to escape config root",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  expose_by_default: false\n  entity_config: !include ../outside.yaml\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "unknown",
+        "gate": "blocked",
+        "diagnostics": [
+          "include_outside_config"
+        ]
+      }
+    },
+    {
+      "id": "S13",
+      "title": "Parseable YAML with invalid localized override",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  expose_by_default: false\n  entity_config:\n    light.good:\n      expose: true\n    light.bad:\n      expose: true\n      room:\n        - unexpected\n        - list\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "explicit_only",
+        "gate": "pending_review",
+        "diagnostics": [
+          "invalid_per_entity_option"
+        ],
+        "explicit_entities": 2
+      }
+    },
+    {
+      "id": "S14",
+      "title": "Entity exists in YAML but no registry identity",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  expose_by_default: false\n  entity_config:\n    sensor.legacy_temperature:\n      expose: true\n"
+      },
+      "registry_entities": [],
+      "runtime_entities": [
+        "sensor.legacy_temperature"
+      ],
+      "expected": {
+        "parseable": true,
+        "rule": "explicit_only",
+        "gate": "pending_review",
+        "diagnostics": [
+          "entity_without_registry_entry"
+        ],
+        "explicit_entities": 1
+      }
+    },
+    {
+      "id": "S15",
+      "title": "Dynamic rules with hidden and disabled HA entities",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  expose_by_default: true\n  exposed_domains:\n    - light\n"
+      },
+      "registry_entities": [
+        {
+          "entity_id": "light.hidden",
+          "hidden_by": "user"
+        },
+        {
+          "entity_id": "light.disabled",
+          "disabled_by": "user"
+        },
+        {
+          "entity_id": "light.visible"
+        }
+      ],
+      "expected": {
+        "parseable": true,
+        "rule": "domain_limited",
+        "gate": "pending_review",
+        "diagnostics": [
+          "requires_real_ha_semantics_test"
+        ],
+        "explicit_entities": 0
+      }
+    },
+    {
+      "id": "S16",
+      "title": "Secret value appears as unresolved tag only",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  project_id: example\n  secure_devices_pin: !secret google_pin\n  service_account: !include credentials.json\n  expose_by_default: false\n  entity_config:\n    lock.front_door:\n      expose: false\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "explicit_only",
+        "gate": "pending_review",
+        "diagnostics": [
+          "secret_tag_unresolved",
+          "explicit_exclusion"
+        ],
+        "explicit_entities": 1
+      }
+    },
+    {
+      "id": "S17",
+      "title": "Ambiguous duplicate Google Assistant root keys",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  expose_by_default: false\ngoogle_assistant:\n  expose_by_default: true\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "unknown",
+        "gate": "blocked",
+        "diagnostics": [
+          "duplicate_mapping_key"
+        ]
+      }
+    },
+    {
+      "id": "S18",
+      "title": "Cloud-only Google Actions without manual YAML",
+      "files": {
+        "configuration.yaml": "cloud:\n  google_actions:\n    filter:\n      include_entities:\n        - light.salon\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "none",
+        "gate": "blocked",
+        "diagnostics": [
+          "cloud_not_manual_ga"
+        ]
+      }
+    },
+    {
+      "id": "S19",
+      "title": "Explicit true outside selected default domain",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  expose_by_default: true\n  exposed_domains:\n    - light\n  entity_config:\n    switch.ventilation:\n      expose: true\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "domain_limited",
+        "gate": "pending_review",
+        "diagnostics": [
+          "explicit_override_outside_default_domains"
+        ],
+        "explicit_entities": 1
+      }
+    },
+    {
+      "id": "S20",
+      "title": "Empty entity_config under default-deny",
+      "files": {
+        "configuration.yaml": "google_assistant:\n  expose_by_default: false\n  entity_config: {}\n"
+      },
+      "expected": {
+        "parseable": true,
+        "rule": "explicit_only",
+        "gate": "pending_review",
+        "diagnostics": [
+          "empty_entity_config"
+        ],
+        "explicit_entities": 0
+      }
+    }
+  ]
+}
