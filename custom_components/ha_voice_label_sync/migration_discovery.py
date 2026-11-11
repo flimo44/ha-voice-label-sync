@@ -44,6 +44,8 @@ def _mapping(node: Any) -> dict[str, Any]:
     for key, value in node.value:
         if not isinstance(key, ScalarNode) or key.tag.startswith("!"):
             raise DiscoveryProblem("unsupported_mapping_key")
+        if key.value == "<<":
+            raise DiscoveryProblem("unsupported_yaml_merge")
         if key.value in result:
             raise DiscoveryProblem("duplicate_mapping_key")
         result[key.value] = value
@@ -303,6 +305,8 @@ def discover_google_assistant(config_dir: str | Path) -> dict[str, Any]:
             cloud = main.get("cloud")
             if isinstance(cloud, MappingNode) and "google_actions" in _mapping(cloud):
                 block("cloud_not_manual_ga")
+            elif cloud is not None and not isinstance(cloud, MappingNode):
+                block("unresolved_cloud_configuration")
             elif not report["global_blockers"]:
                 report["mode"] = "new_configuration"
                 report["source"]["status"] = "resolved"
@@ -383,7 +387,11 @@ def discover_google_assistant(config_dir: str | Path) -> dict[str, Any]:
             entry["category"] == "explicitly_excluded"
             for entry in report["entities"]
         )
-        report["counts"]["current_exposure_unknown"] = len(report["entities"])
+        # A default-on rule may expose any number of entities absent from
+        # entity_config; no meaningful total exists without HA runtime state.
+        report["counts"]["current_exposure_unknown"] = (
+            None if expose_by_default else len(report["entities"])
+        )
 
         if not report["global_blockers"]:
             report["source"]["status"] = "resolved"
