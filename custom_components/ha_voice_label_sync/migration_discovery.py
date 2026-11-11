@@ -262,6 +262,7 @@ def discover_google_assistant(config_dir: str | Path) -> dict[str, Any]:
         "rules": {
             "expose_by_default": "unknown",
             "exposed_domains": [],
+            "exposed_domains_declared": None,
             "implicit_exposure_may_change_with_new_entities": False,
             "rule_type": "unknown",
         },
@@ -329,6 +330,9 @@ def discover_google_assistant(config_dir: str | Path) -> dict[str, Any]:
         report["rules"]["expose_by_default"] = str(expose_by_default).lower()
 
         domains_node = google_options.get("exposed_domains")
+        report["rules"]["exposed_domains_declared"] = (
+            "exposed_domains" in google_options
+        )
         if domains_node is not None:
             if not isinstance(domains_node, SequenceNode) or any(
                 not isinstance(entry, ScalarNode) or entry.tag.startswith("!")
