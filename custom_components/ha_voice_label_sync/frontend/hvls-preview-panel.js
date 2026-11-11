@@ -2401,17 +2401,16 @@ class HVLSPreviewPanel extends HTMLElement {
       this._migrationReport = result;
       this._migrationError = null;
       this._migrationDirty = false;
-      this._renderMigrationReview();
     } catch (_error) {
       if (requestId !== this._migrationRequestId) return;
       // Do not display arbitrary backend exception text in the admin UI.
       this._migrationError = "migration_review_unavailable";
       this._migrationReport = null;
-      this._renderMigrationReview();
     } finally {
       if (requestId === this._migrationRequestId) {
         this._migrationLoading = false;
         if (button) button.disabled = false;
+        this._renderMigrationReview();
       }
     }
   }
