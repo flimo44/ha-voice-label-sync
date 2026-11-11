@@ -30,7 +30,7 @@ VALID_RULES = {
     "none",
     "explicit_only",
     "domain_limited",
-    "default_all_supported",
+    "default_exposed_domains",
     "unknown",
 }
 
