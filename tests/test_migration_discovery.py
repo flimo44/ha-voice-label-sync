@@ -42,7 +42,7 @@ def prepare_case(tmp_path: Path, case_id: str) -> Path:
     [
         ("S02", "explicit_only", 2),
         ("S03", "explicit_only", 1),
-        ("S04", "default_all_supported", 1),
+        ("S04", "default_exposed_domains", 1),
         ("S05", "domain_limited", 1),
         ("S06", "explicit_only", 2),
         ("S09", "explicit_only", 1),
@@ -313,7 +313,7 @@ def test_implicit_default_does_not_claim_a_complete_entity_count(
 ) -> None:
     prepare_case(tmp_path, "S04")
     report = discovery.discover_google_assistant(tmp_path)
-    assert report["rules"]["rule_type"] == "default_all_supported"
+    assert report["rules"]["rule_type"] == "default_exposed_domains"
     assert report["counts"]["current_exposure_unknown"] is None
 
 
