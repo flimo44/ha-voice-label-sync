@@ -409,3 +409,53 @@ def test_metadata_evidence_corrupted_blocks_operation(planner):
     )
     assert result["label_additions_proposed"] == []
     assert "metadata_evidence_invalid" in by_id(result)["light.bad"]["reasons"]
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        {"action": ["import"]},
+        {"action": "import", "metadata_policy": []},
+        {"action": "import", "acknowledge_change": "yes"},
+        {"action": "import", "unrecognized_option": "secret"},
+    ],
+)
+def test_malformed_decision_is_local_not_global(planner, invalid):
+    good, bad = "light.good", "light.bad"
+    result = plan(
+        planner,
+        report(row(good), row(bad)),
+        {good: {"action": "import"}, bad: invalid},
+        facts(good, bad),
+    )
+    assert [op["entity_id"] for op in result["label_additions_proposed"]] == [
+        good
+    ]
+    assert "decision_invalid" in by_id(result)[bad]["reasons"]
+
+
+def test_unknown_local_reason_never_becomes_stageable(planner):
+    good, bad = "light.good", "light.bad"
+    result = plan(
+        planner,
+        report(row(good), row(bad, reasons=["unrecognized_runtime_problem"])),
+        selections(good, bad),
+        facts(good, bad),
+    )
+    assert [op["entity_id"] for op in result["label_additions_proposed"]] == [
+        good
+    ]
+    assert "local_entity_anomaly" in by_id(result)[bad]["reasons"]
+
+
+def test_invalid_metadata_evidence_is_local(planner):
+    good, bad = "light.good", "light.bad"
+    result = plan(
+        planner,
+        report(row(good), row(bad, metadata=[{"invalid": "shape"}])),
+        selections(good, bad),
+        facts(good, bad),
+    )
+    assert len(result["label_additions_proposed"]) == 1
+    assert result["label_additions_proposed"][0]["entity_id"] == good
+    assert "metadata_evidence_invalid" in by_id(result)[bad]["reasons"]
