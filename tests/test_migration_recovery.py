@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -153,6 +154,8 @@ def test_symlink_source_and_storage_refused(tmp_path, modules):
 
     original.unlink()
     (tmp_path / "good.yaml").rename(original)
+    # First rejected capture created the empty private storage directory.
+    shutil.rmtree(tmp_path / ".storage")
     (tmp_path / ".storage").symlink_to(tmp_path / "good.yaml")
     with pytest.raises(
         modules["migration_baseline"].BaselineError, match="ha_storage_unavailable"
