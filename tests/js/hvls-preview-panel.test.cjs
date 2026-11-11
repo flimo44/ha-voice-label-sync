@@ -1013,7 +1013,7 @@ test("Migration tab exposes a review-only action and no cutover button", () => {
   assert.match(source, /data-tab="migration"/);
   assert.match(source, /id="tab-migration"/);
   assert.match(source, /id="migrationAnalyze"/);
-  assert.match(source, /ha_voice_label_sync\\/get_migration_review/);
+  assert.ok(source.includes("ha_voice_label_sync/get_migration_review"));
   const tabStart = source.indexOf('<section id="tab-migration"');
   const tabEnd = source.indexOf('<section id="tab-backups"', tabStart);
   assert.ok(tabStart >= 0 && tabEnd > tabStart);
