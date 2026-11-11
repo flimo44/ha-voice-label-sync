@@ -262,7 +262,7 @@ def build_reviewed_stage_plan(
             if entity_id in mismatched:
                 flags.append("loaded_policy_entity_mismatch")
             if row.get("category") not in {
-                "candidate_for_review", "needs_review", "implicitly_exposed"
+                "candidate_for_review", "implicitly_exposed"
             }:
                 flags.append("diagnostic_category_not_eligible")
             if _safe_codes(row.get("reasons", [])) and any(
