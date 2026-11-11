@@ -126,9 +126,9 @@ def _global_reasons(diagnostic: Mapping[str, Any]) -> list[str]:
         reasons.append("source_not_resolved")
     if diagnostic.get("global_blockers"):
         reasons.append("source_global_blockers")
-    if not isinstance(runtime, Mapping) or runtime.get("status") not in {
+    if not isinstance(runtime, Mapping) or runtime.get("status") not in (
         "complete", "partial"
-    }:
+    ):
         reasons.append("ha_runtime_unavailable")
     if (
         not isinstance(projection, Mapping)
@@ -137,8 +137,10 @@ def _global_reasons(diagnostic: Mapping[str, Any]) -> list[str]:
         or projection.get("active_runtime_policy_certified") is not False
     ):
         reasons.append("projection_not_trustworthy")
-    if not isinstance(loaded, Mapping) or loaded.get("status") not in (
-        _COMPARISON_STATES
+    if (
+        not isinstance(loaded, Mapping)
+        or not isinstance(loaded.get("status"), str)
+        or loaded["status"] not in _COMPARISON_STATES
     ):
         reasons.append("loaded_policy_unavailable")
     elif loaded.get("rule_changes"):
@@ -165,8 +167,11 @@ def _decision_data(value: Any) -> tuple[str | None, str | None, bool, bool]:
     ack = value.get("acknowledge_change", False)
     sensitive = value.get("acknowledge_sensitive_exposure", False)
     if (
-        action not in _ACTIONS
-        or (metadata is not None and metadata not in _METADATA)
+        not isinstance(action, str)
+        or action not in _ACTIONS
+        or (metadata is not None and (
+            not isinstance(metadata, str) or metadata not in _METADATA
+        ))
         or type(ack) is not bool
         or type(sensitive) is not bool
     ):
@@ -229,7 +234,11 @@ def build_reviewed_stage_plan(
         custom_fields = row.get("customization_fields_present")
         if (
             not isinstance(custom_fields, list)
-            or any(field not in {"name", "room", "aliases"} for field in custom_fields)
+            or any(
+                not isinstance(field, str)
+                or field not in {"name", "room", "aliases"}
+                for field in custom_fields
+            )
         ):
             custom_fields = []
             flags.append("metadata_evidence_invalid")
@@ -261,19 +270,16 @@ def build_reviewed_stage_plan(
                 flags.append("currently_exposed_state_not_proven")
             if entity_id in mismatched:
                 flags.append("loaded_policy_entity_mismatch")
-            if row.get("category") not in {
+            if row.get("category") not in (
                 "candidate_for_review", "implicitly_exposed"
-            }:
+            ):
                 flags.append("diagnostic_category_not_eligible")
-            if _safe_codes(row.get("reasons", [])) and any(
-                code in {
-                    "invalid_entity_options", "invalid_expose_value",
-                    "invalid_name_option", "invalid_room_option",
-                    "invalid_aliases_option", "unhandled_entity_option",
-                    "source_entity_requires_validation", "no_active_state",
-                    "google_traits_not_verified", "google_traits_unsupported",
-                    "disabled_in_registry", "entity_without_registry_entry",
-                }
+            safe_reasons = {
+                "explicitly_exposed", "implicitly_exposed",
+                "registry_and_runtime_not_yet_checked",
+            }
+            if any(
+                code not in safe_reasons
                 for code in _safe_codes(row.get("reasons", []))
             ):
                 flags.append("local_entity_anomaly")
