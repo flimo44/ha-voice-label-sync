@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from yaml.nodes import MappingNode, ScalarNode, SequenceNode
+from yaml.nodes import ScalarNode, SequenceNode
 
 from .migration_baseline import (
     _regular_file,
