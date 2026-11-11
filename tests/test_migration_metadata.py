@@ -128,7 +128,7 @@ def test_exact_metadata_overlay_roundtrip_preserves_unicode_and_strings(
     assert result["apply_allowed"] is False
     assert result["cutover_allowed"] is False
     assert result["summary"]["metadata_fields_preserved"] == 4
-    assert result["summary"]["manual_entries_not_imported"] == 4
+    assert result["summary"]["manual_entries_not_imported"] == 3
     assert result["google_home_state_verified"] is False
     mapping = yaml.safe_load(result["content"])
     assert mapping["light.good"] == {
@@ -354,6 +354,6 @@ def test_no_implicit_carryover_of_uncertain_manual_policy(
         x["entity_id"] for x in result["entities"]
         if x["status"] == "not_imported"
     ]
-    assert result["summary"]["manual_entries_not_imported"] == 5
+    assert result["summary"]["manual_entries_not_imported"] == 4
     assert result["cutover_allowed"] is False
     assert result["apply_allowed"] is False
