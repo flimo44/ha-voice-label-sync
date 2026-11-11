@@ -46,8 +46,9 @@ The helper:
    its metadata-related staging blocks.
 4. Verifies every current original YAML file still matches the protected
    baseline and validates the supplied manifest SHA.
-5. Reconstructs original metadata from the protected source and applies
-   PR #114's internal **private** preview overlay.
+5. Reconstructs original metadata from the protected source, verifies
+   that the set of explicit manual entries is identical to the diagnostic
+   source inventory, and applies PR #114's internal **private** overlay.
 6. Compares *all* diagnostic entities' disk-projected
    `exposed/not_exposed/unknown` before status with whether they appear in
    the hypothetical default-deny target YAML.
