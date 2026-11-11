@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -23,16 +24,8 @@ from .migration_metadata import (
 from .migration_stage_executor import MigrationStageError, verify_current_sources
 from .migration_stage_plan import StagePlanError, build_reviewed_stage_plan
 
-_ALLOWED_DOMAINS = frozenset({
-    "light", "switch", "lock", "cover", "climate", "fan",
-    "scene", "script", "media_player", "vacuum", "sensor",
-    "binary_sensor", "input_boolean", "input_number", "button",
-})
+_DOMAIN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _ALLOWED_EXPOSURE = frozenset({"exposed", "not_exposed", "unknown"})
-_LOCAL_STAGE_BLOCKERS = frozenset({
-    "metadata_preservation_not_yet_implemented",
-    "metadata_decision_required",
-})
 
 
 class CutoverReviewError(ValueError):
@@ -61,7 +54,11 @@ def _simulate_candidate(
     if (
         not isinstance(domains, frozenset)
         or not domains
-        or any(domain not in _ALLOWED_DOMAINS for domain in domains)
+        or len(domains) > 32
+        or any(
+            not isinstance(domain, str) or not _DOMAIN.fullmatch(domain)
+            for domain in domains
+        )
         or not isinstance(configured_label, str)
         or not configured_label
     ):
@@ -283,11 +280,6 @@ def build_readonly_migration_review(
         reasons.append("candidate_yaml_not_complete")
     elif overlay["summary"]["unreviewed_generated_entities"]:
         reasons.append("unapproved_generated_exposure")
-    if anomalies:
-        # Native snapshot drift remains local; never silently coerce.
-        # Rows below list the affected entities.
-        pass
-
     rows = _compare_entities(diagnostic, decisions, stage_plan, overlay, anomalies)
     if not rows:
         reasons.append("empty_exposure_inventory")
