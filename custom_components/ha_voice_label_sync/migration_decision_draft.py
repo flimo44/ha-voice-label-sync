@@ -24,9 +24,10 @@ from .migration_baseline import (
     migration_lock,
     storage_directory,
 )
+from .migration_discovery import discover_google_assistant
 from .migration_journal import JournalError, _read as _read_journal
 from .migration_stage_executor import MigrationStageError, verify_current_sources
-from .migration_stage_plan import _decision_data, _valid_entity_id
+from .migration_stage_plan import _decision_data, _source_token, _valid_entity_id
 
 _FILE = "review-draft.json"
 _MAX_BYTES = 1024 * 1024
@@ -153,7 +154,8 @@ def _atomic_commit(storage: Path, content: bytes) -> None:
 
 def _public_status(
     draft: dict[str, Any] | None, journal: dict[str, Any],
-    baseline_sha: str, *, include_decisions: bool
+    baseline_sha: str, *, include_decisions: bool,
+    source_stale: bool = False,
 ) -> dict[str, Any]:
     stale = draft is not None and (
         draft["journal_revision_at_review"] != journal["revision"]
@@ -162,6 +164,7 @@ def _public_status(
     status = (
         "not_saved" if draft is None
         else "stale_journal" if stale
+        else "stale_source" if source_stale
         else "saved_unapproved_draft"
     )
     result = {
@@ -195,8 +198,22 @@ def load_review_draft(config_dir: str | Path) -> dict[str, Any]:
         journal = _read_journal(storage)
         baseline_sha = journal["baseline_manifest_sha256"]
         draft = _verified_draft(storage, baseline_sha)
+        source_stale = False
+        if draft is not None:
+            try:
+                discovery = discover_google_assistant(config_dir)
+                source_stale = (
+                    discovery.get("mode") != "assisted_migration"
+                    or discovery.get("source", {}).get("status") != "resolved"
+                    or bool(discovery.get("global_blockers"))
+                    or _source_token(discovery)
+                    != draft["source_evidence_sha256"]
+                )
+            except (OSError, ValueError, TypeError):
+                source_stale = True
         return _public_status(
-            draft, journal, baseline_sha, include_decisions=True
+            draft, journal, baseline_sha, include_decisions=True,
+            source_stale=source_stale,
         )
     except (BaselineError, JournalError, OSError, ValueError) as exc:
         if isinstance(exc, DecisionDraftError):
