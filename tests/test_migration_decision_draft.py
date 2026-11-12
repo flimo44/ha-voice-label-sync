@@ -430,3 +430,36 @@ def test_admin_only_websocket_actions_do_not_call_mutation_apis():
         and n.name == "async_register_websocket_api"
     )
     assert "websocket_save_migration_decision_draft" in ast.unparse(register)
+
+
+
+def test_recovered_draft_marks_original_source_change_stale(
+    tmp_path, modules
+):
+    info = _setup(tmp_path, modules)
+    _save(tmp_path, modules, info)
+    (tmp_path / "ga_entities.yaml").write_bytes(
+        ENTITIES + b"\n# post-review source edit\n"
+    )
+    recovered = modules["migration_decision_draft"].load_review_draft(
+        tmp_path
+    )
+    assert recovered["status"] == "stale_source"
+    assert recovered["decisions"]["light.safe"]["action"] == "import"
+    assert recovered["apply_allowed"] is False
+    assert recovered["cutover_allowed"] is False
+
+
+def test_saved_draft_refuses_unexpected_extra_fields_after_restart(
+    tmp_path, modules
+):
+    info = _setup(tmp_path, modules)
+    _save(tmp_path, modules, info)
+    original = json.loads(_raw(tmp_path).read_text())
+    original["cutover_allowed"] = True
+    _raw(tmp_path).write_text(json.dumps(original))
+    with pytest.raises(
+        modules["migration_decision_draft"].DecisionDraftError,
+        match="draft_invalid_document",
+    ):
+        modules["migration_decision_draft"].load_review_draft(tmp_path)
