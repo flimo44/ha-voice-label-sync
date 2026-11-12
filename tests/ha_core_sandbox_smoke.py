@@ -26,7 +26,7 @@ from homeassistant.components.google_assistant.const import (
     CONF_EXPOSED_DOMAINS,
 )
 from homeassistant.components.google_assistant.http import GoogleConfig
-from homeassistant.config_entries import SOURCE_IMPORT
+from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntries
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
@@ -76,6 +76,9 @@ async def exercise_ha_core_native_contract() -> dict[str, Any]:
         config = base / "configuration.yaml"
         config.write_bytes(GOOGLE_SOURCE)
         hass = HomeAssistant(str(base))
+        # Native entity-registry loading requires config entries initialized.
+        hass.config_entries = ConfigEntries(hass, {})
+        await hass.config_entries.async_initialize()
         # Core requires the device registry to be initialized before
         # loading the entity registry. Match its real bootstrap order.
         await lr.async_load(hass, load_empty=True)
