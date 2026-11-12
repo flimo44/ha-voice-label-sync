@@ -1916,7 +1916,9 @@ test("Recovery intent matching desired label remains a non-authorizing simulatio
       resolution_scenarios: {
         status: "investigation_required", read_only: true,
         automatic_recovery_allowed: false, journal_ack_allowed: false,
-        retry_allowed: false, rollback_allowed: false, cutover_allowed: false,
+        retry_allowed: false, rollback_allowed: false,
+        stage_allowed: false, apply_allowed: false, cutover_allowed: false,
+        evidence_is_not_execution_authorization: true,
         summary: {
           unconfirmed: 1, requires_investigation: 1, quarantined: 0,
         },
