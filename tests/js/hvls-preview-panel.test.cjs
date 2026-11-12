@@ -1991,3 +1991,183 @@ test("Untrusted recovery scenario claiming authorization is not rendered", async
   assert.match(controls.migrationRecoveryStatus.textContent,
     /Examen manuel requis/);
 });
+
+
+function recoverySimulationFixture() {
+  return {
+    status: "review_required", read_only: true,
+    automatic_recovery_allowed: false, stage_allowed: false,
+    apply_allowed: false, cutover_allowed: false,
+    needs_review: true, phase: "labels_staging", journal_revision: 2,
+    journal_evidence_sha256: "f".repeat(64),
+    source_integrity: "verified_unchanged",
+    summary: {total: 1, unconfirmed: 1, other_issues: 0},
+    operations: [{
+      entity_id: "light.sandbox", operation_status: "intent",
+      observed_status: "unconfirmed_intent", membership: "present",
+      needs_review: true,
+    }],
+    resolution_scenarios: {
+      status: "investigation_required",
+      read_only: true, automatic_recovery_allowed: false,
+      journal_ack_allowed: false, retry_allowed: false,
+      rollback_allowed: false, stage_allowed: false,
+      apply_allowed: false, cutover_allowed: false,
+      evidence_is_not_execution_authorization: true,
+      summary: {unconfirmed: 1, requires_investigation: 1, quarantined: 0},
+      operations: [{
+        entity_id: "light.sandbox", category: "investigation",
+        scenario: "intent_desired_membership_observed",
+        human_investigation_required: true,
+        resolution_authorized: false,
+        reason_codes: ["journal_intent_still_unconfirmed"],
+      }],
+    },
+  };
+}
+
+test("Recovery simulation runs two admin-only steps without mutation requests", async () => {
+  const calls = [];
+  const {panel} = makePanel(async req => {
+    calls.push(req);
+    if (req.type === "ha_voice_label_sync/prepare_migration_recovery_decision") {
+      assert.equal(req.entity_id, "light.sandbox");
+      assert.equal(req.disposition, "inspect_external_effects");
+      return {
+        status: "awaiting_simulated_human_confirmation",
+        entity_id: req.entity_id, disposition: req.disposition,
+        confirmation_token: "single_use_challenge",
+        read_only: true, execution_authorized: false,
+        stage_allowed: false, cutover_allowed: false,
+      };
+    }
+    assert.equal(req.type,
+      "ha_voice_label_sync/confirm_migration_recovery_decision");
+    assert.equal(req.confirmation_token, "single_use_challenge");
+    assert.equal(req.confirmed, true);
+    assert.equal(req.acknowledge_external_uncertainty, true);
+    return {
+      status: "simulated_review_confirmation_no_execution",
+      entity_id: req.entity_id, read_only: true,
+      no_action_was_performed: true, execution_authorized: false,
+      journal_ack_allowed: false, retry_allowed: false,
+      rollback_allowed: false, stage_allowed: false,
+      apply_allowed: false, cutover_allowed: false,
+    };
+  });
+  const controls = {
+    migrationRecoveryStatus: {textContent: ""},
+    migrationRecoveryDecisionStatus: {textContent: ""},
+    migrationRecoveryRows: {
+      children: [], replaceChildren() {this.children = [];},
+      append(node) {this.children.push(node);},
+    },
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationRecoveryReport = recoverySimulationFixture();
+  panel._renderMigrationRecovery();
+  const first = controls.migrationRecoveryRows.children[0];
+  assert.equal(first.children.length, 2);
+  assert.equal(first.children[0].tag, "select");
+  assert.equal(first.children[1].tag, "button");
+  assert.equal(first.children[0].value, "inspect_external_effects");
+  assert.equal(typeof first.children[1].on_click, "function");
+  await panel._simulateRecoveryDecision(
+    "light.sandbox", "inspect_external_effects"
+  );
+  assert.deepEqual(calls.map(x => x.type), [
+    "ha_voice_label_sync/prepare_migration_recovery_decision",
+    "ha_voice_label_sync/confirm_migration_recovery_decision",
+  ]);
+  assert.match(controls.migrationRecoveryDecisionStatus.textContent,
+    /Simulation confirmée/);
+  assert.match(controls.migrationRecoveryDecisionStatus.textContent,
+    /Aucun journal, label ou YAML modifié/);
+  assert.ok(!calls.some(c => /apply|stage|rollback|retry/.test(c.type)));
+});
+
+test("Canceled recovery simulation sends preparation only", async () => {
+  const calls = [];
+  const {panel} = makePanel(async req => {
+    calls.push(req.type);
+    return {
+      status: "awaiting_simulated_human_confirmation",
+      entity_id: "light.sandbox",
+      disposition: "defer_until_further_evidence",
+      confirmation_token: "unused",
+      read_only: true, execution_authorized: false,
+      stage_allowed: false, cutover_allowed: false,
+    };
+  }, () => false);
+  const controls = {
+    migrationRecoveryStatus: {textContent: ""},
+    migrationRecoveryDecisionStatus: {textContent: ""},
+    migrationRecoveryRows: {
+      replaceChildren() {}, append() {},
+    },
+  };
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  panel._migrationRecoveryReport = recoverySimulationFixture();
+  await panel._simulateRecoveryDecision(
+    "light.sandbox", "defer_until_further_evidence"
+  );
+  assert.deepEqual(calls, [
+    "ha_voice_label_sync/prepare_migration_recovery_decision"
+  ]);
+  assert.match(controls.migrationRecoveryDecisionStatus.textContent,
+    /Simulation annulée/);
+});
+
+test("Unsafe recovery evidence hides simulation buttons", () => {
+  const {panel} = makePanel(async () => ({}));
+  const controls = {
+    migrationRecoveryStatus: {textContent: ""},
+    migrationRecoveryRows: {
+      children: [], replaceChildren() {this.children = [];},
+      append(node) {this.children.push(node);},
+    },
+  };
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  const report = recoverySimulationFixture();
+  report.source_integrity = "changed_or_unavailable";
+  panel._migrationRecoveryReport = report;
+  panel._renderMigrationRecovery();
+  assert.equal(controls.migrationRecoveryRows.children[0].children.length, 0);
+  report.source_integrity = "verified_unchanged";
+  report.resolution_scenarios.operations[0].resolution_authorized = true;
+  panel._renderMigrationRecovery();
+  assert.equal(controls.migrationRecoveryRows.children[0].children.length, 0);
+});
+
+test("Forged recovery confirmation claiming writes is refused in UI", async () => {
+  const {panel} = makePanel(async req => {
+    if (req.type.includes("prepare")) return {
+      status: "awaiting_simulated_human_confirmation",
+      entity_id: "light.sandbox",
+      disposition: "inspect_external_effects",
+      confirmation_token: "challenge",
+      read_only: true, execution_authorized: false,
+      stage_allowed: false, cutover_allowed: false,
+    };
+    return {
+      status: "simulated_review_confirmation_no_execution",
+      entity_id: "light.sandbox", read_only: true,
+      no_action_was_performed: true, execution_authorized: true,
+      journal_ack_allowed: true, retry_allowed: true,
+      rollback_allowed: true, stage_allowed: true,
+      apply_allowed: true, cutover_allowed: true,
+    };
+  });
+  const controls = {
+    migrationRecoveryStatus: {textContent: ""},
+    migrationRecoveryDecisionStatus: {textContent: ""},
+    migrationRecoveryRows: {replaceChildren() {}, append() {}},
+  };
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  panel._migrationRecoveryReport = recoverySimulationFixture();
+  await panel._simulateRecoveryDecision(
+    "light.sandbox", "inspect_external_effects"
+  );
+  assert.match(controls.migrationRecoveryDecisionStatus.textContent,
+    /Simulation refusée/);
+});
