@@ -79,6 +79,7 @@ async def exercise_ha_core_native_contract() -> dict[str, Any]:
         # Core requires the device registry to be initialized before
         # loading the entity registry. Match its real bootstrap order.
         await lr.async_load(hass, load_empty=True)
+        dr.async_setup(hass)
         await dr.async_load(hass, load_empty=True)
         await er.async_load(hass, load_empty=True)
 
