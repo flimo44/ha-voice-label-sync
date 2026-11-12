@@ -79,6 +79,16 @@ const HVLS_TRANSLATIONS = {
     migrationRecoverySummary: "Phase : {phase} · Révision : {revision} · Opérations : {total} · Intentions non acquittées : {pending} · Autres anomalies : {issues} · Sources YAML : {sources}.",
     migrationRecoveryRow: "{entity} · journal : {journal} · registre : {observed} · label : {membership} · revue : {review}",
     migrationRecoverySafeView: "Observation instantanée uniquement ; aucun droit de staging ni de bascule.",
+    migrationRecoverySimulationTitle: "Validation humaine simulée (sans écriture)",
+    migrationRecoverySimulationAction: "Tester ma décision",
+    migrationRecoverySimulationInspect: "Enquêter sur les effets externes",
+    migrationRecoverySimulationQuarantine: "Isoler cette entité pour examen",
+    migrationRecoverySimulationDefer: "Reporter jusqu’à de nouvelles preuves",
+    migrationRecoverySimulationPreparing: "Nouvelle vérification du journal, du YAML et des labels…",
+    migrationRecoverySimulationConfirm: "SIMULATION UNIQUEMENT. Confirmer la décision « {disposition} » pour {entity} ? Les effets externes et Google Home restent inconnus. Cette confirmation n’est pas sauvegardée et ne réalise aucune correction.",
+    migrationRecoverySimulationComplete: "Simulation confirmée pour {entity} : preuves revérifiées, jeton consommé. Aucun journal, label ou YAML modifié ; aucune autorisation d’exécution.",
+    migrationRecoverySimulationDeclined: "Simulation annulée. Aucune action effectuée.",
+    migrationRecoverySimulationRefused: "Simulation refusée : preuves périmées, incertaines ou confirmation invalide. Actualisez le diagnostic avant une nouvelle tentative.",
     migrationResolutionSummary: "Scénarios d’enquête (simulation seulement) : {pending} intentions non acquittées, {investigate} à examiner, {quarantine} cas à isoler. Aucune décision n’a été appliquée.",
     migrationResolutionLine: "Hypothèse : {scenario} · catégorie : {category} · vérifications : {reasons}.",
     migrationScenario_intent_desired_membership_observed: "état voulu observé, intention NON acquittée",
@@ -291,6 +301,16 @@ const HVLS_TRANSLATIONS = {
     migrationRecoverySummary: "Phase: {phase} · Revision: {revision} · Operations: {total} · Unacknowledged intents: {pending} · Other issues: {issues} · Source YAML: {sources}.",
     migrationRecoveryRow: "{entity} · journal: {journal} · registry: {observed} · label: {membership} · review: {review}",
     migrationRecoverySafeView: "Snapshot only; no staging or cutover permission.",
+    migrationRecoverySimulationTitle: "Simulated human confirmation (no writes)",
+    migrationRecoverySimulationAction: "Test my decision",
+    migrationRecoverySimulationInspect: "Investigate external effects",
+    migrationRecoverySimulationQuarantine: "Quarantine this entity for investigation",
+    migrationRecoverySimulationDefer: "Defer until further evidence",
+    migrationRecoverySimulationPreparing: "Rechecking journal, YAML and native labels…",
+    migrationRecoverySimulationConfirm: "SIMULATION ONLY. Confirm the « {disposition} » choice for {entity}? External effects and Google Home remain unknown. This confirmation is not saved and cannot fix anything.",
+    migrationRecoverySimulationComplete: "Simulation confirmed for {entity}: fresh evidence rechecked, challenge consumed. No journal, label or YAML changed; no execution permission.",
+    migrationRecoverySimulationDeclined: "Simulation canceled. No action performed.",
+    migrationRecoverySimulationRefused: "Simulation refused: changed/uncertain evidence or invalid confirmation. Refresh the recovery report before trying again.",
     migrationResolutionSummary: "Investigation scenarios (simulation only): {pending} unacknowledged intents, {investigate} require inspection, {quarantine} quarantined. No decision has been applied.",
     migrationResolutionLine: "Hypothesis: {scenario} · category: {category} · checks: {reasons}.",
     migrationScenario_intent_desired_membership_observed: "desired membership observed, intent NOT acknowledged",
@@ -1897,6 +1917,7 @@ class HVLSPreviewPanel extends HTMLElement {
           </button>
           <p id="migrationRecoveryStatus" role="status" class="diagnostic-note"></p>
           <div id="migrationRecoveryRows" class="migration-scroll"></div>
+          <p id="migrationRecoveryDecisionStatus" role="status" class="diagnostic-note"></p>
 
           <p id="migrationStatus" role="status">${this._t("migrationEmpty")}</p>
           <div id="migrationSummary" class="migration-review-note"></div>
@@ -2704,7 +2725,115 @@ class HVLSPreviewPanel extends HTMLElement {
           reasons: (hypothesis.reason_codes || []).join(", ") || "—",
         });
       }
+      // A review simulation is offered ONLY for a fresh-looking, intact
+      // source and a uniquely diagnosed unresolved case. It cannot write.
+      if (scenariosSafe && result.read_only === true &&
+          result.automatic_recovery_allowed === false &&
+          result.stage_allowed === false &&
+          result.apply_allowed === false &&
+          result.cutover_allowed === false &&
+          result.source_integrity === "verified_unchanged" &&
+          result.phase === "labels_staging" &&
+          /^[0-9a-f]{64}$/.test(result.journal_evidence_sha256 || "") &&
+          row.needs_review === true &&
+          hypothesis?.human_investigation_required === true &&
+          hypothesis?.resolution_authorized === false) {
+        const choice = document.createElement("select");
+        choice.setAttribute("aria-label",
+          this._t("migrationRecoverySimulationTitle"));
+        const available = [
+          ["inspect_external_effects", "migrationRecoverySimulationInspect"],
+          ["quarantine_for_investigation", "migrationRecoverySimulationQuarantine"],
+          ["defer_until_further_evidence", "migrationRecoverySimulationDefer"],
+        ];
+        for (const [value, key] of available) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = this._t(key);
+          choice.append(option);
+        }
+        choice.value = hypothesis.category === "quarantine"
+          ? "quarantine_for_investigation" : "inspect_external_effects";
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "secondary";
+        button.textContent = this._t("migrationRecoverySimulationAction");
+        button.disabled = this._recoverySimulationBusy === true;
+        button.addEventListener("click", () => {
+          this._simulateRecoveryDecision(row.entity_id, choice.value);
+        });
+        line.append(choice, button);
+      }
       container.append(line);
+    }
+  }
+
+  async _simulateRecoveryDecision(entityId, disposition) {
+    if (!this._hass || this._recoverySimulationBusy) return;
+    this._recoverySimulationBusy = true;
+    const status = this.querySelector("#migrationRecoveryDecisionStatus");
+    if (status) status.textContent = this._t("migrationRecoverySimulationPreparing");
+    // Remove clickable controls while awaiting a fresh server preparation.
+    this._renderMigrationRecovery();
+    try {
+      const prepared = await this._hass.callWS({
+        type: "ha_voice_label_sync/prepare_migration_recovery_decision",
+        entity_id: entityId, disposition,
+      });
+      if (prepared?.status !== "awaiting_simulated_human_confirmation" ||
+          prepared.entity_id !== entityId ||
+          prepared.disposition !== disposition ||
+          typeof prepared.confirmation_token !== "string" ||
+          prepared.read_only !== true ||
+          prepared.execution_authorized !== false ||
+          prepared.stage_allowed !== false ||
+          prepared.cutover_allowed !== false) {
+        throw new Error("invalid_simulation_prepare");
+      }
+      const confirmed = window.confirm(this._tf(
+        "migrationRecoverySimulationConfirm", {
+          entity: entityId,
+          disposition: this._t({
+            inspect_external_effects: "migrationRecoverySimulationInspect",
+            quarantine_for_investigation: "migrationRecoverySimulationQuarantine",
+            defer_until_further_evidence: "migrationRecoverySimulationDefer",
+          }[disposition]),
+        }
+      ));
+      if (!confirmed) {
+        if (status) status.textContent =
+          this._t("migrationRecoverySimulationDeclined");
+        return;
+      }
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/confirm_migration_recovery_decision",
+        entity_id: entityId, disposition,
+        confirmation_token: prepared.confirmation_token,
+        confirmed: true,
+        acknowledge_external_uncertainty: true,
+      });
+      if (result?.status !== "simulated_review_confirmation_no_execution" ||
+          result.entity_id !== entityId ||
+          result.read_only !== true ||
+          result.no_action_was_performed !== true ||
+          result.execution_authorized !== false ||
+          result.journal_ack_allowed !== false ||
+          result.retry_allowed !== false ||
+          result.rollback_allowed !== false ||
+          result.stage_allowed !== false ||
+          result.apply_allowed !== false ||
+          result.cutover_allowed !== false) {
+        throw new Error("invalid_simulation_confirmation");
+      }
+      if (status) status.textContent = this._tf(
+        "migrationRecoverySimulationComplete", {entity: entityId}
+      );
+    } catch (_error) {
+      if (status) status.textContent =
+        this._t("migrationRecoverySimulationRefused");
+    } finally {
+      this._recoverySimulationBusy = false;
+      this._renderMigrationRecovery();
     }
   }
 
