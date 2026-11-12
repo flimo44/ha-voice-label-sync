@@ -192,13 +192,10 @@ async def exercise_ha_core_native_contract() -> dict[str, Any]:
                 hass, [safe, excluded, auxiliary]
             )
             assert after["status"] == "captured", after
-            assert {
-                entity_id: row["native_before"]
-                for entity_id, row in after["observations"].items()
-            } == {
-                entity_id: row["native_before"]
-                for entity_id, row in initial["observations"].items()
-            }
+            # Compare the FULL sanitized observations, including the
+            # intentionally unknown native None case (which has no
+            # "native_before" key). Never hide or default unknown facts.
+            assert after["observations"] == initial["observations"]
 
             # Repeat the same desired operation with expected_enabled=True:
             # this is a no-op, so no extra registry event or callback.
