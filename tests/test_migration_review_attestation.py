@@ -111,6 +111,19 @@ def report(*, problems=False, token="f" * 64):
             "global_blockers": [],
             "summary": {"needs_review": 1 if problems else 0},
         },
+        "pre_stage_impact": {
+            "read_only": True,
+            "stage_allowed": False,
+            "cutover_allowed": False,
+            "other_label_consumers_verified": False,
+            "google_home_state_verified": False,
+            "status": "no_manual_policy_delta_detected",
+            "global_blockers": [],
+            "summary": {"needs_review": 0},
+            "entities": [
+                {"entity_id": "light.good", "status": "no_manual_policy_delta_detected"}
+            ],
+        },
         "simulation": {
             "read_only": True, "cutover_allowed": False,
             "stage_review_token_sha256": token,
@@ -445,3 +458,52 @@ def test_no_execution_api_wiring_in_review_websocket():
         and n.name == "async_register_websocket_api"
     )
     assert "websocket_attest_migration_review" in ast.unparse(handler)
+
+
+
+def test_changed_label_impact_invalidates_human_attestation(
+    tmp_path, components
+):
+    prepare(tmp_path, components)
+    initial = report()
+    submit(tmp_path, components, initial)
+    reviewed = components["migration_review_attestation"]
+    assert reviewed.load_attestation(
+        tmp_path, current_evidence=reviewed.review_evidence(initial)
+    )["status"] == "reviewed_without_detected_issues"
+    changed = report()
+    changed["pre_stage_impact"]["status"] = "local_review_pending"
+    changed["pre_stage_impact"]["summary"]["needs_review"] = 1
+    changed["pre_stage_impact"]["entities"][0]["status"] = "needs_review"
+    assert reviewed.load_attestation(
+        tmp_path, current_evidence=reviewed.review_evidence(changed)
+    )["status"] == "stale_review_attestation"
+
+
+def test_missing_loaded_impact_evidence_fails_closed(
+    tmp_path, components
+):
+    prepare(tmp_path, components)
+    incomplete = report()
+    del incomplete["pre_stage_impact"]
+    with pytest.raises(
+        components["migration_review_attestation"].AttestationError,
+        match="complete_readonly_review_required",
+    ):
+        submit(tmp_path, components, incomplete)
+    assert not path(tmp_path).exists()
+
+
+def test_loaded_impact_anomalies_require_explicit_acknowledgment(
+    tmp_path, components
+):
+    prepare(tmp_path, components)
+    changed = report()
+    changed["pre_stage_impact"]["status"] = "local_review_pending"
+    changed["pre_stage_impact"]["summary"]["needs_review"] = 1
+    reviewed = components["migration_review_attestation"]
+    with pytest.raises(reviewed.AttestationError):
+        submit(tmp_path, components, changed, acknowledge=False)
+    result = submit(tmp_path, components, changed, acknowledge=True)
+    assert result["status"] == "reviewed_with_open_issues"
+    assert result["cutover_allowed"] is False
