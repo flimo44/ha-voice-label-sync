@@ -50,6 +50,25 @@ The ordinary tests remain unchanged and continue to run on Python 3.12.
 The new job is a distinct CI check so a Home Assistant breaking change
 cannot be disguised by mocking a legacy API.
 
+## Native behavior discovered during the first real Core runs
+
+On Core 2026.11.0, `GoogleConfig.should_expose(entity_id)` can return
+`None` (falsy) for an implicitly excluded auxiliary/diagnostic entity,
+rather than the literal boolean `False`. This can happen because the
+upstream expression returns an unset explicit override when the default
+exposure condition is false.
+
+The PR #120 observer deliberately marks non-boolean native evidence as
+`native_google_exposure_not_bool`: an **entity-local unknown**.
+The new smoke verifies that this unknown state remains unchanged across a
+label-only update. It does not infer safety from falsiness and does not
+normalize unknown observations into a green staging assessment.
+
+Also, Core's entity-registry loader requires both the actual device registry
+to be set up and loaded, and the config-entry manager to have completed
+initialization. The sandbox uses those real bootstrap contracts rather than
+bypassing them with fakes.
+
 ## Scope limitations
 
 - This is a **real Home Assistant runtime API contract** and event-bus
