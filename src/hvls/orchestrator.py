@@ -9,7 +9,7 @@ from .backends import render_google_assistant
 from .engine import select_entities
 from .models import GenerationRequest, WorkflowResult
 from .registry import load_json
-from .writers import write_with_backup
+from .owned_writer import write_owned_output
 
 
 class WorkflowError(Exception):
@@ -24,6 +24,8 @@ def run_google_assistant_workflow(
     create_backup_enabled: bool = True,
     *,
     registries: dict[str, dict[str, Any]] | None = None,
+    entry_id: str | None = None,
+    ownership_registry_path: Path | None = None,
 ) -> WorkflowResult:
     """Run the complete Google Assistant generation workflow.
 
@@ -79,15 +81,28 @@ def run_google_assistant_workflow(
             "Generation returned no entity; output file was not modified."
         )
 
+    # A write requires an explicit, stable installation identity.
+    # Preview/dry-run never requires ownership authorization.
+    if (
+        not isinstance(entry_id, str)
+        or not entry_id.strip()
+        or ownership_registry_path is None
+    ):
+        raise WorkflowError(
+            "Ownership authorization required for generation."
+        )
+
     resolved_backup_directory = (
         backup_directory
         if backup_directory is not None
         else request.output_path.parent / ".hvls_backups"
     )
 
-    write_result = write_with_backup(
+    write_result = write_owned_output(
         output_path=request.output_path,
         content=generation.content,
+        entry_id=entry_id,
+        ownership_registry_path=ownership_registry_path,
         backup_directory=resolved_backup_directory,
         retention=backup_retention,
         create_backup_enabled=create_backup_enabled,

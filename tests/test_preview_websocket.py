@@ -208,6 +208,7 @@ def make_hass():
                 SimpleNamespace(
                     data={"label": "google_assistant"},
                     options={},
+                    entry_id="test-installation",
                 )
             ]
         ),
@@ -347,6 +348,10 @@ def test_apply_websocket_success(websocket_module, tmp_path):
     apply_call = websocket_module.websocket.apply_reviewed_preview.call_args
     assert apply_call.args[3] == "a" * 64
     assert apply_call.kwargs["expected_production_digest"] == "b" * 64
+    assert apply_call.kwargs["entry_id"] == "test-installation"
+    assert apply_call.kwargs["ownership_registry_path"] == Path(
+        "/config/.hvls/ownership.json"
+    )
 
 
 def test_apply_websocket_rejects_changed_preview(websocket_module):
@@ -615,3 +620,48 @@ def test_set_entity_label_websocket_refuses_missing_entity(websocket_module):
     connection.send_result.assert_not_called()
     assert connection.send_error.call_args.args[1] == "label_update_refused"
     ws.update_entity_label.assert_not_called()
+
+
+def test_restore_websocket_passes_ownership_identity(websocket_module):
+    """Restore must use HA's installation identity, not client input."""
+    ws = websocket_module.websocket
+
+    ws.restore_reviewed_backup.reset_mock()
+    ws.restore_reviewed_backup.return_value = {
+        "restored": True,
+        "backup_id": "test.bak",
+        "safety_backup": "safety.bak",
+        "bytes_written": 42,
+    }
+
+    connection = SimpleNamespace(
+        send_result=Mock(),
+        send_error=Mock(),
+    )
+
+    asyncio.run(
+        ws.websocket_restore_backup(
+            make_hass(),
+            connection,
+            {
+                "id": 301,
+                "backup_id": "test.bak",
+                "backup_sha256": "a" * 64,
+                "production_sha256": "b" * 64,
+                "entry_id": "forged-client-identity",
+            },
+        )
+    )
+
+    connection.send_error.assert_not_called()
+    connection.send_result.assert_called_once()
+
+    call = ws.restore_reviewed_backup.call_args
+
+    assert call is not None
+    assert call.kwargs["entry_id"] == "test-installation"
+    assert call.kwargs["ownership_registry_path"] == Path(
+        "/config/.hvls/ownership.json"
+    )
+
+    assert call.kwargs["entry_id"] != "forged-client-identity"

@@ -133,6 +133,10 @@ async def _async_run_workflow_unlocked(
         registries=registries,
         backup_retention=backup_retention,
         create_backup_enabled=create_backup_enabled,
+        entry_id=entry.entry_id if not dry_run else None,
+        ownership_registry_path=Path(
+            hass.config.path(".hvls", "ownership.json")
+        ),
     )
 
     try:

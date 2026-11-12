@@ -150,6 +150,10 @@ def main() -> int:
             storage_path=args.storage,
             backup_directory=args.backup_directory,
             backup_retention=args.backup_retention,
+            entry_id="cli" if not args.dry_run else None,
+            ownership_registry_path=(
+                args.storage.parent / ".hvls" / "ownership.json"
+            ),
         )
     except (
         RegistryError,
