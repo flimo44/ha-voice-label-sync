@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .models import FileWriteResult
+from .output_ownership import OwnershipResult
 from .output_ownership_registry import OwnershipRegistry
 from .writers import FileWriterError, atomic_write, write_with_backup
 
@@ -324,3 +325,121 @@ def write_owned_output(
         )
 
         return result
+
+
+
+def evaluate_registered_output(
+    output_path: str | Path,
+    entry_id: str,
+    ownership_registry_path: str | Path,
+) -> OwnershipResult:
+    """Evaluate Apply eligibility without authorizing or performing writes."""
+
+    def result(status, allowed, code, reason):
+        return OwnershipResult(status, allowed, reason, code)
+
+    if not isinstance(entry_id, str) or not entry_id.strip():
+        return result(
+            "unknown", False, "missing_identity",
+            "Installation identity unavailable.",
+        )
+
+    try:
+        output = _safe_path(output_path)
+        registry_path = _safe_path(ownership_registry_path)
+    except (FileWriterError, OSError, ValueError, TypeError):
+        return result(
+            "unknown", False, "unsafe_path",
+            "Unsafe output or registry path.",
+        )
+
+    reserved = {
+        registry_path,
+        registry_path.with_name(registry_path.name + ".lock"),
+        registry_path.with_name(registry_path.name + ".write.lock"),
+    }
+
+    if output in reserved:
+        return result(
+            "unknown", False, "reserved_path",
+            "Output conflicts with ownership metadata.",
+        )
+
+    try:
+        records = OwnershipRegistry(registry_path)._load()["records"]
+    except (OSError, ValueError, RuntimeError):
+        return result(
+            "unknown", False, "registry_invalid",
+            "Ownership registry cannot be verified.",
+        )
+
+    for owner, other in records.items():
+        if owner != entry_id and other["output_path"] == str(output):
+            return result(
+                "unknown", False, "owned_by_other_installation",
+                "Output belongs to another installation.",
+            )
+
+    record = records.get(entry_id)
+
+    if record is None:
+        try:
+            if output.exists():
+                return result(
+                    "unmanaged", False, "unmanaged_output",
+                    "Existing manual or unregistered YAML is protected.",
+                )
+
+            if not output.parent.is_dir():
+                return result(
+                    "unknown", False, "missing_directory",
+                    "Output directory is unavailable.",
+                )
+
+        except (OSError, ValueError):
+            return result(
+                "unknown", False, "verification_failed",
+                "Unable to verify output safely.",
+            )
+
+        return result(
+            "new", True, "new_output",
+            "New output can be created by HVLS.",
+        )
+
+    if record["output_path"] != str(output):
+        return result(
+            "unknown", False, "output_path_mismatch",
+            "Configured output differs from registered ownership.",
+        )
+
+    if record["state"] != "managed":
+        return result(
+            "pending", False, "pending_operation",
+            "An incomplete operation requires controlled recovery.",
+        )
+
+    if not output.exists():
+        return result(
+            "missing", False, "managed_output_missing",
+            "Previously managed output is missing.",
+        )
+
+    try:
+        _verify_current_file(output, record["sha256"])
+    except FileWriterError as exc:
+        if "changed" in str(exc).lower():
+            return result(
+                "changed", False, "output_changed",
+                "Managed output differs from its recorded SHA-256.",
+            )
+
+        return result(
+            "unknown", False, "verification_failed",
+            "Managed output cannot be verified safely.",
+        )
+
+    return result(
+        "managed", True, "verified_owned_output",
+        "HVLS ownership and SHA-256 verified.",
+    )

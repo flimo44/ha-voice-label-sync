@@ -19,6 +19,7 @@ class OwnershipResult:
     status: str
     write_allowed: bool
     reason: str
+    reason_code: str = "unspecified"
 
 
 def evaluate_output_ownership(

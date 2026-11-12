@@ -92,6 +92,11 @@ function preview(canApply = true) {
     production_path: "/config/google_assistant_entities.yaml",
     content: "switch.test:\n  expose: true\n",
     can_apply: canApply,
+    ownership: {
+      status: "new",
+      write_allowed: true,
+      reason: "New output can be created by HVLS.",
+    },
     preview_sha256: "a".repeat(64),
     production_sha256: null,
   };
@@ -2336,4 +2341,267 @@ test("Invalid protected history response is never displayed as verified", async 
   await panel._loadMigrationInvestigationHistory();
   assert.match(controls.migrationLedgerStatus.textContent, /indisponible/);
   assert.equal(controls.migrationLedgerRefresh.disabled, false);
+});
+
+
+test("Unmanaged Apply displays its reason without enabling writes", async () => {
+  const reason = "Existing manual or unregistered YAML is protected.";
+  const calls = [];
+
+  const { panel, controls } = makePanel(async message => {
+    calls.push(message.type);
+    return {
+      ...preview(false),
+      ownership: {
+        status: "unmanaged",
+        write_allowed: false,
+        reason,
+      },
+    };
+  });
+
+  const info = { hidden: true, title: "" };
+  const explanation = { textContent: "" };
+  const originalQuery = panel.querySelector.bind(panel);
+
+  panel.querySelector = selector => {
+    if (selector === "#applyInfo") return info;
+    if (selector === "#applyBlockReason") return explanation;
+    return originalQuery(selector);
+  };
+
+  await panel._loadPreview();
+
+  assert.equal(controls.apply.disabled, true);
+  assert.equal(info.hidden, false);
+  assert.equal(explanation.textContent, reason);
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_preview"]);
+});
+
+
+test("Apply ownership contract: contradictory denial", async () => {
+  const calls = [];
+  const response = {
+    ...preview(true),
+    ownership: {
+      status: "unmanaged",
+      write_allowed: false,
+      reason: "Manual YAML is protected.",
+    },
+  };
+
+  const {panel, controls} = makePanel(async message => {
+    calls.push(message.type);
+    return response;
+  });
+
+  await panel._loadPreview();
+  assert.equal(controls.apply.disabled, true);
+  assert.equal(panel._review, null);
+
+  await panel._applyPreview();
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_preview"]);
+});
+
+test("Apply ownership contract: missing evidence", async () => {
+  const response = preview(true);
+  delete response.ownership;
+
+  const {panel, controls} = makePanel(async () => response);
+  await panel._loadPreview();
+
+  assert.equal(controls.apply.disabled, true);
+  assert.equal(panel._review, null);
+});
+
+test("Apply ownership contract: invalid state and digests", async () => {
+  const responses = [
+    {
+      ...preview(true),
+      ownership: {status: "unknown", write_allowed: true},
+    },
+    {
+      ...preview(true),
+      ownership: {status: "managed", write_allowed: true},
+      // Managed requires a known production digest.
+      production_sha256: null,
+    },
+    {
+      ...preview(true),
+      ownership: {status: "new", write_allowed: true},
+      production_sha256: "b".repeat(64),
+    },
+    {
+      ...preview(true),
+      preview_sha256: "invalid-digest",
+    },
+  ];
+
+  for (const response of responses) {
+    const {panel, controls} = makePanel(async () => response);
+    await panel._loadPreview();
+    assert.equal(controls.apply.disabled, true);
+    assert.equal(panel._review, null);
+  }
+});
+
+test("Apply ownership contract: legitimate new and managed", async () => {
+  for (const status of ["new", "managed"]) {
+    const response = {
+      ...preview(true),
+      ownership: {status, write_allowed: true},
+      production_sha256: status === "managed"
+        ? "b".repeat(64)
+        : null,
+    };
+
+    const {panel, controls} = makePanel(async () => response);
+    await panel._loadPreview();
+
+    assert.equal(controls.apply.disabled, false);
+    assert.equal(panel._review.preview_sha256, "a".repeat(64));
+    assert.equal(
+      panel._review.production_sha256,
+      response.production_sha256
+    );
+  }
+});
+
+test("Apply ownership contract: explanation clears on recovery", async () => {
+  let blocked = true;
+  const info = {hidden: true, open: false, title: ""};
+  const explanation = {textContent: ""};
+
+  const {panel, controls} = makePanel(async () => blocked
+    ? {
+        ...preview(true),
+        ownership: {
+          status: "unmanaged",
+          write_allowed: false,
+          reason: "Manual YAML is protected.",
+        },
+      }
+    : preview(true)
+  );
+
+  const originalQuery = panel.querySelector.bind(panel);
+  panel.querySelector = selector => {
+    if (selector === "#applyInfo") return info;
+    if (selector === "#applyBlockReason") return explanation;
+    return originalQuery(selector);
+  };
+
+  await panel._loadPreview();
+  assert.equal(controls.apply.disabled, true);
+  assert.equal(info.hidden, false);
+  assert.equal(explanation.textContent, "Manual YAML is protected.");
+
+  info.open = true;
+  blocked = false;
+
+  await panel._loadPreview();
+  assert.equal(controls.apply.disabled, false);
+  assert.equal(info.hidden, true);
+  assert.equal(info.open, false);
+  assert.equal(explanation.textContent, "");
+});
+
+
+test("Apply reason code: French localization", async () => {
+  const response = {
+    ...preview(false),
+    ownership: {
+      status: "unmanaged",
+      write_allowed: false,
+      reason_code: "unmanaged_output",
+      reason: "Existing manual or unregistered YAML is protected.",
+    },
+  };
+
+  const {panel, controls} = makePanel(async () => response);
+  const info = {hidden: true, title: ""};
+  const explanation = {textContent: ""};
+  const originalQuery = panel.querySelector.bind(panel);
+
+  panel.querySelector = selector => {
+    if (selector === "#applyInfo") return info;
+    if (selector === "#applyBlockReason") return explanation;
+    return originalQuery(selector);
+  };
+
+  await panel._loadPreview();
+
+  assert.equal(controls.apply.disabled, true);
+  assert.equal(info.hidden, false);
+  assert.match(explanation.textContent, /fichier YAML/i);
+  assert.match(explanation.textContent, /HVLS/i);
+  assert.doesNotMatch(explanation.textContent, /Existing manual/i);
+});
+
+test("Apply reason code: language change without new WebSocket", async () => {
+  let calls = 0;
+
+  const {panel, controls} = makePanel(async () => {
+    calls++;
+    return {
+      ...preview(false),
+      ownership: {
+        status: "pending",
+        write_allowed: false,
+        reason_code: "pending_operation",
+        reason: "An incomplete operation requires controlled recovery.",
+      },
+    };
+  });
+
+  const info = {hidden: true, title: ""};
+  const explanation = {textContent: ""};
+  const originalQuery = panel.querySelector.bind(panel);
+
+  panel.querySelector = selector => {
+    if (selector === "#applyInfo") return info;
+    if (selector === "#applyBlockReason") return explanation;
+    return originalQuery(selector);
+  };
+
+  await panel._loadPreview();
+
+  assert.equal(controls.apply.disabled, true);
+  assert.match(explanation.textContent, /opération|reprise|récupération/i);
+
+  panel._language = "en";
+  panel._updateApplyButton();
+
+  assert.match(explanation.textContent, /operation|recovery/i);
+  assert.equal(calls, 1);
+  assert.equal(controls.apply.disabled, true);
+});
+
+test("Apply reason code: unknown code uses localized fallback", async () => {
+  const {panel, controls} = makePanel(async () => ({
+    ...preview(true),
+    ownership: {
+      status: "unexpected",
+      write_allowed: true,
+      reason_code: "unknown_future_code",
+      reason: "Unexpected server state.",
+    },
+  }));
+
+  const info = {hidden: true, title: ""};
+  const explanation = {textContent: ""};
+  const originalQuery = panel.querySelector.bind(panel);
+
+  panel.querySelector = selector => {
+    if (selector === "#applyInfo") return info;
+    if (selector === "#applyBlockReason") return explanation;
+    return originalQuery(selector);
+  };
+
+  await panel._loadPreview();
+
+  assert.equal(controls.apply.disabled, true);
+  assert.equal(info.hidden, false);
+  assert.match(explanation.textContent, /Impossible de valider Apply/i);
+  assert.doesNotMatch(explanation.textContent, /Unexpected server state/i);
 });
