@@ -52,6 +52,7 @@ def setup(monkeypatch, tmp_path):
         "migration_resolution_scenarios", "migration_recovery_view",
         "migration_recovery_confirmation",
         "migration_recovery_records", "migration_recovery_records_api",
+        "migration_execution_approval_records",
     ):
         name = f"{prefix}.{stem}"
         spec = importlib.util.spec_from_file_location(
@@ -1169,3 +1170,256 @@ def test_durable_investigation_ws_is_admin_only_and_has_no_stage_code():
     )
     for name in names:
         assert name in ast.unparse(reg)
+
+
+
+def _approval_record_setup(env, monkeypatch, entity="light.first"):
+    """Use real baseline/journal/storage and a deterministic saved draft."""
+    _ready(env)
+    disk = env.modules["migration_execution_approval_records"]
+    baseline = env.modules["migration_baseline"].verify_baseline(env.tmp)
+    draft = {
+        "status": "saved_unapproved_draft",
+        "stored_choices_unapproved": True,
+        "baseline_manifest_sha256": baseline["manifest_sha256"],
+        "decisions": {entity: {"action": "import"}},
+    }
+    monkeypatch.setattr(disk, "load_review_draft", lambda _dir: draft)
+    return disk, draft
+
+
+def _append_approval(env, disk, draft, *, entity="light.first",
+                     count=0, head=None, journal=None, admin="admin_1"):
+    if journal is None:
+        journal = env.modules["migration_journal"].read_journal(env.tmp)
+    return disk.append_approval_intent_evidence(
+        str(env.tmp),
+        expected_record_count=count,
+        expected_last_record_sha256=head or ("0" * 64),
+        expected_journal_sha256=disk._hash(journal),
+        expected_journal_revision=journal["revision"],
+        expected_draft_sha256=disk._hash(draft),
+        admission_evidence_sha256="e" * 64,
+        entity_id=entity,
+        action="stage_one_label_addition",
+        administrator_id=admin,
+    )
+
+
+def _approval_folder(env):
+    return (
+        env.tmp / ".storage" / "hvls_migration"
+        / "execution-approval-intent-evidence"
+    )
+
+
+def test_durable_approval_intent_private_anchor_and_no_executor_changes(
+    setup, monkeypatch,
+):
+    disk, draft = _approval_record_setup(setup, monkeypatch)
+    journal = setup.modules["migration_journal"].read_journal(setup.tmp)
+    source = (setup.tmp / "configuration.yaml").read_bytes()
+    include = (setup.tmp / "google_entities.yaml").read_bytes()
+    assert not _approval_folder(setup).exists()
+    result = _append_approval(setup, disk, draft)
+    folder = _approval_folder(setup)
+    assert result["status"] == (
+        "durable_approval_intent_recorded_no_execution"
+    )
+    assert result["record_fsync_completed"] is True
+    assert result["history_head_fsync_completed"] is True
+    assert result["record"]["sequence"] == 1
+    assert result["execution_authorized"] is False
+    assert result["stage_allowed"] is False
+    assert result["journal_ack_allowed"] is False
+    assert result["cutover_allowed"] is False
+    assert (folder.stat().st_mode & 0o077) == 0
+    assert all((p.stat().st_mode & 0o077) == 0 for p in folder.iterdir())
+    raw = (folder / "000001.json").read_bytes()
+    assert b"admin_1" not in raw
+    assert b"PRIVATE_PROJECT_ID_NEVER_EXPOSE" not in raw
+    assert b"PRIVATE ENTITY NAME" not in raw
+    assert b"confirmation_token" not in raw
+    assert (setup.tmp / "configuration.yaml").read_bytes() == source
+    assert (setup.tmp / "google_entities.yaml").read_bytes() == include
+    assert setup.modules["migration_journal"].read_journal(setup.tmp) == journal
+    assert setup.entries["light.first"].labels == frozenset()
+    history = disk.load_approval_intent_history(str(setup.tmp))
+    assert history["record_count"] == 1
+    assert history["read_only"] is True
+    assert history["history_is_not_execution_authorization"] is True
+    assert history["records"][0]["execution_authorized"] is False
+
+
+def test_durable_approval_intent_two_records_verify_anchored_head(
+    setup, monkeypatch,
+):
+    disk, draft = _approval_record_setup(setup, monkeypatch)
+    first = _append_approval(setup, disk, draft)
+    initial = (_approval_folder(setup) / "000001.json").read_bytes()
+    second = _append_approval(
+        setup, disk, draft, count=1,
+        head=first["record"]["record_sha256"],
+    )
+    assert second["record_count"] == 2
+    assert (_approval_folder(setup) / "000001.json").read_bytes() == initial
+    assert second["record"]["record_sha256"] != (
+        first["record"]["record_sha256"]
+    )
+    saved_head = __import__("json").loads(
+        (_approval_folder(setup) / "head.json").read_bytes()
+    )
+    assert saved_head["record_count"] == 2
+    assert saved_head["record_sha256"] == second["record"]["record_sha256"]
+    assert disk.load_approval_intent_history(
+        str(setup.tmp)
+    )["record_count"] == 2
+
+
+@pytest.mark.parametrize("mutation", [
+    "remove_last", "truncate_head", "corrupt_record", "forged_head_sha",
+    "pending_head", "unfinished_record", "symlink_record",
+    "permissive_record", "permissive_directory",
+])
+def test_durable_approval_intent_truncation_tamper_and_crash_refuse(
+    setup, monkeypatch, mutation,
+):
+    disk, draft = _approval_record_setup(setup, monkeypatch)
+    first = _append_approval(setup, disk, draft)
+    folder = _approval_folder(setup)
+    record = folder / "000001.json"
+    head = folder / "head.json"
+    if mutation == "remove_last":
+        record.unlink()
+    elif mutation == "truncate_head":
+        head.write_text("{", encoding="utf-8")
+    elif mutation == "corrupt_record":
+        record.write_text("{}", encoding="utf-8")
+    elif mutation == "forged_head_sha":
+        obj = __import__("json").loads(head.read_bytes())
+        obj["record_sha256"] = "f" * 64
+        head.write_text(__import__("json").dumps(obj), encoding="utf-8")
+    elif mutation == "pending_head":
+        (folder / ".head-pending-interrupted").write_text(
+            "power loss before replace", encoding="utf-8"
+        )
+    elif mutation == "unfinished_record":
+        (folder / "000002.json").write_bytes(b"{incomplete")
+    elif mutation == "symlink_record":
+        record.unlink()
+        record.symlink_to(setup.tmp / "configuration.yaml")
+    elif mutation == "permissive_record":
+        record.chmod(0o644)
+    elif mutation == "permissive_directory":
+        folder.chmod(0o755)
+    with pytest.raises(disk.ApprovalEvidenceError):
+        disk.load_approval_intent_history(str(setup.tmp))
+    with pytest.raises(disk.ApprovalEvidenceError):
+        _append_approval(
+            setup, disk, draft, count=1,
+            head=first["record"]["record_sha256"],
+        )
+    assert setup.modules["migration_journal"].read_journal(setup.tmp)[
+        "operations"
+    ] == []
+    assert setup.entries["light.first"].labels == frozenset()
+
+
+def test_durable_approval_intent_two_admins_competing_cas_rejects_loser(
+    setup, monkeypatch,
+):
+    disk, draft = _approval_record_setup(setup, monkeypatch)
+    first = _append_approval(setup, disk, draft, admin="admin_1")
+    assert first["record_count"] == 1
+    with pytest.raises(
+        disk.ApprovalEvidenceError, match="approval_history_cas_conflict"
+    ):
+        _append_approval(setup, disk, draft, admin="admin_2")
+    assert disk.load_approval_intent_history(
+        str(setup.tmp)
+    )["record_count"] == 1
+
+
+@pytest.mark.parametrize("mutation", [
+    "journal_advanced", "same_entity_intent", "source_drift",
+    "draft_changed", "draft_no_longer_import",
+])
+def test_durable_approval_intent_disk_writer_refuses_stale_material(
+    setup, monkeypatch, mutation,
+):
+    disk, draft = _approval_record_setup(setup, monkeypatch)
+    before = setup.modules["migration_journal"].read_journal(setup.tmp)
+    if mutation == "journal_advanced":
+        setup.modules["migration_journal"].advance_phase(
+            setup.tmp, "labels_staging", expected_revision=0
+        )
+    elif mutation == "same_entity_intent":
+        setup.modules["migration_journal"].advance_phase(
+            setup.tmp, "labels_staging", expected_revision=0
+        )
+        _intent(setup)
+    elif mutation == "source_drift":
+        (setup.tmp / "google_entities.yaml").write_bytes(ENTITIES + b"#bad\n")
+    elif mutation == "draft_changed":
+        draft["decisions"]["light.second"] = {"action": "keep"}
+    elif mutation == "draft_no_longer_import":
+        draft["decisions"]["light.first"]["action"] = "keep"
+    # Keep original expected evidence even after the underlying source moves.
+    prior_draft = {
+        "status": "saved_unapproved_draft",
+        "stored_choices_unapproved": True,
+        "baseline_manifest_sha256":
+            setup.modules["migration_baseline"].verify_baseline(
+                setup.tmp
+            )["manifest_sha256"],
+        "decisions": {"light.first": {"action": "import"}},
+    }
+    with pytest.raises(disk.ApprovalEvidenceError):
+        _append_approval(
+            setup, disk, prior_draft, journal=before
+        )
+    assert not _approval_folder(setup).exists()
+
+
+def test_other_entity_pending_does_not_block_safe_local_approval_intent(
+    setup, monkeypatch,
+):
+    disk, draft = _approval_record_setup(setup, monkeypatch)
+    j = setup.modules["migration_journal"]
+    j.advance_phase(setup.tmp, "labels_staging", expected_revision=0)
+    _intent(
+        setup, entity="light.second", operation="unrelated",
+        registry="entity_native_second",
+    )
+    saved = _append_approval(setup, disk, draft)
+    assert saved["record"]["entity_id"] == "light.first"
+    assert saved["execution_authorized"] is False
+    assert j.read_journal(setup.tmp)["operations"][0]["status"] == "intent"
+
+
+def test_durable_approval_history_is_not_wired_into_stage_executor():
+    import ast
+
+    stage = (ROOT / "migration_stage_executor.py").read_text()
+    assert "migration_execution_approval_records" not in stage
+    assert "migration_execution_approval_records_api" not in stage
+    tree = ast.parse((ROOT / "websocket.py").read_text())
+    for name in (
+        "websocket_get_migration_durable_approval_intent_history",
+        "websocket_prepare_migration_durable_approval_intent",
+        "websocket_confirm_migration_durable_approval_intent",
+    ):
+        fn = next(
+            n for n in tree.body
+            if isinstance(n, ast.AsyncFunctionDef) and n.name == name
+        )
+        assert any(
+            isinstance(d, ast.Attribute) and d.attr == "require_admin"
+            for d in fn.decorator_list
+        )
+        for forbidden in (
+            "stage_one_approved_label", "mark_label_applied",
+            "record_label_intent", "async_update_entity",
+            "advance_phase",
+        ):
+            assert forbidden not in ast.unparse(fn)
