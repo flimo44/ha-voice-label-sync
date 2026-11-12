@@ -32,7 +32,8 @@ def modules(monkeypatch):
     loaded = {}
     for stem in (
         "migration_discovery", "migration_baseline", "migration_journal",
-        "migration_stage_plan", "label_update", "migration_stage_executor",
+        "migration_stage_plan", "label_update", "migration_write_boundary",
+        "migration_stage_executor",
     ):
         name = f"{prefix}.{stem}"
         spec = importlib.util.spec_from_file_location(
@@ -113,6 +114,27 @@ def _setup(tmp_path, modules, diag_module, monkeypatch):
     hass.async_add_executor_job = executor
     diag_module.build_admin_migration_diagnostic = get_diagnostic
     stage = modules["migration_stage_executor"]
+    guard = modules["migration_write_boundary"]
+    hass.unrelated_labels = {"unrelated"}
+
+    def native_boundary(_hass, *, entity_id, configured_label):
+        assert configured_label == "Google Assistant"
+        if entity_id != "light.good":
+            return "google_assistant", None, {}
+        current_labels = set(hass.unrelated_labels)
+        if hass.label_present:
+            current_labels.add("google_assistant")
+        entry = SimpleNamespace(
+            id=hass.registry_id,
+            labels=current_labels,
+            hidden_by=None, disabled_by=None,
+        )
+        return "google_assistant", entry, {
+            label: SimpleNamespace(label_id=label, name=label)
+            for label in ("google_assistant", "unrelated", "third")
+        }
+
+    monkeypatch.setattr(guard, "_native", native_boundary)
 
     def catalog(_hass, configured_label, entity_ids):
         assert configured_label == "Google Assistant"
@@ -457,12 +479,27 @@ def test_native_registry_identity_check_preserves_other_labels(
         }
 
     monkeypatch.setattr(stage, "_current_catalog", current)
+    guard = group["migration_write_boundary"]
+    monkeypatch.setattr(
+        guard, "_native",
+        lambda _hass, **_kw: (
+            "google_assistant", entity, {
+                "google_assistant": object(), "other_label": object(),
+            }
+        ),
+    )
+    snapshot = guard.capture_native_boundary(
+        object(), entity_id="light.good",
+        configured_label="Google Assistant", desired_present=True,
+    )
+    assert snapshot["status"] == "captured"
     stage._write_one_ha_label(
         object(),
         entity_id="light.good",
         expected_registry_id="native_01",
         label_id="google_assistant",
         configured_label="Google Assistant",
+        expected_boundary_capture=snapshot,
     )
     assert registry.writes == [(
         "light.good", {"other_label", "google_assistant"}
@@ -516,10 +553,25 @@ def test_native_registry_refuses_stale_or_ineligible_entity(
             }},
         ),
     )
+    guard = group["migration_write_boundary"]
+    monkeypatch.setattr(
+        guard, "_native",
+        lambda _hass, **_kw: (
+            "google_assistant", entity, {
+                "google_assistant": object(),
+            }
+        ),
+    )
+    # The captured state is stale/refused or the entity becomes ineligible.
+    snapshot = guard.capture_native_boundary(
+        object(), entity_id="light.good",
+        configured_label="Google Assistant", desired_present=True,
+    )
     with pytest.raises(stage.MigrationStageError, match="registry_prewrite"):
         stage._write_one_ha_label(
             object(), entity_id="light.good",
             expected_registry_id="native_01",
             label_id="google_assistant",
             configured_label="Google Assistant",
+            expected_boundary_capture=snapshot,
         )
