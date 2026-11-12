@@ -50,10 +50,101 @@ def _unavailable(entity_id: str | None, reason: str) -> dict[str, Any]:
     return result
 
 
+async def _async_collect_stage_admission_locked(
+    hass: Any, *, entity_id: str,
+) -> dict[str, Any]:
+    """Read all admission evidence while caller holds the HA workflow lock."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if len(entries) != 1:
+        return _unavailable(entity_id, "integration_not_uniquely_configured")
+    settings = {**entries[0].data, **entries[0].options}
+    label = settings.get(CONF_LABEL, DEFAULT_LABEL)
+    if not isinstance(label, str) or not label:
+        return _unavailable(entity_id, "configured_label_unavailable")
+    config_dir = hass.config.config_dir
+    try:
+        saved = await hass.async_add_executor_job(
+            load_review_draft, config_dir
+        )
+        if saved.get("status") != "saved_unapproved_draft":
+            return _unavailable(entity_id, "fresh_saved_draft_required")
+        journal = await hass.async_add_executor_job(
+            read_journal, config_dir
+        )
+        report = await async_build_admin_review(hass, saved["decisions"])
+        evidence = review_evidence(report)
+        attestation = await hass.async_add_executor_job(
+            partial(
+                load_attestation, config_dir,
+                current_evidence=evidence,
+            )
+        )
+        source = report.get("diagnostic", {}).get("source", {})
+        if not isinstance(source, dict):
+            return _unavailable(entity_id, "source_inventory_unavailable")
+        locations = source.get("locations")
+        if not isinstance(locations, list):
+            return _unavailable(entity_id, "source_inventory_unavailable")
+        verified = await hass.async_add_executor_job(
+            verify_current_sources,
+            config_dir,
+            locations,
+            journal["baseline_manifest_sha256"],
+        )
+        # Capture on the native HA event loop after other awaits.
+        native = capture_native_boundary(
+            hass, entity_id=entity_id,
+            configured_label=label, desired_present=True,
+        )
+        # A concurrent HVLS writer can change private storage between
+        # executor reads despite an in-process workflow lock. Fail shut.
+        end_journal = await hass.async_add_executor_job(
+            read_journal, config_dir
+        )
+        end_saved = await hass.async_add_executor_job(
+            load_review_draft, config_dir
+        )
+        if end_journal != journal or end_saved != saved:
+            return _unavailable(entity_id, "protected_evidence_changed")
+        await hass.async_add_executor_job(
+            verify_current_sources,
+            config_dir,
+            locations,
+            journal["baseline_manifest_sha256"],
+        )
+        # Also ensure no native registry drift during disk I/O. This is
+        # another OBSERVATION only, never a write-time atomicity claim.
+        from .migration_write_boundary import assess_native_boundary
+
+        native_assessment = assess_native_boundary(
+            hass, capture=native
+        )
+        if native_assessment.get("status") != "matched":
+            return _unavailable(entity_id, "native_snapshot_changed")
+        assessment = assess_stage_admission(
+            entity_id=entity_id,
+            saved_draft=saved,
+            review=report,
+            attestation=attestation,
+            journal=journal,
+            sources_verified=verified,
+            native_capture=native,
+        )
+        # An opaque, *non-authorizing* proof that the complete evidence
+        # was freshly collected. Not an execution capability or signature.
+        assessment["server_evidence_sha256"] = _fingerprint(
+            draft=saved, journal=journal, review=report,
+            attestation=attestation, source=verified, native=native,
+        )
+        return assessment
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, AttributeError):
+        return _unavailable(entity_id, "protected_evidence_unavailable")
+
+
 async def async_get_stage_admission_preview(
     hass: Any, *, entity_id: str,
 ) -> dict[str, Any]:
-    """Inspect all server-owned evidence, returning no execution capability."""
+    """Admin-only exposed read-only facade with shared workflow lock."""
     if (
         not isinstance(entity_id, str)
         or len(entity_id) > 255
@@ -61,88 +152,6 @@ async def async_get_stage_admission_preview(
     ):
         return _unavailable(None, "invalid_entity_id")
     async with get_workflow_lock(hass):
-        entries = hass.config_entries.async_entries(DOMAIN)
-        if len(entries) != 1:
-            return _unavailable(entity_id, "integration_not_uniquely_configured")
-        settings = {**entries[0].data, **entries[0].options}
-        label = settings.get(CONF_LABEL, DEFAULT_LABEL)
-        if not isinstance(label, str) or not label:
-            return _unavailable(entity_id, "configured_label_unavailable")
-        config_dir = hass.config.config_dir
-        try:
-            saved = await hass.async_add_executor_job(
-                load_review_draft, config_dir
-            )
-            if saved.get("status") != "saved_unapproved_draft":
-                return _unavailable(entity_id, "fresh_saved_draft_required")
-            journal = await hass.async_add_executor_job(
-                read_journal, config_dir
-            )
-            report = await async_build_admin_review(hass, saved["decisions"])
-            evidence = review_evidence(report)
-            attestation = await hass.async_add_executor_job(
-                partial(
-                    load_attestation, config_dir,
-                    current_evidence=evidence,
-                )
-            )
-            source = report.get("diagnostic", {}).get("source", {})
-            if not isinstance(source, dict):
-                return _unavailable(entity_id, "source_inventory_unavailable")
-            locations = source.get("locations")
-            if not isinstance(locations, list):
-                return _unavailable(entity_id, "source_inventory_unavailable")
-            verified = await hass.async_add_executor_job(
-                verify_current_sources,
-                config_dir,
-                locations,
-                journal["baseline_manifest_sha256"],
-            )
-            # Capture on the native HA event loop after other awaits.
-            native = capture_native_boundary(
-                hass, entity_id=entity_id,
-                configured_label=label, desired_present=True,
-            )
-            # A concurrent HVLS writer can change private storage between
-            # executor reads despite an in-process workflow lock. Fail shut.
-            end_journal = await hass.async_add_executor_job(
-                read_journal, config_dir
-            )
-            end_saved = await hass.async_add_executor_job(
-                load_review_draft, config_dir
-            )
-            if end_journal != journal or end_saved != saved:
-                return _unavailable(entity_id, "protected_evidence_changed")
-            await hass.async_add_executor_job(
-                verify_current_sources,
-                config_dir,
-                locations,
-                journal["baseline_manifest_sha256"],
-            )
-            # Also ensure no native registry drift during disk I/O. This is
-            # another OBSERVATION only, never a write-time atomicity claim.
-            from .migration_write_boundary import assess_native_boundary
-
-            native_assessment = assess_native_boundary(
-                hass, capture=native
-            )
-            if native_assessment.get("status") != "matched":
-                return _unavailable(entity_id, "native_snapshot_changed")
-            assessment = assess_stage_admission(
-                entity_id=entity_id,
-                saved_draft=saved,
-                review=report,
-                attestation=attestation,
-                journal=journal,
-                sources_verified=verified,
-                native_capture=native,
-            )
-            # An opaque, *non-authorizing* proof that the complete evidence
-            # was freshly collected. Not an execution capability or signature.
-            assessment["server_evidence_sha256"] = _fingerprint(
-                draft=saved, journal=journal, review=report,
-                attestation=attestation, source=verified, native=native,
-            )
-            return assessment
-        except (OSError, ValueError, KeyError, TypeError, RuntimeError, AttributeError):
-            return _unavailable(entity_id, "protected_evidence_unavailable")
+        return await _async_collect_stage_admission_locked(
+            hass, entity_id=entity_id
+        )
