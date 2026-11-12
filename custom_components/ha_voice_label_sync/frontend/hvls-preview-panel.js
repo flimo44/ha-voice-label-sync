@@ -2555,7 +2555,7 @@ class HVLSPreviewPanel extends HTMLElement {
           !saved.decisions || typeof saved.decisions !== "object") {
         throw new Error("unavailable_draft");
       }
-      const prior = saved.status === "stale_journal";
+      const prior = saved.status === "stale_journal" || saved.status === "stale_source";
       this._migrationDecisions = Object.assign(
         Object.create(null), saved.decisions
       );
