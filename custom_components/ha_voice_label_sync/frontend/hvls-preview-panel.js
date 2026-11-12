@@ -89,6 +89,18 @@ const HVLS_TRANSLATIONS = {
     migrationRecoverySimulationComplete: "Simulation confirmée pour {entity} : preuves revérifiées, jeton consommé. Aucun journal, label ou YAML modifié ; aucune autorisation d’exécution.",
     migrationRecoverySimulationDeclined: "Simulation annulée. Aucune action effectuée.",
     migrationRecoverySimulationRefused: "Simulation refusée : preuves périmées, incertaines ou confirmation invalide. Actualisez le diagnostic avant une nouvelle tentative.",
+    migrationLedgerTitle: "Historique protégé des décisions d’enquête (sans correction)",
+    migrationLedgerRead: "Consulter l’historique vérifié",
+    migrationLedgerButton: "Enregistrer ce choix d’enquête",
+    migrationLedgerConfirm: "ENREGISTREMENT DURABLE : consigner « {disposition} » pour {entity} dans l’historique privé ? Ceci écrit UNIQUEMENT une preuve de décision, pas le journal de migration, les labels ni Google Assistant.",
+    migrationLedgerSaving: "Vérification des preuves et préparation de l’enregistrement…",
+    migrationLedgerRecorded: "Décision d’enquête n°{sequence} enregistrée et synchronisée sur disque. Aucun label ni YAML modifié, aucune reprise autorisée.",
+    migrationLedgerCount: "{count} décisions d’enquête archivées et chaînées. Ces entrées ne sont jamais des autorisations d’exécution.",
+    migrationLedgerRow: "n°{sequence} · {entity} · {disposition} · preuves : {relation}",
+    migrationLedgerUnavailable: "Historique indisponible ou suspect : aucune décision ne peut être enregistrée.",
+    migrationLedgerRejected: "Enregistrement refusé : preuves modifiées, jeton expiré ou historique non vérifiable. Réexaminer la situation.",
+    migrationLedgerCancelled: "Enregistrement annulé, aucune écriture.",
+    migrationLedgerReading: "Vérification intégrale de la chaîne des décisions…",
     migrationResolutionSummary: "Scénarios d’enquête (simulation seulement) : {pending} intentions non acquittées, {investigate} à examiner, {quarantine} cas à isoler. Aucune décision n’a été appliquée.",
     migrationResolutionLine: "Hypothèse : {scenario} · catégorie : {category} · vérifications : {reasons}.",
     migrationScenario_intent_desired_membership_observed: "état voulu observé, intention NON acquittée",
@@ -311,6 +323,18 @@ const HVLS_TRANSLATIONS = {
     migrationRecoverySimulationComplete: "Simulation confirmed for {entity}: fresh evidence rechecked, challenge consumed. No journal, label or YAML changed; no execution permission.",
     migrationRecoverySimulationDeclined: "Simulation canceled. No action performed.",
     migrationRecoverySimulationRefused: "Simulation refused: changed/uncertain evidence or invalid confirmation. Refresh the recovery report before trying again.",
+    migrationLedgerTitle: "Protected investigation decision history (no remediation)",
+    migrationLedgerRead: "Read verified investigation history",
+    migrationLedgerButton: "Record this investigation choice",
+    migrationLedgerConfirm: "DURABLE RECORD: save « {disposition} » for {entity} in private audit history? This writes ONLY a decision record, NOT the migration journal, labels or Google Assistant.",
+    migrationLedgerSaving: "Rechecking evidence and preparing the record…",
+    migrationLedgerRecorded: "Investigation record #{sequence} saved and synced. No labels or YAML changed; no recovery authorized.",
+    migrationLedgerCount: "{count} chained, archived investigation decisions. None authorize execution.",
+    migrationLedgerRow: "#{sequence} · {entity} · {disposition} · evidence: {relation}",
+    migrationLedgerUnavailable: "History unavailable or suspect: no decision can be saved.",
+    migrationLedgerRejected: "Record refused: evidence changed, expired challenge or history not verified. Reinvestigate.",
+    migrationLedgerCancelled: "Record canceled without writing.",
+    migrationLedgerReading: "Verifying the complete investigation chain…",
     migrationResolutionSummary: "Investigation scenarios (simulation only): {pending} unacknowledged intents, {investigate} require inspection, {quarantine} quarantined. No decision has been applied.",
     migrationResolutionLine: "Hypothesis: {scenario} · category: {category} · checks: {reasons}.",
     migrationScenario_intent_desired_membership_observed: "desired membership observed, intent NOT acknowledged",
@@ -561,6 +585,10 @@ class HVLSPreviewPanel extends HTMLElement {
     const recoveryRead = this.querySelector("#migrationRecoveryRefresh");
     if (recoveryRead) recoveryRead.textContent = this._t("migrationRecoveryRead");
     if (this._migrationRecoveryReport) this._renderMigrationRecovery();
+    const ledgerTitle = this.querySelector("#migrationLedgerTitle");
+    if (ledgerTitle) ledgerTitle.textContent = this._t("migrationLedgerTitle");
+    const ledgerRefresh = this.querySelector("#migrationLedgerRefresh");
+    if (ledgerRefresh) ledgerRefresh.textContent = this._t("migrationLedgerRead");
     const migrationMore = this.querySelector("#migrationMore");
     if (migrationMore) migrationMore.textContent = this._t("migrationMore");
     const nav = this.querySelector(".hvls-tabs");
@@ -1918,6 +1946,12 @@ class HVLSPreviewPanel extends HTMLElement {
           <p id="migrationRecoveryStatus" role="status" class="diagnostic-note"></p>
           <div id="migrationRecoveryRows" class="migration-scroll"></div>
           <p id="migrationRecoveryDecisionStatus" role="status" class="diagnostic-note"></p>
+          <h3 id="migrationLedgerTitle">${this._t("migrationLedgerTitle")}</h3>
+          <button id="migrationLedgerRefresh" class="secondary" type="button">
+            ${this._t("migrationLedgerRead")}
+          </button>
+          <p id="migrationLedgerStatus" role="status" class="diagnostic-note"></p>
+          <div id="migrationLedgerRows" class="migration-scroll"></div>
 
           <p id="migrationStatus" role="status">${this._t("migrationEmpty")}</p>
           <div id="migrationSummary" class="migration-review-note"></div>
@@ -1970,6 +2004,9 @@ class HVLSPreviewPanel extends HTMLElement {
     this.querySelector("#migrationReadAttestation").addEventListener("click", () => this._readMigrationAttestation());
     this.querySelector("#migrationAttestReview").addEventListener("click", () => this._attestMigrationReview());
     this.querySelector("#migrationRecoveryRefresh").addEventListener("click", () => this._loadMigrationRecovery());
+    this.querySelector("#migrationLedgerRefresh").addEventListener(
+      "click", () => this._loadMigrationInvestigationHistory()
+    );
     this.querySelector("#migrationMore").addEventListener("click", () => {
       this._migrationLimit = (this._migrationLimit || 100) + 100;
       this._renderMigrationReview();
@@ -2762,7 +2799,15 @@ class HVLSPreviewPanel extends HTMLElement {
         button.addEventListener("click", () => {
           this._simulateRecoveryDecision(row.entity_id, choice.value);
         });
-        line.append(choice, button);
+        const durable = document.createElement("button");
+        durable.type = "button";
+        durable.className = "secondary";
+        durable.textContent = this._t("migrationLedgerButton");
+        durable.disabled = this._recoveryLedgerBusy === true;
+        durable.addEventListener("click", () => {
+          this._recordRecoveryInvestigation(row.entity_id, choice.value);
+        });
+        line.append(choice, button, durable);
       }
       container.append(line);
     }
@@ -2834,6 +2879,118 @@ class HVLSPreviewPanel extends HTMLElement {
     } finally {
       this._recoverySimulationBusy = false;
       this._renderMigrationRecovery();
+    }
+  }
+
+  async _recordRecoveryInvestigation(entityId, disposition) {
+    if (!this._hass || this._recoveryLedgerBusy) return;
+    this._recoveryLedgerBusy = true;
+    const status = this.querySelector("#migrationRecoveryDecisionStatus");
+    if (status) status.textContent = this._t("migrationLedgerSaving");
+    this._renderMigrationRecovery();
+    try {
+      const prepared = await this._hass.callWS({
+        type: "ha_voice_label_sync/prepare_migration_investigation_record",
+        entity_id: entityId, disposition,
+      });
+      if (prepared?.status !== "awaiting_durable_investigation_confirmation" ||
+          prepared.entity_id !== entityId ||
+          prepared.disposition !== disposition ||
+          typeof prepared.confirmation_token !== "string" ||
+          prepared.execution_authorized !== false ||
+          prepared.journal_ack_allowed !== false ||
+          prepared.stage_allowed !== false ||
+          prepared.cutover_allowed !== false) {
+        throw new Error("invalid_durable_prepare");
+      }
+      const accepted = window.confirm(this._tf("migrationLedgerConfirm", {
+        entity: entityId,
+        disposition: this._t({
+          inspect_external_effects: "migrationRecoverySimulationInspect",
+          quarantine_for_investigation: "migrationRecoverySimulationQuarantine",
+          defer_until_further_evidence: "migrationRecoverySimulationDefer",
+        }[disposition]),
+      }));
+      if (!accepted) {
+        if (status) status.textContent = this._t("migrationLedgerCancelled");
+        return;
+      }
+      const saved = await this._hass.callWS({
+        type: "ha_voice_label_sync/confirm_migration_investigation_record",
+        entity_id: entityId, disposition,
+        confirmation_token: prepared.confirmation_token,
+        confirmed: true, acknowledge_external_uncertainty: true,
+      });
+      if (saved?.status !== "durable_investigation_recorded_no_execution" ||
+          saved.record?.entity_id !== entityId ||
+          saved.record?.disposition !== disposition ||
+          saved.execution_authorized !== false ||
+          saved.journal_ack_allowed !== false ||
+          saved.retry_allowed !== false ||
+          saved.rollback_allowed !== false ||
+          saved.stage_allowed !== false ||
+          saved.apply_allowed !== false ||
+          saved.cutover_allowed !== false ||
+          saved.label_changed !== false ||
+          saved.journal_changed !== false ||
+          saved.production_yaml_changed !== false) {
+        throw new Error("invalid_durable_result");
+      }
+      if (status) status.textContent = this._tf("migrationLedgerRecorded", {
+        sequence: saved.record.sequence,
+      });
+      await this._loadMigrationInvestigationHistory();
+    } catch (_error) {
+      if (status) status.textContent = this._t("migrationLedgerRejected");
+    } finally {
+      this._recoveryLedgerBusy = false;
+      this._renderMigrationRecovery();
+    }
+  }
+
+  async _loadMigrationInvestigationHistory() {
+    if (!this._hass || this._ledgerLoading) return;
+    this._ledgerLoading = true;
+    const button = this.querySelector("#migrationLedgerRefresh");
+    const status = this.querySelector("#migrationLedgerStatus");
+    const container = this.querySelector("#migrationLedgerRows");
+    if (button) button.disabled = true;
+    if (status) status.textContent = this._t("migrationLedgerReading");
+    try {
+      const ledger = await this._hass.callWS({
+        type: "ha_voice_label_sync/get_migration_investigation_history",
+      });
+      if (ledger?.status !== "verified_investigation_history" ||
+          ledger.execution_authorized !== false ||
+          ledger.stage_allowed !== false ||
+          ledger.cutover_allowed !== false ||
+          ledger.history_read_only !== true ||
+          !Array.isArray(ledger.records)) {
+        throw new Error("invalid_history");
+      }
+      if (status) status.textContent = this._tf("migrationLedgerCount", {
+        count: ledger.record_count,
+      });
+      if (container) {
+        container.replaceChildren();
+        for (const record of ledger.records.slice(-50)) {
+          const row = document.createElement("p");
+          row.className = "diagnostic-note";
+          row.textContent = this._tf("migrationLedgerRow", {
+            sequence: record.sequence,
+            entity: record.entity_id,
+            disposition: record.disposition,
+            relation: record.evidence_relation,
+          });
+          container.append(row);
+        }
+      }
+    } catch (_error) {
+      if (container) container.replaceChildren();
+      if (status) status.textContent = this._t("migrationLedgerUnavailable");
+    } finally {
+      this._ledgerLoading = false;
+      if (button) button.disabled = false;
     }
   }
 
