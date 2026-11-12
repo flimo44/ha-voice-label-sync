@@ -185,6 +185,76 @@ async def websocket_initialize_migration_baseline(
     connection.send_result(msg["id"], result)
 
 
+WS_TYPE_MIGRATION_LOAD_DRAFT = f"{DOMAIN}/get_migration_decision_draft"
+WS_TYPE_MIGRATION_SAVE_DRAFT = f"{DOMAIN}/save_migration_decision_draft"
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_TYPE_MIGRATION_LOAD_DRAFT}
+)
+async def websocket_get_migration_decision_draft(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Read protected provisional selections; never an execution approval."""
+    try:
+        from .migration_draft_api import async_load_admin_draft
+
+        result = await async_load_admin_draft(hass)
+    except Exception:
+        connection.send_error(
+            msg["id"], "migration_draft_unavailable",
+            "Saved migration selections unavailable; inspect protected files.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_TYPE_MIGRATION_SAVE_DRAFT,
+        vol.Required("decisions"): dict,
+        vol.Required("review_token_sha256"): str,
+        vol.Required("baseline_manifest_sha256"): str,
+        vol.Required("journal_revision"): int,
+        vol.Required("draft_revision"): int,
+    }
+)
+async def websocket_save_migration_decision_draft(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Explicit CAS save of *non-authorizing* review choices only."""
+    try:
+        from .migration_draft_api import async_save_admin_draft
+
+        result = await async_save_admin_draft(
+            hass,
+            user_id=connection.user.id,
+            decisions=msg["decisions"],
+            expected_review_token_sha256=msg["review_token_sha256"],
+            expected_baseline_manifest_sha256=msg["baseline_manifest_sha256"],
+            expected_journal_revision=msg["journal_revision"],
+            expected_draft_revision=msg["draft_revision"],
+        )
+    except Exception:
+        # No raw exception text: it could contain YAML values or filesystem
+        # details. On ambiguous I/O failure, advise explicit inspection.
+        connection.send_error(
+            msg["id"], "migration_draft_save_refused",
+            "Migration draft was not confirmed saved. Inspect protected state "
+            "and refresh the review before retrying.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
 WS_TYPE_GET_PREVIEW = f"{DOMAIN}/get_preview"
 
 
@@ -635,6 +705,8 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_get_migration_review)
     websocket_api.async_register_command(hass, websocket_prepare_migration_baseline)
     websocket_api.async_register_command(hass, websocket_initialize_migration_baseline)
+    websocket_api.async_register_command(hass, websocket_get_migration_decision_draft)
+    websocket_api.async_register_command(hass, websocket_save_migration_decision_draft)
     websocket_api.async_register_command(hass, websocket_get_entities)
     websocket_api.async_register_command(hass, websocket_set_entity_label)
     websocket_api.async_register_command(hass, websocket_apply_preview)

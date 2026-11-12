@@ -47,6 +47,17 @@ const HVLS_TRANSLATIONS = {
     migrationBaselinePartial: "Sauvegarde vérifiée, mais journal indisponible : examen manuel requis. Aucun changement des labels ou du YAML.",
     migrationBaselineError: "Préparation ou initialisation refusée. Revérifiez le diagnostic et les fichiers protégés.",
     migrationBaselineWarning: "Attention : exposition implicite possible. La sauvegarde ne valide pas l’exposition Google.",
+    migrationDraftLoad: "Recharger les choix sauvegardés",
+    migrationDraftSave: "Enregistrer mes choix",
+    migrationDraftSaving: "Vérification des sources et enregistrement des choix…",
+    migrationDraftLoading: "Lecture des choix sauvegardés…",
+    migrationDraftLoaded: "{count} choix récupéré(s). Relisez les résultats de la simulation.",
+    migrationDraftStale: "Attention : les choix sauvegardés sont liés à une ancienne version du journal. Nouvelle revue indispensable.",
+    migrationDraftSaved: "{count} choix enregistrés (révision {revision}). Ce n’est PAS une autorisation de migration.",
+    migrationDraftSaveConfirm: "Enregistrer ces {count} décisions comme brouillon privé et non autorisant ? Les labels et fichiers Google Assistant resteront inchangés.",
+    migrationDraftNotReady: "Actualisez d’abord la simulation après vos modifications et vérifiez la sauvegarde protégée.",
+    migrationDraftError: "Lecture ou sauvegarde des choix refusée. Revérifiez le diagnostic, le journal et les fichiers protégés.",
+    migrationDraftConflict: "Un brouillon existe ou a changé. Rechargez-le avant de remplacer vos décisions, puis relancez la simulation.",
     backupIntro: "Choisissez une sauvegarde pour voir ses différences avec la production. Seul le YAML Google Assistant sera restauré, jamais les étiquettes Home Assistant.",
     backupLoading: "Chargement des sauvegardes…",
     backupEmpty: "Aucune sauvegarde disponible.",
@@ -215,6 +226,17 @@ const HVLS_TRANSLATIONS = {
     migrationBaselinePartial: "Protected backup verified, but journal unavailable: manual review required. No labels or YAML changed.",
     migrationBaselineError: "Preparation or initialization refused. Recheck diagnostic and protected files.",
     migrationBaselineWarning: "Warning: implicit exposure is possible. Backing up does not verify Google exposure.",
+    migrationDraftLoad: "Restore saved selections",
+    migrationDraftSave: "Save my selections",
+    migrationDraftSaving: "Verifying sources and saving selections…",
+    migrationDraftLoading: "Reading saved selections…",
+    migrationDraftLoaded: "{count} saved selection(s) restored. Review the refreshed simulation.",
+    migrationDraftStale: "Warning: saved selections refer to an earlier journal revision. A new review is required.",
+    migrationDraftSaved: "{count} selection(s) saved (revision {revision}). This is NOT authorization to migrate.",
+    migrationDraftSaveConfirm: "Save these {count} decisions as a private non-authorizing draft? HA labels and Google Assistant YAML will remain unchanged.",
+    migrationDraftNotReady: "Refresh simulation after editing selections and verify the protected baseline first.",
+    migrationDraftError: "Cannot restore or save selections. Recheck diagnostic, journal and protected files.",
+    migrationDraftConflict: "A draft already exists or has changed. Restore it before replacing selections, then refresh the simulation.",
     backupIntro: "Select a backup to compare it with current production. Only the Google Assistant YAML file is restored, never Home Assistant labels.",
     backupLoading: "Loading backups…",
     backupEmpty: "No backups available.",
@@ -440,6 +462,10 @@ class HVLSPreviewPanel extends HTMLElement {
     if (migrationPrepare) migrationPrepare.textContent = this._t("migrationBaselinePrepare");
     const migrationConfirm = this.querySelector("#migrationConfirmBaseline");
     if (migrationConfirm) migrationConfirm.textContent = this._t("migrationBaselineConfirmAction");
+    const migrationRestoreDraft = this.querySelector("#migrationRestoreDraft");
+    if (migrationRestoreDraft) migrationRestoreDraft.textContent = this._t("migrationDraftLoad");
+    const migrationSaveDraft = this.querySelector("#migrationSaveDraft");
+    if (migrationSaveDraft) migrationSaveDraft.textContent = this._t("migrationDraftSave");
     const migrationMore = this.querySelector("#migrationMore");
     if (migrationMore) migrationMore.textContent = this._t("migrationMore");
     const nav = this.querySelector(".hvls-tabs");
@@ -1772,6 +1798,15 @@ class HVLSPreviewPanel extends HTMLElement {
             </button>
           </div>
           <p id="migrationBaselineStatus" role="status" class="diagnostic-note"></p>
+          <div class="migration-controls">
+            <button id="migrationRestoreDraft" type="button" class="secondary">
+              ${this._t("migrationDraftLoad")}
+            </button>
+            <button id="migrationSaveDraft" type="button" class="secondary">
+              ${this._t("migrationDraftSave")}
+            </button>
+          </div>
+          <p id="migrationDraftStatus" role="status" class="diagnostic-note"></p>
 
           <p id="migrationStatus" role="status">${this._t("migrationEmpty")}</p>
           <div id="migrationSummary" class="migration-review-note"></div>
@@ -1819,6 +1854,8 @@ class HVLSPreviewPanel extends HTMLElement {
     this.querySelector("#migrationAnalyze").addEventListener("click", () => this._loadMigrationReview());
     this.querySelector("#migrationPrepareBaseline").addEventListener("click", () => this._prepareMigrationBaseline());
     this.querySelector("#migrationConfirmBaseline").addEventListener("click", () => this._confirmMigrationBaseline());
+    this.querySelector("#migrationRestoreDraft").addEventListener("click", () => this._restoreMigrationDecisionDraft());
+    this.querySelector("#migrationSaveDraft").addEventListener("click", () => this._saveMigrationDecisionDraft());
     this.querySelector("#migrationMore").addEventListener("click", () => {
       this._migrationLimit = (this._migrationLimit || 100) + 100;
       this._renderMigrationReview();
@@ -2494,6 +2531,114 @@ class HVLSPreviewPanel extends HTMLElement {
     } finally {
       this._baselineBusy = false;
       this._migrationBaselineControls();
+    }
+  }
+
+  _draftControls() {
+    const save = this.querySelector("#migrationSaveDraft");
+    const restore = this.querySelector("#migrationRestoreDraft");
+    if (save) save.disabled = this._draftBusy === true;
+    if (restore) restore.disabled = this._draftBusy === true;
+  }
+
+  async _restoreMigrationDecisionDraft() {
+    if (!this._hass || this._draftBusy || this._migrationLoading) return;
+    this._draftBusy = true;
+    this._draftControls();
+    const status = this.querySelector("#migrationDraftStatus");
+    if (status) status.textContent = this._t("migrationDraftLoading");
+    try {
+      const saved = await this._hass.callWS({
+        type: "ha_voice_label_sync/get_migration_decision_draft",
+      });
+      if (!saved || !saved.stored_choices_unapproved ||
+          !saved.decisions || typeof saved.decisions !== "object") {
+        throw new Error("unavailable_draft");
+      }
+      const prior = saved.status === "stale_journal" || saved.status === "stale_source";
+      this._migrationDecisions = Object.assign(
+        Object.create(null), saved.decisions
+      );
+      this._draftExpectedRevision = saved.draft_revision;
+      this._migrationDirty = true;
+      await this._loadMigrationReview();
+      if (status) {
+        status.textContent = this._tf("migrationDraftLoaded", {
+          count: Object.keys(saved.decisions).length,
+        }) + (prior ? " " + this._t("migrationDraftStale") : "");
+      }
+    } catch (_error) {
+      if (status) status.textContent = this._t("migrationDraftError");
+    } finally {
+      this._draftBusy = false;
+      this._draftControls();
+    }
+  }
+
+  async _saveMigrationDecisionDraft() {
+    if (!this._hass || this._draftBusy || this._migrationLoading) return;
+    const report = this._migrationReport;
+    const plan = report?.preflight;
+    if (this._migrationDirty ||
+        report?.protected_baseline_status !== "verified" ||
+        !plan?.review_token_sha256) {
+      const status = this.querySelector("#migrationDraftStatus");
+      if (status) status.textContent = this._t("migrationDraftNotReady");
+      return;
+    }
+    this._migrationDecisions ||= Object.create(null);
+    const decisions = {...this._migrationDecisions};
+    if (!window.confirm(this._tf("migrationDraftSaveConfirm", {
+      count: Object.keys(decisions).length,
+    }))) return;
+
+    this._draftBusy = true;
+    this._draftControls();
+    const status = this.querySelector("#migrationDraftStatus");
+    if (status) status.textContent = this._t("migrationDraftSaving");
+    try {
+      const current = await this._hass.callWS({
+        type: "ha_voice_label_sync/get_migration_decision_draft",
+      });
+      if (!current || typeof current.journal_revision !== "number" ||
+          typeof current.draft_revision !== "number" ||
+          typeof current.baseline_manifest_sha256 !== "string") {
+        throw new Error("draft_state_invalid");
+      }
+      if (this._draftExpectedRevision == null) {
+        if (current.draft_revision !== -1) {
+          throw new Error("draft_conflict_needs_restore");
+        }
+        this._draftExpectedRevision = -1;
+      }
+      if (current.draft_revision !== this._draftExpectedRevision) {
+        throw new Error("draft_conflict_needs_restore");
+      }
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/save_migration_decision_draft",
+        decisions,
+        review_token_sha256: plan.review_token_sha256,
+        baseline_manifest_sha256: current.baseline_manifest_sha256,
+        journal_revision: current.journal_revision,
+        draft_revision: this._draftExpectedRevision,
+      });
+      if (result?.status !== "saved_unapproved_draft" ||
+          result.cutover_allowed !== false) {
+        throw new Error("draft_result_invalid");
+      }
+      this._draftExpectedRevision = result.draft_revision;
+      if (status) status.textContent = this._tf("migrationDraftSaved", {
+        count: result.saved_decision_count,
+        revision: result.draft_revision,
+      });
+    } catch (error) {
+      // A lost WS response may follow a durable write. Don't retry on a
+      // guessed revision; the administrator must inspect and refresh.
+      if (status) status.textContent = error?.message === "draft_conflict_needs_restore"
+        ? this._t("migrationDraftConflict") : this._t("migrationDraftError");
+    } finally {
+      this._draftBusy = false;
+      this._draftControls();
     }
   }
 

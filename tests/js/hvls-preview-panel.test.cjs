@@ -1204,3 +1204,158 @@ test("Migration tab contains no automatic confirmed initialization", () => {
   assert.match(source, /window\.confirm\(this\._tf\("migrationBaselineConfirm"/);
   assert.doesNotMatch(source, /setTimeout\([^)]*initialize_migration_baseline/);
 });
+
+
+test("Saving migration choices never calls any label or YAML write", async () => {
+  const requests = [];
+  const {panel} = makePanel(async request => {
+    requests.push(request);
+    if (request.type === "ha_voice_label_sync/get_migration_decision_draft") {
+      return {
+        status: "not_saved", draft_revision: -1,
+        journal_revision: 0,
+        baseline_manifest_sha256: "b".repeat(64),
+        decisions: {},
+      };
+    }
+    if (request.type === "ha_voice_label_sync/save_migration_decision_draft") {
+      return {
+        status: "saved_unapproved_draft", draft_revision: 0,
+        saved_decision_count: 1, cutover_allowed: false,
+      };
+    }
+    throw new Error("Unexpected endpoint");
+  });
+  const controls = {
+    migrationSaveDraft: {disabled: false},
+    migrationRestoreDraft: {disabled: false},
+    migrationDraftStatus: {textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {
+    protected_baseline_status: "verified",
+    preflight: {review_token_sha256: "a".repeat(64)},
+  };
+  panel._migrationDecisions = {"light.safe": {action: "import"}};
+  panel._migrationDirty = false;
+  await panel._saveMigrationDecisionDraft();
+  assert.deepEqual(requests.map(r => r.type), [
+    "ha_voice_label_sync/get_migration_decision_draft",
+    "ha_voice_label_sync/save_migration_decision_draft",
+  ]);
+  assert.equal(requests[1].decisions["light.safe"].action, "import");
+  assert.equal(requests[1].draft_revision, -1);
+  assert.equal(requests[1].review_token_sha256, "a".repeat(64));
+  assert.equal(panel._draftExpectedRevision, 0);
+  assert.match(controls.migrationDraftStatus.textContent, /PAS une autorisation/);
+});
+
+test("Migration draft refuses silent overwrite of unseen administrator changes", async () => {
+  const requests = [];
+  const {panel} = makePanel(async request => {
+    requests.push(request);
+    return {
+      status: "saved_unapproved_draft", draft_revision: 2,
+      journal_revision: 0,
+      baseline_manifest_sha256: "b".repeat(64),
+      decisions: {"light.other": {action: "keep"}},
+    };
+  });
+  const controls = {
+    migrationSaveDraft: {disabled: false},
+    migrationRestoreDraft: {disabled: false},
+    migrationDraftStatus: {textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {
+    protected_baseline_status: "verified",
+    preflight: {review_token_sha256: "a".repeat(64)},
+  };
+  panel._migrationDecisions = {"light.safe": {action: "import"}};
+  panel._migrationDirty = false;
+  await panel._saveMigrationDecisionDraft();
+  assert.equal(requests.length, 1);
+  assert.match(controls.migrationDraftStatus.textContent, /Un brouillon existe/);
+  assert.equal(panel._draftExpectedRevision, undefined);
+});
+
+test("Restored migration draft survives UI reopening but needs fresh analysis", async () => {
+  const requests = [];
+  const {panel} = makePanel(async request => {
+    requests.push(request);
+    return {
+      stored_choices_unapproved: true,
+      status: "saved_unapproved_draft",
+      draft_revision: 4,
+      decisions: {
+        "light.safe": {action: "import"},
+        "light.bad": {action: "keep"},
+      },
+    };
+  });
+  const controls = {
+    migrationSaveDraft: {disabled: false},
+    migrationRestoreDraft: {disabled: false},
+    migrationDraftStatus: {textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  let refreshed = 0;
+  panel._loadMigrationReview = async () => { refreshed++; };
+  await panel._restoreMigrationDecisionDraft();
+  assert.equal(panel._draftExpectedRevision, 4);
+  assert.equal(panel._migrationDecisions["light.safe"].action, "import");
+  assert.equal(panel._migrationDecisions["light.bad"].action, "keep");
+  assert.equal(refreshed, 1);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].type,
+    "ha_voice_label_sync/get_migration_decision_draft");
+});
+
+test("Draft choice edits do not autosave or mutate labels", async () => {
+  const requests = [];
+  const {panel} = makePanel(async request => {
+    requests.push(request.type);
+    return {};
+  });
+  panel.querySelector = () => null;
+  panel._setMigrationChoice("light.safe", "action", "keep");
+  panel._setMigrationChoice("light.safe", "metadata_policy",
+    "retain_manual_yaml");
+  assert.equal(requests.length, 0);
+  assert.equal(panel._migrationDirty, true);
+});
+
+test("Unsaved or stale migration analysis cannot persist decisions", async () => {
+  const requests = [];
+  const {panel} = makePanel(async request => {
+    requests.push(request);
+    return {};
+  });
+  const controls = {migrationDraftStatus: {textContent: ""}};
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationDirty = true;
+  panel._migrationReport = {
+    protected_baseline_status: "verified",
+    preflight: {review_token_sha256: "a".repeat(64)},
+  };
+  await panel._saveMigrationDecisionDraft();
+  assert.equal(requests.length, 0);
+  assert.match(controls.migrationDraftStatus.textContent,
+    /Actualisez d’abord/);
+});
+
+test("Cancel save migration selections sends no write", async () => {
+  const requests = [];
+  const {panel} = makePanel(async request => {
+    requests.push(request);
+    return {};
+  }, () => false);
+  panel._migrationDirty = false;
+  panel._migrationReport = {
+    protected_baseline_status: "verified",
+    preflight: {review_token_sha256: "a".repeat(64)},
+  };
+  panel.querySelector = () => null;
+  await panel._saveMigrationDecisionDraft();
+  assert.equal(requests.length, 0);
+});
