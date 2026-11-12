@@ -7,6 +7,8 @@ and external-effects verification explicitly missing.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from functools import partial
 from typing import Any
@@ -22,6 +24,24 @@ from .migration_write_boundary import capture_native_boundary
 from .workflow_lock import get_workflow_lock
 
 _ENTITY = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
+_MAX_EVIDENCE_BYTES = 8 * 1024 * 1024
+
+
+def _fingerprint(*, draft: dict[str, Any], journal: dict[str, Any],
+                 review: dict[str, Any], attestation: dict[str, Any],
+                 source: dict[str, Any], native: dict[str, Any]) -> str:
+    """Opaque digest of COMPLETE server-collected evidence, no private text."""
+    raw = json.dumps(
+        {
+            "draft": draft, "journal": journal, "review": review,
+            "attestation": attestation, "source": source, "native": native,
+        },
+        sort_keys=True, ensure_ascii=False, separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    if len(raw) > _MAX_EVIDENCE_BYTES:
+        raise ValueError("evidence_size_exceeded")
+    return hashlib.sha256(raw).hexdigest()
 
 
 def _unavailable(entity_id: str | None, reason: str) -> dict[str, Any]:
@@ -108,7 +128,7 @@ async def async_get_stage_admission_preview(
             )
             if native_assessment.get("status") != "matched":
                 return _unavailable(entity_id, "native_snapshot_changed")
-            return assess_stage_admission(
+            assessment = assess_stage_admission(
                 entity_id=entity_id,
                 saved_draft=saved,
                 review=report,
@@ -117,5 +137,12 @@ async def async_get_stage_admission_preview(
                 sources_verified=verified,
                 native_capture=native,
             )
+            # An opaque, *non-authorizing* proof that the complete evidence
+            # was freshly collected. Not an execution capability or signature.
+            assessment["server_evidence_sha256"] = _fingerprint(
+                draft=saved, journal=journal, review=report,
+                attestation=attestation, source=verified, native=native,
+            )
+            return assessment
         except (OSError, ValueError, KeyError, TypeError, RuntimeError, AttributeError):
             return _unavailable(entity_id, "protected_evidence_unavailable")
