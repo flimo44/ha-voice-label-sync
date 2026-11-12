@@ -15,17 +15,21 @@ from functools import partial
 from typing import Any
 
 from .const import DOMAIN
+from .migration_decision_draft import load_review_draft
 from .migration_execution_approval_dryrun import (
-    _ACTION, _fresh_preview_without_reentering_lock, _trusted_preview,
+    _ACTION,
+    _fresh_preview_without_reentering_lock,
+    _trusted_preview,
     _valid_request,
-)
-from .migration_execution_one_shot_rehearsal import (
-    _hash, append_rehearsal_transition, read_one_shot_rehearsals,
 )
 from .migration_execution_approval_records import (
     load_approval_intent_history,
 )
-from .migration_decision_draft import load_review_draft
+from .migration_execution_one_shot_rehearsal import (
+    _hash,
+    append_rehearsal_transition,
+    read_one_shot_rehearsals,
+)
 from .migration_journal import read_journal
 from .workflow_lock import get_workflow_lock
 
