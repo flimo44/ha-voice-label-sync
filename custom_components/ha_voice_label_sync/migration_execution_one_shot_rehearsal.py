@@ -18,14 +18,19 @@ from pathlib import Path
 from typing import Any
 
 from .migration_baseline import (
-    BaselineError, _capture_sources, _json_bytes, _private_directory,
-    _regular_file, _sync_dir, _write_new, migration_lock,
-    storage_directory, verify_baseline,
+    BaselineError,
+    _capture_sources,
+    _json_bytes,
+    _private_directory,
+    _regular_file,
+    _sync_dir,
+    _write_new,
+    migration_lock,
+    storage_directory,
+    verify_baseline,
 )
 from .migration_decision_draft import load_review_draft
-from .migration_execution_approval_records import (
-    load_approval_intent_history,
-)
+from .migration_execution_approval_records import load_approval_intent_history
 from .migration_journal import read_journal
 
 _DIR = "execution-one-shot-rehearsal"
