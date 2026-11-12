@@ -86,7 +86,8 @@ def capture_native_boundary(
     """
     invalid = _base("refused", "invalid_boundary_request")
     if (
-        not isinstance(entity_id, str) or not _ENTITY.fullmatch(entity_id)
+        not isinstance(entity_id, str) or len(entity_id) > 255
+        or not _ENTITY.fullmatch(entity_id)
         or not isinstance(configured_label, str)
         or not 0 < len(configured_label) <= 128
         or type(desired_present) is not bool
@@ -164,6 +165,7 @@ def assess_native_boundary(
     try:
         if (
             not isinstance(snapshot["entity_id"], str)
+            or len(snapshot["entity_id"]) > 255
             or not _ENTITY.fullmatch(snapshot["entity_id"])
             or not isinstance(snapshot["configured_label"], str)
             or not 0 < len(snapshot["configured_label"]) <= 128
