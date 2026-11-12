@@ -257,3 +257,245 @@ def test_invalid_entity_id_refused_before_any_server_read(app):
     assert result["technical_blockers"] == ["invalid_entity_id"]
     assert app.calls == []
     assert "private-secret" not in str(result)
+
+
+
+def _approval(app, monkeypatch):
+    """Load approval under the exact mocked HA package from this fixture."""
+    prefix = app.api.__name__.rsplit(".", 1)[0]
+    spec = importlib.util.spec_from_file_location(
+        f"{prefix}.migration_execution_approval_dryrun",
+        ROOT / "migration_execution_approval_dryrun.py",
+    )
+    assert spec and spec.loader
+    approval = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, approval)
+    spec.loader.exec_module(approval)
+    app.hass.data = {}
+    return approval
+
+
+def _prepare_approval(mod, app, *, admin="admin_a", entity="light.good",
+                      action="stage_one_label_addition"):
+    return asyncio.run(mod.prepare_admin_execution_approval_dryrun(
+        app.hass, administrator_id=admin, entity_id=entity, action=action,
+    ))
+
+
+def _confirm_approval(mod, app, prepared, *, admin="admin_a",
+                      entity="light.good", action="stage_one_label_addition",
+                      confirmed=True, acknowledge=True):
+    return asyncio.run(mod.confirm_admin_execution_approval_dryrun(
+        app.hass, administrator_id=admin, entity_id=entity, action=action,
+        confirmation_token=prepared["confirmation_token"],
+        confirmed=confirmed, acknowledge_external_uncertainty=acknowledge,
+    ))
+
+
+def test_admin_bound_single_use_rehearsal_never_grants_staging(app, monkeypatch):
+    approval = _approval(app, monkeypatch)
+    prepared = _prepare_approval(approval, app)
+    assert prepared["status"] == (
+        "awaiting_simulated_execution_approval_confirmation"
+    )
+    assert prepared["expires_in_seconds"] == 180
+    assert len(prepared["server_evidence_sha256"]) == 64
+    assert len(prepared["confirmation_token"]) >= 32
+    assert prepared["human_confirmation_received"] is False
+    confirmed = _confirm_approval(approval, app, prepared)
+    assert confirmed["status"] == (
+        "simulated_execution_approval_confirmed_no_execution"
+    )
+    assert confirmed["fresh_evidence_rechecked"] is True
+    assert confirmed["challenge_consumed"] is True
+    assert confirmed["human_confirmation_received"] is True
+    assert confirmed["server_evidence_sha256"] == (
+        prepared["server_evidence_sha256"]
+    )
+    for field in (
+        "execution_authorized", "journal_ack_allowed", "retry_allowed",
+        "rollback_allowed", "stage_allowed", "apply_allowed",
+        "cutover_allowed", "google_home_state_verified",
+        "external_consumers_verified", "observation_atomic_across_processes",
+    ):
+        assert prepared[field] is False
+        assert confirmed[field] is False
+    assert confirmed["decision_not_durably_saved"] is True
+    assert confirmed["no_action_was_performed"] is True
+    assert app.calls.count("read_source") == 4
+    assert app.hass.data["hvls"][approval._PENDING_KEY] == {}
+
+
+def test_approval_replay_fails_and_missing_token_does_not_bypass(app, monkeypatch):
+    approval = _approval(app, monkeypatch)
+    prepared = _prepare_approval(approval, app)
+    with pytest.raises(approval.ApprovalDryRunError):
+        asyncio.run(approval.confirm_admin_execution_approval_dryrun(
+            app.hass, administrator_id="admin_a",
+            entity_id="light.good", action="stage_one_label_addition",
+            confirmation_token="forged", confirmed=True,
+            acknowledge_external_uncertainty=True,
+        ))
+    _confirm_approval(approval, app, prepared)
+    with pytest.raises(
+        approval.ApprovalDryRunError, match="challenge_expired_or_invalid"
+    ):
+        _confirm_approval(approval, app, prepared)
+
+
+def test_other_admin_cannot_use_or_consume_approval(app, monkeypatch):
+    approval = _approval(app, monkeypatch)
+    prepared = _prepare_approval(approval, app)
+    with pytest.raises(
+        approval.ApprovalDryRunError, match="challenge_expired_or_invalid"
+    ):
+        _confirm_approval(approval, app, prepared, admin="admin_b")
+    assert _confirm_approval(approval, app, prepared)[
+        "challenge_consumed"
+    ] is True
+
+
+def test_second_admin_prepare_same_entity_invalidates_first(app, monkeypatch):
+    approval = _approval(app, monkeypatch)
+    first = _prepare_approval(approval, app, admin="admin_a")
+    second = _prepare_approval(approval, app, admin="admin_b")
+    with pytest.raises(
+        approval.ApprovalDryRunError, match="challenge_expired_or_invalid"
+    ):
+        _confirm_approval(approval, app, first, admin="admin_a")
+    assert _confirm_approval(
+        approval, app, second, admin="admin_b"
+    )["execution_authorized"] is False
+
+
+def test_expired_challenge_never_confirms(app, monkeypatch):
+    approval = _approval(app, monkeypatch)
+    clock = [1000.0]
+    monkeypatch.setattr(approval.time, "monotonic", lambda: clock[0])
+    prepared = _prepare_approval(approval, app)
+    clock[0] += 181
+    with pytest.raises(
+        approval.ApprovalDryRunError, match="challenge_expired_or_invalid"
+    ):
+        _confirm_approval(approval, app, prepared)
+
+
+@pytest.mark.parametrize("mutation", [
+    "native_labels", "journal_revision", "manual_google_policy",
+    "draft_changed", "source_unavailable", "attestation_changed",
+])
+def test_evidence_drift_or_failed_admission_consumes_proof_without_writes(
+    app, monkeypatch, mutation,
+):
+    approval = _approval(app, monkeypatch)
+    prepared = _prepare_approval(approval, app)
+    if mutation == "native_labels":
+        app.native["snapshot"]["before_labels"] = ["different_unrelated"]
+    elif mutation == "journal_revision":
+        app.journal["revision"] += 1
+    elif mutation == "manual_google_policy":
+        app.review["diagnostic"]["loaded_policy"]["rule_changes"] = ["change"]
+    elif mutation == "draft_changed":
+        app.draft["draft_revision"] += 1
+    elif mutation == "source_unavailable":
+        app.review["diagnostic"]["source"]["locations"] = None
+    elif mutation == "attestation_changed":
+        app.attestation["status"] = "stale_review_attestation"
+    with pytest.raises(approval.ApprovalDryRunError):
+        _confirm_approval(approval, app, prepared)
+    with pytest.raises(
+        approval.ApprovalDryRunError, match="challenge_expired_or_invalid"
+    ):
+        _confirm_approval(approval, app, prepared)
+    assert app.hass.data["hvls"][approval._PENDING_KEY] == {}
+
+
+@pytest.mark.parametrize("invalid_action", [
+    "ack_intent", "rollback", "retry", "cutover",
+    "stage_all_entities", "", "stage_one_label_removal",
+])
+def test_execution_scope_is_only_one_label_addition_no_other_action(
+    app, monkeypatch, invalid_action,
+):
+    approval = _approval(app, monkeypatch)
+    with pytest.raises(
+        approval.ApprovalDryRunError, match="invalid_approval_scope"
+    ):
+        _prepare_approval(approval, app, action=invalid_action)
+    assert app.hass.data == {}
+
+
+def test_wrong_entity_and_noncandidate_cannot_confirm(app, monkeypatch):
+    approval = _approval(app, monkeypatch)
+    prepared = _prepare_approval(approval, app)
+    with pytest.raises(approval.ApprovalDryRunError):
+        _confirm_approval(approval, app, prepared, entity="light.other")
+    assert _confirm_approval(
+        approval, app, prepared
+    )["execution_authorized"] is False
+    with pytest.raises(
+        approval.ApprovalDryRunError, match="technical_admission_not_consistent"
+    ):
+        _prepare_approval(approval, app, entity="light.other")
+
+
+@pytest.mark.parametrize("decision", [
+    {"confirmed": False},
+    {"confirmed": None},
+    {"acknowledge": False},
+    {"acknowledge": None},
+])
+def test_confirmation_requires_explicit_true_and_external_uncertainty(
+    app, monkeypatch, decision,
+):
+    approval = _approval(app, monkeypatch)
+    prepared = _prepare_approval(approval, app)
+    with pytest.raises(
+        approval.ApprovalDryRunError,
+        match="explicit_confirmation_and_uncertainty_required",
+    ):
+        _confirm_approval(approval, app, prepared, **decision)
+    assert _confirm_approval(
+        approval, app, prepared
+    )["execution_authorized"] is False
+
+
+def test_protocol_in_memory_disappears_on_restart(app, monkeypatch):
+    approval = _approval(app, monkeypatch)
+    prepared = _prepare_approval(approval, app)
+    app.hass.data = {}
+    with pytest.raises(
+        approval.ApprovalDryRunError, match="challenge_expired_or_invalid"
+    ):
+        _confirm_approval(approval, app, prepared)
+
+
+def test_approval_ws_admin_only_and_dormant_writer_unreachable():
+    import ast
+
+    tree = ast.parse((ROOT / "websocket.py").read_text(encoding="utf-8"))
+    names = [
+        "websocket_prepare_migration_execution_approval_dryrun",
+        "websocket_confirm_migration_execution_approval_dryrun",
+    ]
+    for name in names:
+        node = next(
+            n for n in tree.body
+            if isinstance(n, ast.AsyncFunctionDef) and n.name == name
+        )
+        assert any(
+            isinstance(d, ast.Attribute) and d.attr == "require_admin"
+            for d in node.decorator_list
+        )
+        source = ast.unparse(node)
+        assert "stage_one_approved_label" not in source
+        assert "mark_label_applied" not in source
+        assert "record_label_intent" not in source
+        assert "async_update_entity" not in source
+    script = (ROOT / "migration_execution_approval_dryrun.py").read_text()
+    for name in (
+        "stage_one_approved_label(", "mark_label_applied(",
+        "record_label_intent(", "async_update_entity(",
+        "append_investigation_record(", "advance_phase(",
+    ):
+        assert name not in script
