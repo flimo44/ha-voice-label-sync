@@ -74,19 +74,12 @@ WS_TYPE_RECOVERY_SIMULATION_PREPARE = (
 WS_TYPE_RECOVERY_SIMULATION_CONFIRM = (
     f"{DOMAIN}/confirm_migration_recovery_decision"
 )
-_RECOVERY_DISPOSITIONS = (
-    "inspect_external_effects",
-    "quarantine_for_investigation",
-    "defer_until_further_evidence",
-)
-
-
 @websocket_api.require_admin
 @websocket_api.async_response
 @websocket_api.websocket_command({
     vol.Required("type"): WS_TYPE_RECOVERY_SIMULATION_PREPARE,
     vol.Required("entity_id"): str,
-    vol.Required("disposition"): vol.In(_RECOVERY_DISPOSITIONS),
+    vol.Required("disposition"): str,
 })
 async def websocket_prepare_migration_recovery_decision(
     hass: HomeAssistant,
@@ -118,7 +111,7 @@ async def websocket_prepare_migration_recovery_decision(
 @websocket_api.websocket_command({
     vol.Required("type"): WS_TYPE_RECOVERY_SIMULATION_CONFIRM,
     vol.Required("entity_id"): str,
-    vol.Required("disposition"): vol.In(_RECOVERY_DISPOSITIONS),
+    vol.Required("disposition"): str,
     vol.Required("confirmation_token"): str,
     vol.Required("confirmed"): bool,
     vol.Required("acknowledge_external_uncertainty"): bool,
