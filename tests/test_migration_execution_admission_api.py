@@ -221,7 +221,7 @@ def test_server_rebuilds_evidence_and_always_returns_non_authorizing(app):
     assert app.calls == [
         "read_draft", "read_journal", "read_review",
         "read_attestation", "read_source", "capture_native",
-        "read_journal", "read_draft", "assess_native",
+        "read_journal", "read_draft", "read_source", "assess_native",
     ]
 
 
