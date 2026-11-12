@@ -21,7 +21,10 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
 
-COMPONENT = Path(__file__).resolve().parents[1] / "custom_components" / "ha_voice_label_sync"
+COMPONENT = (
+    Path(__file__).resolve().parents[1]
+    / "custom_components" / "ha_voice_label_sync"
+)
 SOURCE = b"""# Byte-exact manually maintained Google Assistant source
 google_assistant:
   expose_by_default: false
