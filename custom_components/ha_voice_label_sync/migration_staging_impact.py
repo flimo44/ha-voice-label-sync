@@ -36,7 +36,10 @@ class StagingImpactError(ValueError):
 def _unavailable(reason: str) -> dict[str, Any]:
     return {
         "status": "unavailable",
-        "reason": reason if reason in _REASON_CODES else "loaded_ga_runtime_unavailable",
+        "reason": (
+            reason if reason in _REASON_CODES
+            else "loaded_ga_runtime_unavailable"
+        ),
         "manual_google_policy_checked": False,
         "observations": {},
     }
@@ -103,7 +106,9 @@ def capture_loaded_ga_label_impact(
         try:
             entry = registry.async_get(entity_id)
             if entry is None:
-                observations[entity_id] = {"status": "native_entity_registry_unavailable"}
+                observations[entity_id] = {
+                    "status": "native_entity_registry_unavailable"
+                }
                 continue
             overrides = original_entities.get(entity_id, {})
             if not isinstance(overrides, Mapping):
