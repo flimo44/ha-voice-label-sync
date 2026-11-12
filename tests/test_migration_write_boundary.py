@@ -259,4 +259,7 @@ def test_boundary_module_has_no_mutation_calls_or_websocket_registration():
     ws = (ROOT / "websocket.py").read_text()
     assert "migration_write_boundary" not in ws
     stage = (ROOT / "migration_stage_executor.py").read_text()
-    assert "migration_write_boundary" not in stage
+    assert "migration_write_boundary" in stage
+    assert "capture_native_boundary(" in stage
+    assert "assess_native_boundary(" in stage
+    assert "expected_boundary_capture=boundary_capture" in stage
