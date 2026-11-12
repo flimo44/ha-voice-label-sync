@@ -143,6 +143,82 @@ async def test_real_automation_event(hass, entity_id, label_id, other_label):
     return {"actual_automation_service_calls": len(observed)}
 
 
+async def test_real_registry_write_boundary(hass, label_id, other_label):
+    """Real Core guard: exact native set and identity, zero guard writes."""
+    guard = module("migration_write_boundary")
+    registry = er.async_get(hass)
+    row = registry.async_get_or_create(
+        "light", "hvls_fault_sandbox", "boundary",
+        suggested_object_id="cas_guard",
+    )
+    entity_id = row.entity_id
+    registry.async_update_entity(entity_id, labels={other_label})
+    await hass.async_block_till_done()
+    captured = guard.capture_native_boundary(
+        hass, entity_id=entity_id, configured_label="Google Assistant",
+        desired_present=True,
+    )
+    assert captured["status"] == "captured", captured
+    assert captured["snapshot"]["registry_id"] == row.id
+    assert captured["snapshot"]["before_labels"] == [other_label]
+    result = guard.assess_native_boundary(hass, capture=captured)
+    assert result["status"] == "matched", result
+    assert result["execution_authorized"] is False
+    assert result["stage_allowed"] is False
+    assert registry.async_get(entity_id).labels == {other_label}
+
+    # An unrelated HA label arrives before a hypothetical write.
+    # No guard action may silently overwrite or drop that label.
+    unrelated = lr.async_get(hass).async_create("Concurrent label")
+    registry.async_update_entity(
+        entity_id, labels={other_label, unrelated.label_id}
+    )
+    await hass.async_block_till_done()
+    stale = guard.assess_native_boundary(hass, capture=captured)
+    assert stale["status"] == "refused", stale
+    assert stale["reason"] == "native_full_label_set_changed"
+    assert registry.async_get(entity_id).labels == {
+        other_label, unrelated.label_id
+    }
+
+    # Even after a restored local state, the external side effects are
+    # unknown: a matching snapshot NEVER authorizes a retry.
+    registry.async_update_entity(entity_id, labels={other_label})
+    await hass.async_block_till_done()
+    restored = guard.assess_native_boundary(hass, capture=captured)
+    assert restored["status"] == "matched"
+    assert restored["external_consumers_verified"] is False
+    assert restored["execution_authorized"] is False
+
+    # Another actor adds the target label. The captured addition is stale.
+    registry.async_update_entity(
+        entity_id, labels={other_label, label_id}
+    )
+    await hass.async_block_till_done()
+    assert guard.assess_native_boundary(
+        hass, capture=captured
+    )["status"] == "refused"
+
+    # Test opposite desired direction without ever writing from the guard.
+    removal = guard.capture_native_boundary(
+        hass, entity_id=entity_id, configured_label="Google Assistant",
+        desired_present=False,
+    )
+    assert removal["status"] == "captured"
+    checked = guard.assess_native_boundary(hass, capture=removal)
+    assert checked["status"] == "matched"
+    assert checked["proposed_delta"] == "remove_one_label"
+    assert registry.async_get(entity_id).labels == {
+        other_label, label_id
+    }
+    return {
+        "native_labels_set_cas": True,
+        "unrelated_label_race_rejected": True,
+        "target_membership_race_rejected": True,
+        "recovery_not_authorized": True,
+    }
+
+
 async def prepare_crash_boundary(
     root: Path, *, mutate_after_intent: bool
 ) -> dict:
@@ -361,6 +437,9 @@ async def main():
         automation_result = await test_real_automation_event(
             hass, entity_id, label_id, other_label
         )
+        boundary_result = await test_real_registry_write_boundary(
+            hass, label_id, other_label
+        )
         assert (automation_root / "configuration.yaml").read_bytes() == SOURCE
 
         outcomes = []
@@ -383,6 +462,7 @@ async def main():
         print("HVLS_NATIVE_AUTOMATION_AND_CRASH_PASS", json.dumps({
             "core": "2026.11.0",
             "real_automation": automation_result,
+            "native_write_boundary": boundary_result,
             "restarted_process_scenarios": outcomes,
             "native_registry_and_journal_persisted": True,
             "source_yaml_unchanged": True,
