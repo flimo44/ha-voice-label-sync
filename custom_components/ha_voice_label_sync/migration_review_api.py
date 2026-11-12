@@ -19,6 +19,10 @@ from .migration_cutover_review import build_readonly_migration_review
 from .migration_diagnostic import build_admin_migration_diagnostic
 from .migration_stage_executor import _current_catalog
 from .migration_stage_plan import build_reviewed_stage_plan
+from .migration_staging_impact import (
+    assess_label_staging_impact,
+    capture_loaded_ga_label_impact,
+)
 from .services import DEFAULT_DOMAINS
 
 
@@ -34,11 +38,13 @@ def _offline_review(
     registries: Mapping[str, Any],
     configured_label: str,
     label_id: str,
+    impact_capture: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Pure planning and optional baseline-backed simulation in an executor."""
     plan = build_reviewed_stage_plan(
         diagnostic, decisions, facts, label_id=label_id
     )
+    impact = assess_label_staging_impact(diagnostic, plan, impact_capture)
     baseline_status = "unavailable"
     simulation = None
     try:
@@ -62,6 +68,7 @@ def _offline_review(
         "schema_version": 1,
         "diagnostic": diagnostic,
         "preflight": plan,
+        "pre_stage_impact": impact,
         "simulation": simulation,
         "protected_baseline_status": baseline_status,
         "read_only": True,
@@ -97,6 +104,14 @@ async def async_build_admin_review(
     registries = get_live_registries(hass)
     entity_ids = [row["entity_id"] for row in diagnostic["entities"]]
     label_id, facts = _current_catalog(hass, configured_label, entity_ids)
+    # The GoogleConfig oracle is queried ONLY on the HA event loop. Do not
+    # leak the private runtime config into the executor or WebSocket result.
+    imported = [
+        entity_id for entity_id in entity_ids
+        if isinstance(decisions.get(entity_id), Mapping)
+        and decisions[entity_id].get("action") == "import"
+    ]
+    impact_capture = capture_loaded_ga_label_impact(hass, imported)
 
     return await hass.async_add_executor_job(
         partial(
@@ -108,5 +123,6 @@ async def async_build_admin_review(
             registries,
             configured_label,
             label_id,
+            impact_capture,
         )
     )
