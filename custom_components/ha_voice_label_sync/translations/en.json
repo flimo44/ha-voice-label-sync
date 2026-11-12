@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Configure HA Voice Label Sync",
-        "description": "Configure how Home Assistant entities are selected and exported.",
+        "description": "Configure HVLS and review Google Assistant settings.\n\n{diagnostic}",
         "data": {
           "backend": "Voice assistant",
           "label": "Home Assistant label",
@@ -25,7 +25,10 @@
       "already_configured": "HA Voice Label Sync is already configured."
     },
     "error": {
-      "label_setup_failed": "Could not create or resolve the Home Assistant label. Check label names and permissions."
+      "label_setup_failed": "Could not create or resolve the Home Assistant label. Check label names and permissions.",
+      "source_output_conflict": "The output matches the Google Assistant source. Choose a separate file.",
+      "existing_output_not_owned": "This output already exists. Choose another destination.",
+      "unsafe_output_path": "Unsafe output path or path outside Home Assistant."
     }
   },
   "options": {

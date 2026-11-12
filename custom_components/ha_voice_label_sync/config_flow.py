@@ -30,7 +30,13 @@ from .const import (
     DOMAIN,
     NAME,
 )
-from .google_config import check_entity_config, read_google_config
+from .google_config import (
+    check_entity_config,
+    initial_setup_output_error,
+    inspect_initial_setup,
+    read_google_config,
+    render_initial_setup_diagnostic,
+)
 from .label_setup import ensure_configured_label
 from .label_update import LabelUpdateError
 
@@ -93,8 +99,34 @@ class HVLSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Handle the initial setup step."""
+        """Show and validate initial setup with read-only discovery."""
+        values = user_input or {}
+        output = values.get(CONF_OUTPUT, DEFAULT_OUTPUT)
+
+        report = await self.hass.async_add_executor_job(
+            inspect_initial_setup,
+            self.hass.config.path(),
+            output,
+        )
+
+        placeholders = {
+            "diagnostic": render_initial_setup_diagnostic(
+                report,
+                getattr(self.hass.config, "language", "en"),
+            ),
+        }
+
         if user_input is not None:
+            error = initial_setup_output_error(report)
+
+            if error:
+                return self.async_show_form(
+                    step_id="user",
+                    data_schema=build_schema(user_input),
+                    errors={"base": error},
+                    description_placeholders=placeholders,
+                )
+
             await self.async_set_unique_id(DOMAIN)
             self._abort_if_unique_id_configured()
 
@@ -105,19 +137,23 @@ class HVLSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     step_id="user",
                     data_schema=build_schema(user_input),
                     errors={"base": "label_setup_failed"},
+                    description_placeholders=placeholders,
                 )
 
             return self.async_create_entry(
                 title=NAME,
                 data={
                     **user_input,
-                    CONF_BACKUP_RETENTION: int(user_input[CONF_BACKUP_RETENTION]),
+                    CONF_BACKUP_RETENTION: int(
+                        user_input[CONF_BACKUP_RETENTION]
+                    ),
                 },
             )
 
         return self.async_show_form(
             step_id="user",
             data_schema=build_schema(),
+            description_placeholders=placeholders,
         )
 
     @staticmethod
