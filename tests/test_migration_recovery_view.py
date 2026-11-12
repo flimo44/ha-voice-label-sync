@@ -61,6 +61,7 @@ def setup(monkeypatch, tmp_path):
         "migration_recovery_confirmation",
         "migration_recovery_records", "migration_recovery_records_api",
         "migration_execution_approval_records",
+        "migration_execution_one_shot_rehearsal",
     ):
         name = f"{prefix}.{stem}"
         spec = importlib.util.spec_from_file_location(
@@ -1431,3 +1432,306 @@ def test_durable_approval_history_is_not_wired_into_stage_executor():
             "advance_phase",
         ):
             assert forbidden not in ast.unparse(fn)
+
+
+
+def _one_shot_test_setup(env, monkeypatch, entity="light.first"):
+    """Real audit, baseline and transaction journal; synthetic draft only."""
+    _ready(env)
+    approval = env.modules["migration_execution_approval_records"]
+    one = env.modules["migration_execution_one_shot_rehearsal"]
+    baseline = env.modules["migration_baseline"].verify_baseline(env.tmp)
+    draft = {
+        "status": "saved_unapproved_draft",
+        "stored_choices_unapproved": True,
+        "baseline_manifest_sha256": baseline["manifest_sha256"],
+        "decisions": {
+            "light.first": {"action": "import"},
+            "light.second": {"action": "import"},
+        },
+    }
+    monkeypatch.setattr(approval, "load_review_draft", lambda _: draft)
+    monkeypatch.setattr(one, "load_review_draft", lambda _: draft)
+    journal = env.modules["migration_journal"].read_journal(env.tmp)
+    past = approval.append_approval_intent_evidence(
+        str(env.tmp), expected_record_count=0,
+        expected_last_record_sha256="0" * 64,
+        expected_journal_sha256=approval._hash(journal),
+        expected_journal_revision=journal["revision"],
+        expected_draft_sha256=approval._hash(draft),
+        admission_evidence_sha256="e" * 64,
+        entity_id=entity, action="stage_one_label_addition",
+        administrator_id="admin_one",
+    )
+    return one, draft, past["record"]["record_sha256"]
+
+
+def _reserve_one_shot(env, module, draft, approval_sha, *,
+                      count=0, head=None, admin="admin_one",
+                      entity="light.first", event="reserve_non_authorizing",
+                      receipt_id=None, journal=None):
+    if journal is None:
+        journal = env.modules["migration_journal"].read_journal(env.tmp)
+    return module.append_rehearsal_transition(
+        str(env.tmp),
+        event=event, entity_id=entity, administrator_id=admin,
+        admission_evidence_sha256="e" * 64,
+        approval_intent_sha256=approval_sha,
+        expected_journal_sha256=module._hash(journal),
+        expected_draft_sha256=module._hash(draft),
+        expected_event_count=count,
+        expected_head_sha256=head or ("0" * 64),
+        receipt_id=receipt_id,
+    )
+
+
+def _one_shot_dir(env):
+    return (
+        env.tmp / ".storage" / "hvls_migration"
+        / "execution-one-shot-rehearsal"
+    )
+
+
+def test_one_shot_durable_reserve_burn_same_admin_no_real_execution(
+    setup, monkeypatch,
+):
+    one, draft, approval_sha = _one_shot_test_setup(setup, monkeypatch)
+    journal = setup.modules["migration_journal"].read_journal(setup.tmp)
+    yaml = (setup.tmp / "configuration.yaml").read_bytes()
+    include = (setup.tmp / "google_entities.yaml").read_bytes()
+    assert not _one_shot_dir(setup).exists()
+    reserved = _reserve_one_shot(setup, one, draft, approval_sha)
+    assert reserved["status"] == "one_shot_reserved_non_authorizing"
+    assert reserved["receipt"]["lifecycle"] == "reserved_non_authorizing"
+    receipt_id = reserved["receipt"]["receipt_id"]
+    assert len(receipt_id) == 32
+    assert reserved["receipt_is_not_execution_capability"] is True
+    assert reserved["record_fsync_completed"] is True
+    assert reserved["head_fsync_completed"] is True
+    history = one.read_one_shot_rehearsals(str(setup.tmp))
+    assert history["event_count"] == 1
+    assert history["receipts"][0]["receipt_id"] == receipt_id
+    burned = _reserve_one_shot(
+        setup, one, draft, approval_sha,
+        count=1, head=reserved["head_sha256"],
+        event="burn_without_execution", receipt_id=receipt_id,
+    )
+    assert burned["status"] == "one_shot_burned_without_execution"
+    assert burned["receipt"]["lifecycle"] == "burned_without_execution"
+    assert burned["execution_authorized"] is False
+    assert burned["journal_ack_allowed"] is False
+    assert burned["stage_allowed"] is False
+    assert burned["retry_allowed"] is False
+    assert burned["rollback_allowed"] is False
+    assert burned["cutover_allowed"] is False
+    assert burned["label_changed"] is False
+    assert burned["journal_changed"] is False
+    assert burned["production_yaml_changed"] is False
+    assert one.read_one_shot_rehearsals(str(setup.tmp))["event_count"] == 2
+    folder = _one_shot_dir(setup)
+    assert (folder.stat().st_mode & 0o077) == 0
+    assert all((p.stat().st_mode & 0o077) == 0 for p in folder.iterdir())
+    serialized = b"".join(p.read_bytes() for p in folder.iterdir())
+    for sensitive in (
+        b"admin_one", b"PRIVATE_PROJECT_ID_NEVER_EXPOSE",
+        b"PRIVATE ENTITY NAME", b"confirmation_token",
+    ):
+        assert sensitive not in serialized
+    assert setup.modules["migration_journal"].read_journal(setup.tmp) == journal
+    assert (setup.tmp / "configuration.yaml").read_bytes() == yaml
+    assert (setup.tmp / "google_entities.yaml").read_bytes() == include
+    assert setup.entries["light.first"].labels == frozenset()
+
+
+def test_one_shot_burn_cannot_be_replayed_even_after_restart(
+    setup, monkeypatch,
+):
+    one, draft, approval_sha = _one_shot_test_setup(setup, monkeypatch)
+    first = _reserve_one_shot(setup, one, draft, approval_sha)
+    receipt_id = first["receipt"]["receipt_id"]
+    burned = _reserve_one_shot(
+        setup, one, draft, approval_sha,
+        count=1, head=first["head_sha256"],
+        event="burn_without_execution", receipt_id=receipt_id,
+    )
+    with pytest.raises(one.OneShotRehearsalError):
+        _reserve_one_shot(
+            setup, one, draft, approval_sha,
+            count=2, head=burned["head_sha256"],
+            event="burn_without_execution", receipt_id=receipt_id,
+        )
+    assert one.read_one_shot_rehearsals(str(setup.tmp))[
+        "receipts"
+    ][0]["lifecycle"] == "burned_without_execution"
+
+
+def test_one_shot_other_admin_cannot_burn_receipt(setup, monkeypatch):
+    one, draft, approval_sha = _one_shot_test_setup(setup, monkeypatch)
+    first = _reserve_one_shot(setup, one, draft, approval_sha)
+    with pytest.raises(
+        one.OneShotRehearsalError, match="one_shot_burn_context_mismatch"
+    ):
+        _reserve_one_shot(
+            setup, one, draft, approval_sha,
+            count=1, head=first["head_sha256"],
+            admin="admin_two", event="burn_without_execution",
+            receipt_id=first["receipt"]["receipt_id"],
+        )
+    assert one.read_one_shot_rehearsals(str(setup.tmp))["event_count"] == 1
+
+
+def test_one_shot_same_entity_second_reservation_is_refused(
+    setup, monkeypatch,
+):
+    one, draft, approval_sha = _one_shot_test_setup(setup, monkeypatch)
+    first = _reserve_one_shot(setup, one, draft, approval_sha)
+    with pytest.raises(
+        one.OneShotRehearsalError, match="one_shot_active_reservation_exists"
+    ):
+        _reserve_one_shot(
+            setup, one, draft, approval_sha,
+            count=1, head=first["head_sha256"],
+        )
+
+
+def test_one_shot_admin_conflict_at_disk_head_is_refused(
+    setup, monkeypatch,
+):
+    one, draft, approval_sha = _one_shot_test_setup(setup, monkeypatch)
+    _reserve_one_shot(setup, one, draft, approval_sha)
+    with pytest.raises(
+        one.OneShotRehearsalError, match="one_shot_transition_cas_conflict"
+    ):
+        _reserve_one_shot(setup, one, draft, approval_sha, admin="admin_two")
+
+
+@pytest.mark.parametrize("corruption", [
+    "delete_last", "corrupt_head", "bad_record_hash", "symlink_record",
+    "pending_head", "interrupted_next_record",
+    "permissive_record", "permissive_dir", "gap",
+])
+def test_one_shot_tamper_or_crash_fails_closed_without_repair(
+    setup, monkeypatch, corruption,
+):
+    one, draft, approval_sha = _one_shot_test_setup(setup, monkeypatch)
+    first = _reserve_one_shot(setup, one, draft, approval_sha)
+    folder = _one_shot_dir(setup)
+    r = folder / "000001.json"
+    head = folder / "head.json"
+    if corruption == "delete_last":
+        r.unlink()
+    elif corruption == "corrupt_head":
+        head.write_bytes(b"{")
+    elif corruption == "bad_record_hash":
+        r.write_bytes(b"{}")
+    elif corruption == "symlink_record":
+        r.unlink()
+        r.symlink_to(setup.tmp / "configuration.yaml")
+    elif corruption == "pending_head":
+        (folder / ".head-pending-unsafe").write_bytes(b"crashed")
+    elif corruption == "interrupted_next_record":
+        (folder / "000002.json").write_bytes(b"{incomplete")
+    elif corruption == "permissive_record":
+        r.chmod(0o644)
+    elif corruption == "permissive_dir":
+        folder.chmod(0o755)
+    elif corruption == "gap":
+        r.rename(folder / "000002.json")
+    with pytest.raises(one.OneShotRehearsalError):
+        one.read_one_shot_rehearsals(str(setup.tmp))
+    with pytest.raises(one.OneShotRehearsalError):
+        _reserve_one_shot(
+            setup, one, draft, approval_sha,
+            count=1, head=first["head_sha256"],
+            event="burn_without_execution",
+            receipt_id=first["receipt"]["receipt_id"],
+        )
+    assert setup.modules["migration_journal"].read_journal(setup.tmp)[
+        "operations"
+    ] == []
+
+
+@pytest.mark.parametrize("change", [
+    "journal", "draft", "yaml", "approval_context",
+])
+def test_one_shot_context_changed_between_reserve_and_burn_blocks(
+    setup, monkeypatch, change,
+):
+    one, draft, approval_sha = _one_shot_test_setup(setup, monkeypatch)
+    first = _reserve_one_shot(setup, one, draft, approval_sha)
+    journal_before = setup.modules["migration_journal"].read_journal(setup.tmp)
+    if change == "journal":
+        setup.modules["migration_journal"].advance_phase(
+            setup.tmp, "labels_staging", expected_revision=0
+        )
+    elif change == "draft":
+        draft["decisions"]["light.second"]["action"] = "keep"
+    elif change == "yaml":
+        (setup.tmp / "google_entities.yaml").write_bytes(ENTITIES + b"# changed\n")
+    elif change == "approval_context":
+        approval_sha = "f" * 64
+    with pytest.raises(one.OneShotRehearsalError):
+        _reserve_one_shot(
+            setup, one, draft, approval_sha,
+            count=1, head=first["head_sha256"],
+            event="burn_without_execution",
+            receipt_id=first["receipt"]["receipt_id"],
+            journal=journal_before,
+        )
+    assert one.read_one_shot_rehearsals(str(setup.tmp))["event_count"] == 1
+
+
+def test_one_shot_receipt_expires_and_cannot_be_burned(
+    setup, monkeypatch,
+):
+    from datetime import UTC, datetime, timedelta
+
+    one, draft, approval_sha = _one_shot_test_setup(setup, monkeypatch)
+    first = _reserve_one_shot(setup, one, draft, approval_sha)
+    real_now = datetime.now(UTC)
+
+    class FutureDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return real_now + timedelta(hours=1)
+
+    monkeypatch.setattr(one, "datetime", FutureDatetime)
+    with pytest.raises(
+        one.OneShotRehearsalError,
+        match="one_shot_expired_missing_or_already_burned",
+    ):
+        _reserve_one_shot(
+            setup, one, draft, approval_sha,
+            count=1, head=first["head_sha256"],
+            event="burn_without_execution",
+            receipt_id=first["receipt"]["receipt_id"],
+        )
+
+
+def test_one_shot_private_writer_never_connected_to_stage():
+    import ast
+
+    source = (ROOT / "migration_stage_executor.py").read_text()
+    assert "migration_execution_one_shot_rehearsal" not in source
+    assert "migration_execution_one_shot_api" not in source
+    code = (ROOT / "migration_execution_one_shot_rehearsal.py").read_text()
+    assert "stage_one_approved_label(" not in code
+    assert "mark_label_applied(" not in code
+    assert "record_label_intent(" not in code
+    assert "async_update_entity(" not in code
+    tree = ast.parse((ROOT / "websocket.py").read_text())
+    for name in (
+        "websocket_get_migration_one_shot_rehearsal_history",
+        "websocket_prepare_migration_one_shot_rehearsal",
+        "websocket_confirm_migration_one_shot_rehearsal",
+        "websocket_burn_migration_one_shot_rehearsal",
+    ):
+        node = next(
+            n for n in tree.body
+            if isinstance(n, ast.AsyncFunctionDef) and n.name == name
+        )
+        assert any(
+            isinstance(d, ast.Attribute) and d.attr == "require_admin"
+            for d in node.decorator_list
+        )
+        assert "stage_one_approved_label" not in ast.unparse(node)

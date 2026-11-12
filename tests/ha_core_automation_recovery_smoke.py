@@ -424,9 +424,95 @@ async def test_real_dormant_staging_native_cas(hass, label_id, other_label):
                 other_label
             }
             assert (root / "configuration.yaml").read_bytes() == SOURCE
+
+            # Real HA Core + real protected disk reserve/burn rehearsal.
+            # The sandbox admission SHA and draft remain explicitly
+            # synthetic; none is an authorization or staging entrypoint.
+            one = module("migration_execution_one_shot_rehearsal")
+            prior_draft_loader = one.load_review_draft
+            one.load_review_draft = lambda _config: draft
+            try:
+                empty = one.read_one_shot_rehearsals(str(root))
+                assert empty["event_count"] == 0
+                reservation = one.append_rehearsal_transition(
+                    str(root),
+                    event="reserve_non_authorizing",
+                    entity_id=audit_candidate.entity_id,
+                    administrator_id="sandbox_synthetic_admin",
+                    admission_evidence_sha256="e" * 64,
+                    approval_intent_sha256=persisted[
+                        "record"
+                    ]["record_sha256"],
+                    expected_journal_sha256=one._hash(journal_before),
+                    expected_draft_sha256=one._hash(draft),
+                    expected_event_count=0,
+                    expected_head_sha256="0" * 64,
+                )
+                assert reservation["status"] == (
+                    "one_shot_reserved_non_authorizing"
+                )
+                assert reservation["receipt"]["stage_allowed"] is False
+                assert one.read_one_shot_rehearsals(
+                    str(root)
+                )["event_count"] == 1
+                burned = one.append_rehearsal_transition(
+                    str(root),
+                    event="burn_without_execution",
+                    entity_id=audit_candidate.entity_id,
+                    administrator_id="sandbox_synthetic_admin",
+                    admission_evidence_sha256="e" * 64,
+                    approval_intent_sha256=persisted[
+                        "record"
+                    ]["record_sha256"],
+                    expected_journal_sha256=one._hash(journal_before),
+                    expected_draft_sha256=one._hash(draft),
+                    expected_event_count=1,
+                    expected_head_sha256=reservation["head_sha256"],
+                    receipt_id=reservation["receipt"]["receipt_id"],
+                )
+                assert burned["status"] == (
+                    "one_shot_burned_without_execution"
+                )
+                assert burned["execution_authorized"] is False
+                assert burned["journal_ack_allowed"] is False
+                ledger_after = one.read_one_shot_rehearsals(str(root))
+                assert ledger_after["event_count"] == 2
+                assert ledger_after["receipts"][0]["lifecycle"] == (
+                    "burned_without_execution"
+                )
+                try:
+                    one.append_rehearsal_transition(
+                        str(root),
+                        event="burn_without_execution",
+                        entity_id=audit_candidate.entity_id,
+                        administrator_id="sandbox_synthetic_admin",
+                        admission_evidence_sha256="e" * 64,
+                        approval_intent_sha256=persisted[
+                            "record"
+                        ]["record_sha256"],
+                        expected_journal_sha256=one._hash(journal_before),
+                        expected_draft_sha256=one._hash(draft),
+                        expected_event_count=2,
+                        expected_head_sha256=burned["head_sha256"],
+                        receipt_id=reservation["receipt"]["receipt_id"],
+                    )
+                except one.OneShotRehearsalError as exc:
+                    assert str(exc) == (
+                        "one_shot_expired_missing_or_already_burned"
+                    )
+                else:
+                    raise AssertionError("replayed synthetic one-shot burn")
+            finally:
+                one.load_review_draft = prior_draft_loader
+            assert journal.read_journal(root) == journal_before
+            assert registry.async_get(audit_candidate.entity_id).labels == {
+                other_label
+            }
+            assert (root / "configuration.yaml").read_bytes() == SOURCE
         finally:
             records.load_review_draft = original_load_draft
         return {
+            "durable_one_shot_burn_no_execution": True,
             "durable_approval_intent_audit_no_execution": True,
             "approval_rehearsal_refused_pending_intent": True,
             "execution_admission_rejected_pending_intent": True,
