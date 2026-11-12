@@ -365,7 +365,19 @@ async def test_real_dormant_staging_native_cas(hass, label_id, other_label):
         assert gate_result["journal_ack_allowed"] is False
         assert gate_result["stage_allowed"] is False
         assert gate_result["cutover_allowed"] is False
+        # The real protected journal contains unresolved intents. Even if
+        # an opaque digest is supplied, an independent approval rehearsal
+        # may not promote this incomplete admission to a confirmation.
+        approval = module("migration_execution_approval_dryrun")
+        gate_result["server_evidence_sha256"] = "a" * 64
+        try:
+            approval._trusted_preview(gate_result, raced.entity_id)
+        except approval.ApprovalDryRunError as exc:
+            assert str(exc) == "technical_admission_not_consistent"
+        else:
+            raise AssertionError("pending HA intent promoted to approval")
         return {
+            "approval_rehearsal_refused_pending_intent": True,
             "execution_admission_rejected_pending_intent": True,
             "native_private_writer_checked": True,
             "third_party_label_race_refused": True,
