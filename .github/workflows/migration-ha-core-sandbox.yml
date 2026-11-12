@@ -1,0 +1,43 @@
+name: Migration HA Core native sandbox
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-ha-core-contract:
+    name: HA Core 2026.11 isolated event/Google smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out this PR without credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run isolated real Home Assistant Core event smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The official HA image contains Python >=3.14.2 and the real
+          # Home Assistant runtime. No real user HA instance is used.
+          # Never grant network access, secrets, writable host mounts or
+          # privileges to this test.
+          docker run --rm \
+            --network none \
+            --read-only \
+            --tmpfs /tmp:rw,size=256m \
+            --security-opt no-new-privileges \
+            --cap-drop ALL \
+            --mount type=bind,src="$PWD",dst=/workspace,readonly \
+            --workdir /workspace \
+            -e PYTHONPATH=/workspace/src \
+            --entrypoint python \
+            ghcr.io/home-assistant/home-assistant:2026.11.0 \
+            /workspace/tests/ha_core_sandbox_smoke.py
