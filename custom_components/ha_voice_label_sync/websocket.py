@@ -11,6 +11,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 
 from hvls import FileWriterError, GenerationRequest, RegistryError, WorkflowError
+from hvls.owned_writer import evaluate_registered_output
 
 from .backup_restore import (
     BackupRestoreError,
@@ -991,6 +992,32 @@ async def websocket_get_preview(
     result = await hass.async_add_executor_job(
         _read_and_compare, preview_path, output_path
     )
+
+    if entries:
+        ownership = await hass.async_add_executor_job(
+            evaluate_registered_output,
+            output_path,
+            entries[0].entry_id,
+            Path(hass.config.path(".hvls", "ownership.json")),
+        )
+        result["ownership"] = {
+            "status": ownership.status,
+            "reason": ownership.reason,
+            "reason_code": ownership.reason_code,
+            "write_allowed": ownership.write_allowed,
+        }
+        result["can_apply"] = bool(
+            result.get("can_apply", False) and ownership.write_allowed
+        )
+    else:
+        result["ownership"] = {
+            "status": "unknown",
+            "reason": "HVLS is not configured.",
+            "reason_code": "not_configured",
+            "write_allowed": False,
+        }
+        result["can_apply"] = False
+
     try:
         excluded = await hass.async_add_executor_job(
             analyze_exclusions,

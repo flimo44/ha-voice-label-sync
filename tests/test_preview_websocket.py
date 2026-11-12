@@ -665,3 +665,76 @@ def test_restore_websocket_passes_ownership_identity(websocket_module):
     )
 
     assert call.kwargs["entry_id"] != "forged-client-identity"
+
+
+def test_preview_disables_apply_for_unmanaged_yaml(
+    websocket_module, tmp_path
+):
+    """Readable manual YAML must never enable Apply."""
+    ws = websocket_module.websocket
+
+    output = tmp_path / "manual.yaml"
+    output.write_text(
+        "switch.manual:\n  expose: true\n",
+        encoding="utf-8",
+    )
+
+    preview_dir = tmp_path / ".hvls"
+    preview_dir.mkdir()
+    (preview_dir / "preview.yaml").write_text(
+        "switch.generated:\n  expose: true\n",
+        encoding="utf-8",
+    )
+
+    registry_path = preview_dir / "ownership.json"
+    assert not registry_path.exists()
+
+    ws._read_and_compare = ws._read_and_compare_real
+    ws.analyze_preview.return_value = {
+        "summary": {"total": 1},
+        "comparison": {"status": "ok"},
+    }
+
+    hass = make_hass()
+    hass.config.config_dir = str(tmp_path)
+    hass.config.path = lambda *parts: str(
+        tmp_path.joinpath(*parts)
+    )
+    hass.config_entries.async_entries = lambda domain: [
+        SimpleNamespace(
+            entry_id="test-installation",
+            data={
+                "label": "google_assistant",
+                "output": "manual.yaml",
+            },
+            options={},
+        )
+    ]
+
+    connection = SimpleNamespace(
+        send_result=Mock(),
+        send_error=Mock(),
+    )
+
+    before = output.read_bytes()
+
+    asyncio.run(
+        ws.websocket_get_preview(
+            hass,
+            connection,
+            {"id": 501},
+        )
+    )
+
+    connection.send_error.assert_not_called()
+
+    result = connection.send_result.call_args.args[1]
+
+    assert result["available"] is True
+    assert result["can_apply"] is False
+    assert result["ownership"]["status"] == "unmanaged"
+    assert result["ownership"]["reason"]
+
+    # The diagnostic must be completely read-only.
+    assert output.read_bytes() == before
+    assert not registry_path.exists()

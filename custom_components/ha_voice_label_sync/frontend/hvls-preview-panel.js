@@ -204,6 +204,21 @@ const HVLS_TRANSLATIONS = {
     previewGenerating: "Génération du Preview en cours…",
     previewGenerated: "Preview généré : {count} entités. Vérifiez les différences avant application.",
     previewGenerateFailed: "Échec de génération du Preview : {error}",
+    applyInfoLabel: "Pourquoi Apply est-il désactivé ?",
+    applyReasonMissingIdentity: "L'identité de l'installation HVLS est indisponible.",
+    applyReasonUnsafePath: "Le chemin du fichier ou du registre n'est pas sûr. Vérifiez notamment les liens symboliques.",
+    applyReasonReservedPath: "Le fichier de sortie utilise un emplacement réservé aux métadonnées HVLS.",
+    applyReasonRegistryInvalid: "Le registre de propriété HVLS est invalide ou illisible. Vérification nécessaire.",
+    applyReasonOtherInstallation: "Ce fichier appartient à une autre installation HVLS. Écriture interdite.",
+    applyReasonUnmanagedOutput: "Un fichier YAML existe déjà, mais sa propriété n'est pas vérifiée par HVLS. Il reste protégé.",
+    applyReasonMissingDirectory: "Le répertoire de destination est indisponible.",
+    applyReasonVerificationFailed: "La vérification de sécurité du fichier a échoué. Apply reste désactivé.",
+    applyReasonOutputPathMismatch: "Le chemin de sortie ne correspond plus au chemin enregistré par HVLS.",
+    applyReasonPendingOperation: "Une opération HVLS est incomplète. Une reprise contrôlée est nécessaire avant Apply.",
+    applyReasonManagedOutputMissing: "Le fichier précédemment géré par HVLS est introuvable.",
+    applyReasonOutputChanged: "Le fichier géré par HVLS a été modifié depuis son dernier contrôle SHA-256.",
+    applyReasonNotConfigured: "HVLS n'est pas encore configuré.",
+    applyVerificationUnavailable: "Impossible de valider Apply : informations de sécurité manquantes ou incohérentes. Actualisez le Preview.",
     applyConfirm: "Appliquer ce Preview à la configuration Google Assistant ?",
     applyWarning: "Le fichier actuel sera sauvegardé si les sauvegardes sont activées. Toute modification détectée depuis l’examen entraînera un refus.",
     previewApplying: "Vérification et application du Preview…",
@@ -438,6 +453,21 @@ const HVLS_TRANSLATIONS = {
     previewGenerating: "Generating Preview…",
     previewGenerated: "Preview generated: {count} entities. Review differences before applying.",
     previewGenerateFailed: "Failed to generate Preview: {error}",
+    applyInfoLabel: "Why is Apply disabled?",
+    applyReasonMissingIdentity: "The HVLS installation identity is unavailable.",
+    applyReasonUnsafePath: "The output or registry path is unsafe. Check for symbolic links.",
+    applyReasonReservedPath: "The output path conflicts with reserved HVLS metadata.",
+    applyReasonRegistryInvalid: "The HVLS ownership registry is invalid or unreadable. Verification is required.",
+    applyReasonOtherInstallation: "This file belongs to another HVLS installation. Writing is prohibited.",
+    applyReasonUnmanagedOutput: "An existing YAML file is not verified as HVLS-owned. It remains protected.",
+    applyReasonMissingDirectory: "The output directory is unavailable.",
+    applyReasonVerificationFailed: "File safety verification failed. Apply remains disabled.",
+    applyReasonOutputPathMismatch: "The output path no longer matches the path registered by HVLS.",
+    applyReasonPendingOperation: "An HVLS operation is incomplete. Controlled recovery is required before Apply.",
+    applyReasonManagedOutputMissing: "The previously HVLS-managed output file is missing.",
+    applyReasonOutputChanged: "The HVLS-managed file has changed since its last SHA-256 verification.",
+    applyReasonNotConfigured: "HVLS is not configured yet.",
+    applyVerificationUnavailable: "Cannot validate Apply: missing or inconsistent security information. Refresh the Preview.",
     applyConfirm: "Apply this Preview to the Google Assistant configuration?",
     applyWarning: "The current file will be backed up if backups are enabled. The operation will be rejected if changes are detected since your review.",
     previewApplying: "Validating and applying Preview…",
@@ -468,6 +498,22 @@ const HVLS_TRANSLATIONS = {
     fieldAfter: "After"
   }
 };
+
+const HVLS_APPLY_REASON_KEYS = Object.freeze({
+  "missing_identity": "applyReasonMissingIdentity",
+  "unsafe_path": "applyReasonUnsafePath",
+  "reserved_path": "applyReasonReservedPath",
+  "registry_invalid": "applyReasonRegistryInvalid",
+  "owned_by_other_installation": "applyReasonOtherInstallation",
+  "unmanaged_output": "applyReasonUnmanagedOutput",
+  "missing_directory": "applyReasonMissingDirectory",
+  "verification_failed": "applyReasonVerificationFailed",
+  "output_path_mismatch": "applyReasonOutputPathMismatch",
+  "pending_operation": "applyReasonPendingOperation",
+  "managed_output_missing": "applyReasonManagedOutputMissing",
+  "output_changed": "applyReasonOutputChanged",
+  "not_configured": "applyReasonNotConfigured",
+});
 
 class HVLSPreviewPanel extends HTMLElement {
   _t(key) {
@@ -502,6 +548,16 @@ class HVLSPreviewPanel extends HTMLElement {
     if (globalRefresh) {
       globalRefresh.setAttribute("aria-label", this._t("refresh"));
       globalRefresh.title = this._t("refresh");
+    }
+
+    const applyInfoSummary = this.querySelector(
+      "#applyInfo > summary"
+    );
+    if (applyInfoSummary) {
+      applyInfoSummary.setAttribute(
+        "aria-label", this._t("applyInfoLabel")
+      );
+      applyInfoSummary.title = this._t("applyInfoLabel");
     }
 
     const texts = {
@@ -655,6 +711,7 @@ class HVLSPreviewPanel extends HTMLElement {
     this._translateStatic();
     this._syncMenuVisibility();
     if (oldLanguage && oldLanguage !== this._language) {
+      this._updateApplyButton();
       if (this._lastAnalysis) this._renderAnalysis(this._lastAnalysis);
       if (this._entityCatalog && !this._entityLoading && !this._entityWritePending) {
         this._renderEntities();
@@ -734,6 +791,8 @@ class HVLSPreviewPanel extends HTMLElement {
     const loadId = (this._loadId || 0) + 1;
     this._loadId = loadId;
     this._review = null;
+    this._applyBlockReason = null;
+    this._applyBlockReasonCode = null;
     this._updateApplyButton();
     this._setStatusKey("previewLoading");
     try {
@@ -743,14 +802,66 @@ class HVLSPreviewPanel extends HTMLElement {
       if (loadId !== this._loadId || (this._applying && !afterApply)) return;
       this._previewPath = result.path;
       this._previewContent = result.content;
-      this._review = result.can_apply && result.preview_sha256 &&
-        (result.production_sha256 === null ||
-         typeof result.production_sha256 === "string")
+      const validHash = value =>
+        typeof value === "string" &&
+        /^[0-9a-f]{64}$/.test(value);
+
+      const ownership = result.ownership;
+
+      const ownershipConsistent =
+        ownership?.write_allowed === true &&
+        (
+          (
+            ownership.status === "new" &&
+            result.production_sha256 === null
+          ) ||
+          (
+            ownership.status === "managed" &&
+            validHash(result.production_sha256)
+          )
+        );
+
+      const canReview =
+        result.available === true &&
+        result.error == null &&
+        result.can_apply === true &&
+        ownershipConsistent &&
+        validHash(result.preview_sha256);
+
+      this._review = canReview
         ? {
             preview_sha256: result.preview_sha256,
             production_sha256: result.production_sha256,
           }
         : null;
+
+      const serverReason =
+        ownership?.write_allowed === false &&
+        typeof ownership.reason === "string" &&
+        ownership.reason.trim()
+          ? ownership.reason
+          : null;
+
+      const shouldExplain =
+        result.available === true &&
+        !canReview &&
+        (
+          result.can_apply === true ||
+          ownership?.write_allowed === false
+        );
+
+      this._applyBlockReason = shouldExplain
+        ? (
+            serverReason ||
+            this._t("applyVerificationUnavailable")
+          )
+        : null;
+
+      this._applyBlockReasonCode = shouldExplain &&
+        typeof ownership?.reason_code === "string"
+          ? ownership.reason_code
+          : null;
+
       this._updateApplyButton();
       this._setContent(result.content || "");
       this._renderAnalysis(result);
@@ -778,6 +889,31 @@ class HVLSPreviewPanel extends HTMLElement {
         this._generating === true || this._refreshing === true ||
         this._entityWritePending === true;
     }
+    let displayReason = this._applyBlockReason || "";
+
+    if (displayReason && this._applyBlockReasonCode) {
+      const code = this._applyBlockReasonCode;
+      const key = Object.prototype.hasOwnProperty.call(
+        HVLS_APPLY_REASON_KEYS, code
+      ) ? HVLS_APPLY_REASON_KEYS[code] : null;
+
+      displayReason = this._t(
+        key || "applyVerificationUnavailable"
+      );
+    }
+
+    const info = this.querySelector("#applyInfo");
+    if (info) {
+      info.hidden = !displayReason;
+      info.title = displayReason;
+      if (info.hidden) info.open = false;
+    }
+
+    const explanation = this.querySelector("#applyBlockReason");
+    if (explanation) {
+      explanation.textContent = displayReason;
+    }
+
     const refresh = this.querySelector("#refresh");
     if (refresh) refresh.disabled =
       this._applying === true || this._generating === true || this._refreshing === true;
@@ -1784,6 +1920,30 @@ class HVLSPreviewPanel extends HTMLElement {
           .preview-pending-alert { animation:none; }
         }
         .preview-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; margin-top:16px; }
+        .apply-info { margin:0; max-width:340px; }
+        .apply-info > summary {
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          padding:6px 10px;
+          border:1px solid var(--divider-color);
+          border-radius:50%;
+          cursor:pointer;
+          font-weight:600;
+          list-style:none;
+        }
+        .apply-info > summary::-webkit-details-marker { display:none; }
+        .apply-info > summary:focus-visible {
+          outline:2px solid var(--primary-color);
+          outline-offset:2px;
+        }
+        .apply-info > p {
+          margin:6px 0 0;
+          padding:8px 10px;
+          border:1px solid var(--divider-color);
+          border-radius:8px;
+          overflow-wrap:anywhere;
+        }
         .preview-yaml-tools { display:flex; align-items:center; justify-content:flex-end; margin:8px 0; }
         .preview-change-group {
           margin:10px 0;
@@ -1903,6 +2063,10 @@ class HVLSPreviewPanel extends HTMLElement {
           <pre id="content"></pre>
         </details>
         <div class="preview-actions">
+          <details id="applyInfo" class="apply-info" hidden>
+            <summary aria-label="${this._t("applyInfoLabel")}">ⓘ</summary>
+            <p id="applyBlockReason" class="diagnostic-note"></p>
+          </details>
           <button id="apply" type="button" disabled>${this._t("apply")}</button>
         </div>
         </section>
