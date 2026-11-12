@@ -936,11 +936,9 @@ def test_one_shot_fresh_admission_or_cas_change_prevents_reservation(
     elif change == "head":
         state.head = "f" * 64
     elif change == "approval_audit":
-        record = sys.modules[
-            app.api.__name__.rsplit(".", 1)[0] +
-            ".migration_execution_approval_records"
-        ]
-        record.load_approval_intent_history = lambda _: {"records": []}
+        monkeypatch.setattr(
+            api, "load_approval_intent_history", lambda _: {"records": []}
+        )
     with pytest.raises(ValueError):
         _confirm_one_shot(api, app, prepared)
     with pytest.raises(ValueError, match="one_shot_challenge_invalid_or_expired"):
