@@ -220,7 +220,7 @@ def test_multiple_entity_failures_do_not_hide_healthy_observations(setup):
     del setup.entries["light.second"]
     report = _check(setup)
     assert [x["observed_status"] for x in report["operations"]] == [
-        "unconfirmed_intent", "unconfirmed_intent",
+        "unconfirmed_intent", "entity_unavailable",
     ]
     assert [x["membership"] for x in report["operations"]] == [
         "present", "unknown",
@@ -249,7 +249,7 @@ def test_registry_identity_changed_never_counted_as_verified(setup):
     _intent(setup)
     setup.entries["light.first"].id = "replacement_registry_id"
     result = _check(setup)
-    assert result["operations"][0]["observed_status"] == "unconfirmed_intent"
+    assert result["operations"][0]["observed_status"] == "registry_identity_changed"
     assert result["operations"][0]["registry_identity_matches"] is False
     assert result["needs_review"] is True
 
