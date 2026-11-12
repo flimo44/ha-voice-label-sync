@@ -69,6 +69,8 @@ const HVLS_TRANSLATIONS = {
     migrationAttestationUnavailable: "Attestation indisponible ou périmée. Rechargez les choix enregistrés, actualisez la simulation et vérifiez les anomalies.",
     migrationAttestationNotReady: "Enregistrez d’abord vos choix et actualisez la simulation. Aucun changement n’a été effectué.",
     migrationStagingImpact: "Impact prévisionnel des labels sur Google Assistant manuel : {status}. Les autres consommateurs de labels et Google Home restent non vérifiés. Staging interdit.",
+    migrationConsumerAudit: "Audit indirect limité : {files} fichiers YAML inspectés, {writers} références à la génération HVLS, {events} références à un événement du registre, {labels} références à des fonctions de label. Effets externes non certifiés ; staging interdit.",
+    migrationConsumerOverlap: "Attention : le fichier de sortie HVLS correspond à une source Google manuelle protégée. Toute génération V1 pourrait modifier cette source.",
     backupIntro: "Choisissez une sauvegarde pour voir ses différences avec la production. Seul le YAML Google Assistant sera restauré, jamais les étiquettes Home Assistant.",
     backupLoading: "Chargement des sauvegardes…",
     backupEmpty: "Aucune sauvegarde disponible.",
@@ -259,6 +261,8 @@ const HVLS_TRANSLATIONS = {
     migrationAttestationUnavailable: "Attestation unavailable or stale. Restore saved choices, refresh the simulation and inspect anomalies.",
     migrationAttestationNotReady: "Save choices and refresh the simulation first. No changes were made.",
     migrationStagingImpact: "Projected label impact on manual Google Assistant: {status}. Other label consumers and Google Home remain unverified. Staging is forbidden.",
+    migrationConsumerAudit: "Limited indirect audit: {files} YAML files inspected, {writers} HVLS generation references, {events} entity-registry event references, {labels} label-function references. External effects remain unverified; staging forbidden.",
+    migrationConsumerOverlap: "Warning: the HVLS output file overlaps a protected manual Google Assistant source. Any V1 generation may change that source.",
     backupIntro: "Select a backup to compare it with current production. Only the Google Assistant YAML file is restored, never Home Assistant labels.",
     backupLoading: "Loading backups…",
     backupEmpty: "No backups available.",
@@ -2858,6 +2862,7 @@ class HVLSPreviewPanel extends HTMLElement {
     const plan = report.preflight || {};
     const simulation = report.simulation;
     const preStageImpact = report.pre_stage_impact;
+    const consumerAudit = report.indirect_consumer_audit;
     const baseline = report.protected_baseline_status === "verified"
       ? this._t("migrationBaselineOk")
       : this._t("migrationBaselineMissing");
@@ -2876,6 +2881,15 @@ class HVLSPreviewPanel extends HTMLElement {
         ? this._tf("migrationStagingImpact", {
             status: preStageImpact.status || "unavailable",
           })
+        : "") +
+      (consumerAudit && consumerAudit.stage_allowed === false
+        ? " " + this._tf("migrationConsumerAudit", {
+            files: consumerAudit.observed_standard_yaml_files ?? 0,
+            writers: consumerAudit.reference_counts?.explicit_hvls_generate_references ?? 0,
+            events: consumerAudit.reference_counts?.registry_event_references ?? 0,
+            labels: consumerAudit.reference_counts?.label_template_references ?? 0,
+          }) + (consumerAudit.original_google_source_overlap === true
+            ? " " + this._t("migrationConsumerOverlap") : "")
         : "");
 
     if (!Array.isArray(diag.entities)) {
