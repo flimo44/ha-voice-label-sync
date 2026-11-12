@@ -41,3 +41,20 @@ jobs:
             --entrypoint python \
             ghcr.io/home-assistant/home-assistant:2026.11.0 \
             /workspace/tests/ha_core_sandbox_smoke.py
+
+      - name: Run native automation and restart recovery smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --network none \
+            --read-only \
+            --tmpfs /tmp:rw,size=384m \
+            --security-opt no-new-privileges \
+            --cap-drop ALL \
+            --mount type=bind,src="$PWD",dst=/workspace,readonly \
+            --workdir /workspace \
+            -e PYTHONPATH=/workspace/src \
+            --entrypoint python \
+            ghcr.io/home-assistant/home-assistant:2026.11.0 \
+            /workspace/tests/ha_core_automation_recovery_smoke.py
