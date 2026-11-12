@@ -68,6 +68,7 @@ const HVLS_TRANSLATIONS = {
     migrationAttestationFresh: "État de la revue enregistrée : {status}. Aucun droit d’exécution.",
     migrationAttestationUnavailable: "Attestation indisponible ou périmée. Rechargez les choix enregistrés, actualisez la simulation et vérifiez les anomalies.",
     migrationAttestationNotReady: "Enregistrez d’abord vos choix et actualisez la simulation. Aucun changement n’a été effectué.",
+    migrationStagingImpact: "Impact prévisionnel des labels sur Google Assistant manuel : {status}. Les autres consommateurs de labels et Google Home restent non vérifiés. Staging interdit.",
     backupIntro: "Choisissez une sauvegarde pour voir ses différences avec la production. Seul le YAML Google Assistant sera restauré, jamais les étiquettes Home Assistant.",
     backupLoading: "Chargement des sauvegardes…",
     backupEmpty: "Aucune sauvegarde disponible.",
@@ -257,6 +258,7 @@ const HVLS_TRANSLATIONS = {
     migrationAttestationFresh: "Saved review status: {status}. No execution capability.",
     migrationAttestationUnavailable: "Attestation unavailable or stale. Restore saved choices, refresh the simulation and inspect anomalies.",
     migrationAttestationNotReady: "Save choices and refresh the simulation first. No changes were made.",
+    migrationStagingImpact: "Projected label impact on manual Google Assistant: {status}. Other label consumers and Google Home remain unverified. Staging is forbidden.",
     backupIntro: "Select a backup to compare it with current production. Only the Google Assistant YAML file is restored, never Home Assistant labels.",
     backupLoading: "Loading backups…",
     backupEmpty: "No backups available.",
@@ -2855,6 +2857,7 @@ class HVLSPreviewPanel extends HTMLElement {
     const diag = report.diagnostic || {};
     const plan = report.preflight || {};
     const simulation = report.simulation;
+    const preStageImpact = report.pre_stage_impact;
     const baseline = report.protected_baseline_status === "verified"
       ? this._t("migrationBaselineOk")
       : this._t("migrationBaselineMissing");
@@ -2868,7 +2871,12 @@ class HVLSPreviewPanel extends HTMLElement {
       `${this._t("migrationBaseline")}: ${baseline}. ` +
       `${this._t("migrationDecisions")}: ${total}; ` +
       `needs_review=${needReview}; proposed_label_additions=${stageable}. ` +
-      "apply_allowed=false; cutover_allowed=false.";
+      "apply_allowed=false; cutover_allowed=false. " +
+      (preStageImpact && preStageImpact.stage_allowed === false
+        ? this._tf("migrationStagingImpact", {
+            status: preStageImpact.status || "unavailable",
+          })
+        : "");
 
     if (!Array.isArray(diag.entities)) {
       more.hidden = true;
@@ -2877,6 +2885,9 @@ class HVLSPreviewPanel extends HTMLElement {
     this._migrationDecisions ||= Object.create(null);
     const plans = new Map((plan.entities || []).map(item => [item.entity_id, item]));
     const simulations = new Map((simulation?.entities || []).map(
+      item => [item.entity_id, item]
+    ));
+    const impactRows = new Map((preStageImpact?.entities || []).map(
       item => [item.entity_id, item]
     ));
     const table = document.createElement("table");
@@ -2899,6 +2910,7 @@ class HVLSPreviewPanel extends HTMLElement {
       const entityId = entity.entity_id;
       const proposal = plans.get(entityId);
       const simulated = simulations.get(entityId);
+      const impactRow = impactRows.get(entityId);
       const choice = this._migrationDecisions[entityId] || {};
       const row = document.createElement("tr");
       for (const value of [
@@ -2980,6 +2992,7 @@ class HVLSPreviewPanel extends HTMLElement {
       const reasons = [
         ...(proposal?.reasons || []),
         ...(simulated?.reasons || []),
+        ...(impactRow?.reasons || []),
       ];
       reasonsCell.textContent = reasons.length
         ? [...new Set(reasons)].join(", ")
