@@ -200,3 +200,116 @@ def check_entity_config(
         result["status"] = "ok"
 
     return result
+
+
+def discover_existing_google_yaml(config_dir: str | Path) -> dict[str, Any]:
+    """Discover an existing manual Google Assistant entity YAML, read-only.
+
+    Discovery never implies permission to overwrite the source file.
+    Unsupported or ambiguous configurations require manual review.
+    """
+    base = Path(config_dir).resolve()
+    result: dict[str, Any] = {
+        "status": "ambiguous",
+        "source_path": None,
+        "source_exists": False,
+    }
+
+    config_file = base / "configuration.yaml"
+
+    try:
+        if config_file.is_symlink() or not config_file.is_file():
+            return result
+
+        if config_file.stat().st_size > MAX_CONFIG_SIZE:
+            return result
+
+        document = yaml.compose(
+            config_file.read_text(encoding="utf-8"),
+            Loader=yaml.BaseLoader,
+        )
+
+        if not isinstance(document, MappingNode):
+            return result
+
+        def unique_mapping(node: Any) -> dict[str, Any] | None:
+            if not isinstance(node, MappingNode):
+                return None
+            values: dict[str, Any] = {}
+            for key, value in node.value:
+                if not isinstance(key, ScalarNode) or key.tag.startswith("!"):
+                    return None
+                if key.value in values or key.value == "<<":
+                    return None
+                values[key.value] = value
+            return values
+
+        main = unique_mapping(document)
+        if main is None:
+            return result
+
+        # Packages can declare Google Assistant outside configuration.yaml.
+        # Do not claim there is no existing configuration in that case.
+        homeassistant = main.get("homeassistant")
+        if homeassistant is not None:
+            ha_settings = unique_mapping(homeassistant)
+            if ha_settings is None or "packages" in ha_settings:
+                return result
+
+        google = main.get("google_assistant")
+        if google is None:
+            result["status"] = "not_found"
+            return result
+
+        settings = unique_mapping(google)
+        if settings is None:
+            return result
+
+        entity_config = settings.get("entity_config")
+        if entity_config is None:
+            return result
+
+        if (
+            not isinstance(entity_config, ScalarNode)
+            or entity_config.tag != "!include"
+        ):
+            return result
+
+        include_name = entity_config.value.strip()
+
+        if not include_name:
+            return result
+
+        relative = Path(include_name)
+        if relative.is_absolute():
+            result["status"] = "unsafe_path"
+            return result
+
+        candidate = base / relative
+        resolved = candidate.resolve()
+
+        if not resolved.is_relative_to(base):
+            result["status"] = "unsafe_path"
+            return result
+
+        # Refuse symbolic links, including parent directory components.
+        current = base
+        for component in relative.parts:
+            current = current / component
+            if current.is_symlink():
+                result["status"] = "unsafe_path"
+                return result
+
+        if resolved.suffix.lower() not in {".yaml", ".yml"}:
+            result["status"] = "ambiguous"
+            return result
+
+        result["source_path"] = str(resolved)
+        result["source_exists"] = resolved.is_file()
+        result["status"] = (
+            "found" if result["source_exists"] else "file_missing"
+        )
+        return result
+
+    except (OSError, UnicodeError, ValueError, yaml.YAMLError):
+        return result
