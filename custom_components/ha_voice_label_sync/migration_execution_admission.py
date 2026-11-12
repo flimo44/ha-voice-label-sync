@@ -78,13 +78,14 @@ def assess_stage_admission(
 
     result = _base(entity_id, "technical_review_required")
     blockers: list[str] = []
+    choices = saved_draft.get("decisions")
+    choice = choices.get(entity_id) if isinstance(choices, Mapping) else None
     if (
         saved_draft.get("status") != "saved_unapproved_draft"
         or saved_draft.get("stored_choices_unapproved") is not True
         or type(saved_draft.get("draft_revision")) is not int
-        or not isinstance(saved_draft.get("decisions"), Mapping)
-        or saved_draft.get("decisions", {}).get(entity_id, {}).get("action")
-        != "import"
+        or not isinstance(choice, Mapping)
+        or choice.get("action") != "import"
     ):
         blockers.append("fresh_saved_import_choice_required")
 
@@ -124,6 +125,8 @@ def assess_stage_admission(
     )):
         blockers.append("complete_live_review_unavailable")
     else:
+        source = diagnostic.get("source")
+        loaded_policy = diagnostic.get("loaded_policy")
         if (
             review.get("read_only") is not True
             or review.get("protected_baseline_status") != "verified"
@@ -132,11 +135,12 @@ def assess_stage_admission(
             or diagnostic.get("read_only") is not True
             or diagnostic.get("mode") != "assisted_migration"
             or diagnostic.get("global_blockers")
-            or diagnostic.get("source", {}).get("status") != "resolved"
-            or diagnostic.get("loaded_policy", {}).get("status")
-            != "match_compared_fields"
-            or diagnostic.get("loaded_policy", {}).get("differences")
-            or diagnostic.get("loaded_policy", {}).get("rule_changes")
+            or not isinstance(source, Mapping)
+            or source.get("status") != "resolved"
+            or not isinstance(loaded_policy, Mapping)
+            or loaded_policy.get("status") != "match_compared_fields"
+            or loaded_policy.get("differences")
+            or loaded_policy.get("rule_changes")
         ):
             blockers.append("manual_google_policy_review_not_verified")
         if (
@@ -176,10 +180,7 @@ def assess_stage_admission(
             selected = []
         else:
             selected = [x for x in proposed if x.get("entity_id") == entity_id]
-        if len(selected) != 1 or any(
-            x.get("entity_id") == entity_id for x in proposed
-            if x is not selected[0]
-        ) if selected else True:
+        if len(selected) != 1:
             blockers.append("single_eligible_entity_proposal_required")
 
     if (
