@@ -499,3 +499,244 @@ def test_approval_ws_admin_only_and_dormant_writer_unreachable():
         "append_investigation_record(", "advance_phase(",
     ):
         assert name not in script
+
+
+
+def _durable_api(app, monkeypatch):
+    """Two-phase durable API with synthetic disk to test orchestration."""
+    import hashlib
+    import json
+
+    prefix = app.api.__name__.rsplit(".", 1)[0]
+    approval = _approval(app, monkeypatch)
+    ledger = ModuleType(f"{prefix}.migration_execution_approval_records")
+    ledger._hash = lambda obj: hashlib.sha256(
+        json.dumps(obj, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    state = SimpleNamespace(
+        appends=[], read_count=0, changed_head=False,
+    )
+    state.disk = {
+        "journal_revision": 0,
+        "journal_sha256": "a" * 64,
+        "saved_draft_sha256": "b" * 64,
+        "history_count": 0,
+        "history_head_sha256": "0" * 64,
+    }
+
+    def load_history(_path):
+        state.read_count += 1
+        return {
+            "record_count": state.disk["history_count"],
+            "last_record_sha256": state.disk["history_head_sha256"],
+            "records": [],
+        }
+
+    def append(_path, **kwargs):
+        if state.changed_head or kwargs["expected_record_count"] != (
+            state.disk["history_count"]
+        ):
+            raise ValueError("approval_history_cas_conflict")
+        state.appends.append(kwargs)
+        state.disk["history_count"] += 1
+        state.disk["history_head_sha256"] = "c" * 64
+        return {
+            "record": {
+                "sequence": state.disk["history_count"],
+                "entity_id": kwargs["entity_id"],
+                "action": kwargs["action"],
+                "record_sha256": "c" * 64,
+            },
+            "record_count": state.disk["history_count"],
+            "record_fsync_completed": True,
+            "history_head_fsync_completed": True,
+        }
+
+    ledger.append_approval_intent_evidence = append
+    ledger.load_approval_intent_history = load_history
+    monkeypatch.setitem(sys.modules, ledger.__name__, ledger)
+    spec = importlib.util.spec_from_file_location(
+        f"{prefix}.migration_execution_approval_records_api",
+        ROOT / "migration_execution_approval_records_api.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
+    spec.loader.exec_module(module)
+
+    def disk_fn(_dir):
+        return deepcopy(state.disk)
+
+    monkeypatch.setattr(module, "_disk_fingerprint", disk_fn)
+    app.hass.data = {}
+    return module, state
+
+
+def _prepare_durable(api, app, *, admin="admin_a", entity="light.good",
+                     action="stage_one_label_addition"):
+    return asyncio.run(api.prepare_admin_durable_approval_intent(
+        app.hass, administrator_id=admin,
+        entity_id=entity, action=action,
+    ))
+
+
+def _confirm_durable(api, app, prepared, *, admin="admin_a",
+                     entity="light.good", action="stage_one_label_addition",
+                     confirmed=True, acknowledge=True):
+    return asyncio.run(api.confirm_admin_durable_approval_intent(
+        app.hass, administrator_id=admin, entity_id=entity,
+        action=action, confirmation_token=prepared["confirmation_token"],
+        confirmed=confirmed,
+        acknowledge_external_uncertainty=acknowledge,
+    ))
+
+
+def test_durable_admin_confirmation_appends_only_non_authorizing_evidence(
+    app, monkeypatch,
+):
+    api, disk = _durable_api(app, monkeypatch)
+    prepared = _prepare_durable(api, app)
+    assert prepared["status"] == "awaiting_durable_approval_intent_confirmation"
+    assert prepared["expected_history_count"] == 0
+    assert prepared["record_not_yet_created"] is True
+    assert disk.appends == []
+    saved = _confirm_durable(api, app, prepared)
+    assert saved["status"] == (
+        "durable_approval_intent_evidence_recorded_no_execution"
+    )
+    assert saved["human_confirmation_received"] is True
+    assert saved["audit_record_written"] is True
+    assert saved["record_fsync_completed"] is True
+    assert saved["history_head_fsync_completed"] is True
+    assert saved["execution_authorized"] is False
+    assert saved["stage_allowed"] is False
+    assert saved["journal_ack_allowed"] is False
+    assert saved["retry_allowed"] is False
+    assert saved["rollback_allowed"] is False
+    assert saved["cutover_allowed"] is False
+    assert saved["label_changed"] is False
+    assert saved["journal_changed"] is False
+    assert saved["production_yaml_changed"] is False
+    assert disk.appends[0]["administrator_id"] == "admin_a"
+    assert disk.appends[0]["entity_id"] == "light.good"
+    assert disk.appends[0]["action"] == "stage_one_label_addition"
+    assert disk.appends[0]["expected_record_count"] == 0
+    assert app.hass.data["hvls"][api._PENDING_KEY] == {}
+
+
+@pytest.mark.parametrize("mutation", [
+    "changed_native", "journal_changed", "draft_changed",
+    "google_policy_changed", "disk_history_changed", "disk_journal_changed",
+])
+def test_durable_admin_evidence_staleness_consumes_token_without_append(
+    app, monkeypatch, mutation,
+):
+    api, disk = _durable_api(app, monkeypatch)
+    prepared = _prepare_durable(api, app)
+    if mutation == "changed_native":
+        app.native["snapshot"]["before_labels"] = ["new_unrelated"]
+    elif mutation == "journal_changed":
+        app.journal["revision"] += 1
+    elif mutation == "draft_changed":
+        app.draft["draft_revision"] += 1
+    elif mutation == "google_policy_changed":
+        app.review["diagnostic"]["loaded_policy"]["rule_changes"] = ["changed"]
+    elif mutation == "disk_history_changed":
+        disk.disk["history_head_sha256"] = "f" * 64
+    elif mutation == "disk_journal_changed":
+        disk.disk["journal_sha256"] = "f" * 64
+    with pytest.raises(ValueError):
+        _confirm_durable(api, app, prepared)
+    with pytest.raises(
+        ValueError, match="challenge_expired_or_invalid"
+    ):
+        _confirm_durable(api, app, prepared)
+    assert disk.appends == []
+
+
+def test_durable_competing_admin_challenges_single_entity(app, monkeypatch):
+    api, disk = _durable_api(app, monkeypatch)
+    first = _prepare_durable(api, app, admin="admin_a")
+    second = _prepare_durable(api, app, admin="admin_b")
+    with pytest.raises(
+        ValueError, match="challenge_expired_or_invalid"
+    ):
+        _confirm_durable(api, app, first, admin="admin_a")
+    assert _confirm_durable(
+        api, app, second, admin="admin_b"
+    )["execution_authorized"] is False
+    assert len(disk.appends) == 1
+
+
+def test_foreign_admin_and_forged_token_cannot_consume_challenge(
+    app, monkeypatch,
+):
+    api, disk = _durable_api(app, monkeypatch)
+    prepared = _prepare_durable(api, app)
+    with pytest.raises(ValueError, match="challenge_expired_or_invalid"):
+        _confirm_durable(api, app, prepared, admin="admin_b")
+    bad = {**prepared, "confirmation_token": "forged"}
+    with pytest.raises(ValueError, match="challenge_expired_or_invalid"):
+        _confirm_durable(api, app, bad)
+    assert _confirm_durable(
+        api, app, prepared
+    )["record_count"] == 1
+    with pytest.raises(ValueError, match="challenge_expired_or_invalid"):
+        _confirm_durable(api, app, prepared)
+
+
+def test_durable_approval_expires_and_restart_erases_pending(app, monkeypatch):
+    api, disk = _durable_api(app, monkeypatch)
+    now = [1000.]
+    monkeypatch.setattr(api.time, "monotonic", lambda: now[0])
+    prepared = _prepare_durable(api, app)
+    now[0] += 181.
+    with pytest.raises(ValueError, match="challenge_expired_or_invalid"):
+        _confirm_durable(api, app, prepared)
+    again = _prepare_durable(api, app)
+    app.hass.data = {}
+    with pytest.raises(ValueError, match="challenge_expired_or_invalid"):
+        _confirm_durable(api, app, again)
+    assert disk.appends == []
+
+
+@pytest.mark.parametrize(("action", "entity"), [
+    ("stage_one_label_removal", "light.good"),
+    ("rollback", "light.good"),
+    ("retry", "light.good"),
+    ("ack_intent", "light.good"),
+    ("cutover", "light.good"),
+    ("stage_one_label_addition", "light.no_permission"),
+])
+def test_durable_approval_refuses_non_scoped_or_noneligible_choices(
+    app, monkeypatch, action, entity,
+):
+    api, disk = _durable_api(app, monkeypatch)
+    with pytest.raises(ValueError):
+        _prepare_durable(api, app, action=action, entity=entity)
+    assert disk.appends == []
+
+
+def test_durable_confirmation_requires_explicit_true_bools(app, monkeypatch):
+    api, disk = _durable_api(app, monkeypatch)
+    prepared = _prepare_durable(api, app)
+    with pytest.raises(ValueError, match="explicit_durable_confirmation_required"):
+        _confirm_durable(api, app, prepared, acknowledge=False)
+    with pytest.raises(ValueError, match="explicit_durable_confirmation_required"):
+        _confirm_durable(api, app, prepared, confirmed=False)
+    assert len(disk.appends) == 0
+    assert _confirm_durable(api, app, prepared)["record_count"] == 1
+
+
+def test_durable_history_read_is_non_authorizing_and_not_live_verified(
+    app, monkeypatch,
+):
+    api, disk = _durable_api(app, monkeypatch)
+    read = asyncio.run(api.async_get_approval_intent_history(app.hass))
+    assert read["status"] == "verified_durable_approval_intent_history"
+    assert read["history_read_only"] is True
+    assert read["historical_evidence_not_revalidated_against_live_ha"] is True
+    assert read["execution_authorized"] is False
+    assert read["stage_allowed"] is False
+    assert read["record_count"] == 0
+    assert disk.appends == []
