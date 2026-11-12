@@ -40,7 +40,7 @@ def _representative_config(root: Path) -> None:
     )
     (root / "configuration.yaml").write_text(
         "homeassistant:\n"
-        "  packages: !include_dir_named packages\n"
+        "  name: Isolated test VM\n"
         "google_assistant:\n"
         "  project_id: !secret project\n"
         f"  service_account: {PRIVATE_PROJECT}\n"
