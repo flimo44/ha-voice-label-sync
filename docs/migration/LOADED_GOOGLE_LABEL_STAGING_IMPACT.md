@@ -105,3 +105,13 @@ Google integration reload/write methods are called. The live object is
 queried on the event loop and **not** passed to the executor.
 
 Tracking #103; follows #110–#119.
+
+## Human review evidence integration
+
+PR #119's human review attestation now incorporates the **complete sanitized
+staging-impact result** into its evidence SHA-256. A changed native exposure
+projection, any new local/global impact issue or missing impact evidence
+invalidates the earlier attestation. A present issue requires explicit human
+acknowledgment to be *attested as open*; it does **not** authorize staging.
+This keeps review evidence consistent across all already-established
+migration checks and cannot upgrade an older reviewed draft into authority.
