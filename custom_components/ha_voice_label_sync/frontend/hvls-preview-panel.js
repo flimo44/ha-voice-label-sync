@@ -79,6 +79,15 @@ const HVLS_TRANSLATIONS = {
     migrationRecoverySummary: "Phase : {phase} · Révision : {revision} · Opérations : {total} · Intentions non acquittées : {pending} · Autres anomalies : {issues} · Sources YAML : {sources}.",
     migrationRecoveryRow: "{entity} · journal : {journal} · registre : {observed} · label : {membership} · revue : {review}",
     migrationRecoverySafeView: "Observation instantanée uniquement ; aucun droit de staging ni de bascule.",
+    migrationResolutionSummary: "Scénarios d’enquête (simulation seulement) : {pending} intentions non acquittées, {investigate} à examiner, {quarantine} cas à isoler. Aucune décision n’a été appliquée.",
+    migrationResolutionLine: "Hypothèse : {scenario} · catégorie : {category} · vérifications : {reasons}.",
+    migrationScenario_intent_desired_membership_observed: "état voulu observé, intention NON acquittée",
+    migrationScenario_intent_original_membership_observed: "état initial observé, intention NON acquittée",
+    migrationScenario_identity_or_membership_unknown: "identité ou appartenance indéterminée",
+    migrationScenario_recorded_state_no_longer_matches: "divergence entre journal et registre",
+    migrationScenario_applied_record_matches_observation: "application enregistrée, état local cohérent uniquement",
+    migrationScenario_rollback_record_matches_observation: "retour arrière enregistré, état local cohérent uniquement",
+    migrationScenario_inconsistent_journal_observation: "journal et observations incohérents",
     migrationStagingImpact: "Impact prévisionnel des labels sur Google Assistant manuel : {status}. Les autres consommateurs de labels et Google Home restent non vérifiés. Staging interdit.",
     migrationConsumerAudit: "Audit indirect limité : {files} fichiers YAML inspectés, {writers} références à la génération HVLS, {events} références à un événement du registre, {labels} références à des fonctions de label. Effets externes non certifiés ; staging interdit.",
     migrationConsumerOverlap: "Attention : le fichier de sortie HVLS correspond à une source Google manuelle protégée. Toute génération V1 pourrait modifier cette source.",
@@ -282,6 +291,15 @@ const HVLS_TRANSLATIONS = {
     migrationRecoverySummary: "Phase: {phase} · Revision: {revision} · Operations: {total} · Unacknowledged intents: {pending} · Other issues: {issues} · Source YAML: {sources}.",
     migrationRecoveryRow: "{entity} · journal: {journal} · registry: {observed} · label: {membership} · review: {review}",
     migrationRecoverySafeView: "Snapshot only; no staging or cutover permission.",
+    migrationResolutionSummary: "Investigation scenarios (simulation only): {pending} unacknowledged intents, {investigate} require inspection, {quarantine} quarantined. No decision has been applied.",
+    migrationResolutionLine: "Hypothesis: {scenario} · category: {category} · checks: {reasons}.",
+    migrationScenario_intent_desired_membership_observed: "desired membership observed, intent NOT acknowledged",
+    migrationScenario_intent_original_membership_observed: "original membership observed, intent NOT acknowledged",
+    migrationScenario_identity_or_membership_unknown: "identity or membership unknown",
+    migrationScenario_recorded_state_no_longer_matches: "journal and registry disagree",
+    migrationScenario_applied_record_matches_observation: "applied record matches local observation only",
+    migrationScenario_rollback_record_matches_observation: "rollback record matches local observation only",
+    migrationScenario_inconsistent_journal_observation: "inconsistent journal and observation",
     migrationStagingImpact: "Projected label impact on manual Google Assistant: {status}. Other label consumers and Google Home remain unverified. Staging is forbidden.",
     migrationConsumerAudit: "Limited indirect audit: {files} YAML files inspected, {writers} HVLS generation references, {events} entity-registry event references, {labels} label-function references. External effects remain unverified; staging forbidden.",
     migrationConsumerOverlap: "Warning: the HVLS output file overlaps a protected manual Google Assistant source. Any V1 generation may change that source.",
@@ -2643,6 +2661,22 @@ class HVLSPreviewPanel extends HTMLElement {
         issues: result.summary?.other_issues ?? 0,
         sources: result.source_integrity,
       }) + " " + this._t("migrationRecoverySafeView");
+    const scenarios = result.resolution_scenarios;
+    const scenarioRows = new Map((scenarios?.operations || []).map(
+      item => [item.entity_id, item]
+    ));
+    if (scenarios?.read_only === true &&
+        scenarios?.automatic_recovery_allowed === false &&
+        scenarios?.journal_ack_allowed === false &&
+        scenarios?.retry_allowed === false &&
+        scenarios?.rollback_allowed === false &&
+        scenarios?.cutover_allowed === false) {
+      status.textContent += " " + this._tf("migrationResolutionSummary", {
+        pending: scenarios.summary?.unconfirmed ?? 0,
+        investigate: scenarios.summary?.requires_investigation ?? 0,
+        quarantine: scenarios.summary?.quarantined ?? 0,
+      });
+    }
     // Bound rendering independently of the backend's 2,000-operation cap.
     for (const row of (result.operations || []).slice(0, 100)) {
       const line = document.createElement("p");
@@ -2654,6 +2688,14 @@ class HVLSPreviewPanel extends HTMLElement {
         membership: row.membership,
         review: row.needs_review ? "required" : "observed",
       });
+      const hypothesis = scenarioRows.get(row.entity_id);
+      if (hypothesis?.resolution_authorized === false) {
+        line.textContent += " " + this._tf("migrationResolutionLine", {
+          scenario: this._t("migrationScenario_" + hypothesis.scenario),
+          category: hypothesis.category,
+          reasons: (hypothesis.reason_codes || []).join(", ") || "—",
+        });
+      }
       container.append(line);
     }
   }
