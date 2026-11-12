@@ -7,7 +7,6 @@ matched registry state is NOT evidence that Google Home is up to date.
 
 from __future__ import annotations
 
-from collections import Counter
 from functools import partial
 from pathlib import Path
 from typing import Any
