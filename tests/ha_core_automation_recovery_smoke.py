@@ -232,6 +232,27 @@ async def verify_after_process_restart(root: Path, *, should_have_label: bool):
     assert prior["operations"][0]["status"] == "intent"
     facts = current_facts(hass, entity_id, label_id)
     recovery = journal.recovery_report(root, facts)
+    # The administrator recovery API's read-only helpers must classify
+    # exactly the same live HA registry + protected journal after a genuine
+    # second interpreter started and loaded the persisted HA data.
+    recovery_view = module("migration_recovery_view")
+    disk = recovery_view._read_disk_snapshot(str(root))
+    assert disk["status"] == "loaded"
+    native, labels_exist = recovery_view._native_observations(
+        hass, disk["journal"]["operations"]
+    )
+    reviewed = recovery_view._finalize_disk_snapshot(
+        str(root), disk, native, labels_exist
+    )
+    assert reviewed["status"] == "review_required", reviewed
+    assert reviewed["operations"][0]["observed_status"] == "unconfirmed_intent"
+    assert reviewed["operations"][0]["membership"] == (
+        "present" if should_have_label else "absent"
+    )
+    assert reviewed["source_integrity"] == "verified_unchanged"
+    assert reviewed["automatic_recovery_allowed"] is False
+    assert reviewed["stage_allowed"] is False
+    assert reviewed["cutover_allowed"] is False
     assert recovery["operations"][0]["status"] == "unconfirmed_intent"
     assert recovery["needs_review"] is True
     assert recovery["cutover_allowed"] is False
