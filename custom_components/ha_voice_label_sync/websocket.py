@@ -146,6 +146,142 @@ async def websocket_confirm_migration_investigation_record(
     connection.send_result(msg["id"], result)
 
 
+WS_TYPE_ONE_SHOT_HISTORY = f"{DOMAIN}/get_migration_one_shot_rehearsal_history"
+WS_TYPE_ONE_SHOT_PREPARE = f"{DOMAIN}/prepare_migration_one_shot_rehearsal"
+WS_TYPE_ONE_SHOT_CONFIRM = f"{DOMAIN}/confirm_migration_one_shot_rehearsal"
+WS_TYPE_ONE_SHOT_BURN = f"{DOMAIN}/burn_migration_one_shot_rehearsal"
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_ONE_SHOT_HISTORY,
+})
+async def websocket_get_migration_one_shot_rehearsal_history(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Read all-verified NON-executing reservation and burn receipts."""
+    try:
+        from .migration_execution_one_shot_api import (
+            get_one_shot_rehearsal_history,
+        )
+        result = await get_one_shot_rehearsal_history(hass)
+    except Exception:
+        connection.send_error(
+            msg["id"], "one_shot_rehearsal_history_unavailable",
+            "Protected rehearsal history unavailable; no action performed.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_ONE_SHOT_PREPARE,
+    vol.Required("entity_id"): str,
+    vol.Required("action"): str,
+})
+async def websocket_prepare_migration_one_shot_rehearsal(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Prepare only one-entity one-shot rehearsal, without disk changes."""
+    try:
+        from .migration_execution_one_shot_api import (
+            prepare_one_shot_rehearsal,
+        )
+        result = await prepare_one_shot_rehearsal(
+            hass, administrator_id=connection.user.id,
+            entity_id=msg["entity_id"], action=msg["action"],
+        )
+    except Exception:
+        connection.send_error(
+            msg["id"], "one_shot_rehearsal_prepare_refused",
+            "One-shot rehearsal preparation refused; no changes made.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_ONE_SHOT_CONFIRM,
+    vol.Required("entity_id"): str,
+    vol.Required("action"): str,
+    vol.Required("confirmation_token"): str,
+    vol.Required("confirmed"): bool,
+    vol.Required("acknowledge_external_uncertainty"): bool,
+})
+async def websocket_confirm_migration_one_shot_rehearsal(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Store rehearsal reservation receipt, not a stage authorization."""
+    try:
+        from .migration_execution_one_shot_api import (
+            confirm_one_shot_rehearsal,
+        )
+        result = await confirm_one_shot_rehearsal(
+            hass, administrator_id=connection.user.id,
+            entity_id=msg["entity_id"], action=msg["action"],
+            confirmation_token=msg["confirmation_token"],
+            confirmed=msg["confirmed"],
+            acknowledge_external_uncertainty=(
+                msg["acknowledge_external_uncertainty"]
+            ),
+        )
+    except Exception:
+        connection.send_error(
+            msg["id"], "one_shot_rehearsal_confirmation_refused",
+            "One-shot rehearsal confirmation refused; no stage performed.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_ONE_SHOT_BURN,
+    vol.Required("entity_id"): str,
+    vol.Required("action"): str,
+    vol.Required("receipt_id"): str,
+    vol.Required("confirmed"): bool,
+    vol.Required("acknowledge_external_uncertainty"): bool,
+})
+async def websocket_burn_migration_one_shot_rehearsal(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Irreversibly burn audit receipt; NO label, journal ACK or staging."""
+    try:
+        from .migration_execution_one_shot_api import (
+            burn_one_shot_rehearsal,
+        )
+        result = await burn_one_shot_rehearsal(
+            hass, administrator_id=connection.user.id,
+            entity_id=msg["entity_id"], action=msg["action"],
+            receipt_id=msg["receipt_id"], confirmed=msg["confirmed"],
+            acknowledge_external_uncertainty=(
+                msg["acknowledge_external_uncertainty"]
+            ),
+        )
+    except Exception:
+        connection.send_error(
+            msg["id"], "one_shot_rehearsal_burn_refused",
+            "Rehearsal burn refused; no migration operation performed.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
 WS_TYPE_DURABLE_APPROVAL_INTENT_HISTORY = (
     f"{DOMAIN}/get_migration_durable_approval_intent_history"
 )
@@ -1214,6 +1350,18 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     )
     websocket_api.async_register_command(
         hass, websocket_get_migration_durable_approval_intent_history
+    )
+    websocket_api.async_register_command(
+        hass, websocket_get_migration_one_shot_rehearsal_history
+    )
+    websocket_api.async_register_command(
+        hass, websocket_prepare_migration_one_shot_rehearsal
+    )
+    websocket_api.async_register_command(
+        hass, websocket_confirm_migration_one_shot_rehearsal
+    )
+    websocket_api.async_register_command(
+        hass, websocket_burn_migration_one_shot_rehearsal
     )
     websocket_api.async_register_command(
         hass, websocket_prepare_migration_durable_approval_intent
