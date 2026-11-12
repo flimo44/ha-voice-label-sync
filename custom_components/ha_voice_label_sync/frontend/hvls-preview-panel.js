@@ -58,6 +58,16 @@ const HVLS_TRANSLATIONS = {
     migrationDraftNotReady: "Actualisez d’abord la simulation après vos modifications et vérifiez la sauvegarde protégée.",
     migrationDraftError: "Lecture ou sauvegarde des choix refusée. Revérifiez le diagnostic, le journal et les fichiers protégés.",
     migrationDraftConflict: "Un brouillon existe ou a changé. Rechargez-le avant de remplacer vos décisions, puis relancez la simulation.",
+    migrationAttestationRead: "Vérifier l’état de la revue",
+    migrationAttestationConfirmAction: "Attester ma revue",
+    migrationAttestationReading: "Relecture du brouillon et contrôle des preuves…",
+    migrationAttestationConfirm: "Attester que j’ai examiné les décisions enregistrées et leur simulation actuelle ? Cette attestation ne permet ni l’ajout de labels, ni la modification de Google Assistant.",
+    migrationAttestationConfirmIssues: "Des anomalies ou décisions non résolues subsistent. Confirmez-vous les avoir examinées et accepter de les conserver comme problèmes ouverts ? Aucun changement ne sera autorisé ou exécuté.",
+    migrationAttestationDone: "Revue attestée (révision {revision}). Ce n’est PAS une autorisation d’exécuter la migration.",
+    migrationAttestationWithIssues: "Revue attestée AVEC anomalies non résolues : aucune action de migration n’est autorisée.",
+    migrationAttestationFresh: "État de la revue enregistrée : {status}. Aucun droit d’exécution.",
+    migrationAttestationUnavailable: "Attestation indisponible ou périmée. Rechargez les choix enregistrés, actualisez la simulation et vérifiez les anomalies.",
+    migrationAttestationNotReady: "Enregistrez d’abord vos choix et actualisez la simulation. Aucun changement n’a été effectué.",
     backupIntro: "Choisissez une sauvegarde pour voir ses différences avec la production. Seul le YAML Google Assistant sera restauré, jamais les étiquettes Home Assistant.",
     backupLoading: "Chargement des sauvegardes…",
     backupEmpty: "Aucune sauvegarde disponible.",
@@ -237,6 +247,16 @@ const HVLS_TRANSLATIONS = {
     migrationDraftNotReady: "Refresh simulation after editing selections and verify the protected baseline first.",
     migrationDraftError: "Cannot restore or save selections. Recheck diagnostic, journal and protected files.",
     migrationDraftConflict: "A draft already exists or has changed. Restore it before replacing selections, then refresh the simulation.",
+    migrationAttestationRead: "Check review status",
+    migrationAttestationConfirmAction: "Attest my review",
+    migrationAttestationReading: "Re-reading draft and verifying evidence…",
+    migrationAttestationConfirm: "Attest that I examined the saved decisions and current simulation? This does not authorize HA label changes or Google Assistant cutover.",
+    migrationAttestationConfirmIssues: "Open anomalies or unresolved decisions remain. Confirm that you examined them and acknowledge they remain OPEN? No migration change will be authorized or executed.",
+    migrationAttestationDone: "Review attested (revision {revision}). This is NOT permission to execute migration.",
+    migrationAttestationWithIssues: "Attested review WITH open issues: no migration action is authorized.",
+    migrationAttestationFresh: "Saved review status: {status}. No execution capability.",
+    migrationAttestationUnavailable: "Attestation unavailable or stale. Restore saved choices, refresh the simulation and inspect anomalies.",
+    migrationAttestationNotReady: "Save choices and refresh the simulation first. No changes were made.",
     backupIntro: "Select a backup to compare it with current production. Only the Google Assistant YAML file is restored, never Home Assistant labels.",
     backupLoading: "Loading backups…",
     backupEmpty: "No backups available.",
@@ -466,6 +486,10 @@ class HVLSPreviewPanel extends HTMLElement {
     if (migrationRestoreDraft) migrationRestoreDraft.textContent = this._t("migrationDraftLoad");
     const migrationSaveDraft = this.querySelector("#migrationSaveDraft");
     if (migrationSaveDraft) migrationSaveDraft.textContent = this._t("migrationDraftSave");
+    const migrationReadAttestation = this.querySelector("#migrationReadAttestation");
+    if (migrationReadAttestation) migrationReadAttestation.textContent = this._t("migrationAttestationRead");
+    const migrationAttestReview = this.querySelector("#migrationAttestReview");
+    if (migrationAttestReview) migrationAttestReview.textContent = this._t("migrationAttestationConfirmAction");
     const migrationMore = this.querySelector("#migrationMore");
     if (migrationMore) migrationMore.textContent = this._t("migrationMore");
     const nav = this.querySelector(".hvls-tabs");
@@ -1807,6 +1831,15 @@ class HVLSPreviewPanel extends HTMLElement {
             </button>
           </div>
           <p id="migrationDraftStatus" role="status" class="diagnostic-note"></p>
+          <div class="migration-controls">
+            <button id="migrationReadAttestation" type="button" class="secondary">
+              ${this._t("migrationAttestationRead")}
+            </button>
+            <button id="migrationAttestReview" type="button" class="secondary">
+              ${this._t("migrationAttestationConfirmAction")}
+            </button>
+          </div>
+          <p id="migrationAttestationStatus" role="status" class="diagnostic-note"></p>
 
           <p id="migrationStatus" role="status">${this._t("migrationEmpty")}</p>
           <div id="migrationSummary" class="migration-review-note"></div>
@@ -1856,6 +1889,8 @@ class HVLSPreviewPanel extends HTMLElement {
     this.querySelector("#migrationConfirmBaseline").addEventListener("click", () => this._confirmMigrationBaseline());
     this.querySelector("#migrationRestoreDraft").addEventListener("click", () => this._restoreMigrationDecisionDraft());
     this.querySelector("#migrationSaveDraft").addEventListener("click", () => this._saveMigrationDecisionDraft());
+    this.querySelector("#migrationReadAttestation").addEventListener("click", () => this._readMigrationAttestation());
+    this.querySelector("#migrationAttestReview").addEventListener("click", () => this._attestMigrationReview());
     this.querySelector("#migrationMore").addEventListener("click", () => {
       this._migrationLimit = (this._migrationLimit || 100) + 100;
       this._renderMigrationReview();
@@ -2531,6 +2566,114 @@ class HVLSPreviewPanel extends HTMLElement {
     } finally {
       this._baselineBusy = false;
       this._migrationBaselineControls();
+    }
+  }
+
+  _attestationControls() {
+    const read = this.querySelector("#migrationReadAttestation");
+    const attest = this.querySelector("#migrationAttestReview");
+    if (read) read.disabled = this._attestationBusy === true;
+    if (attest) attest.disabled = this._attestationBusy === true;
+  }
+
+  async _readMigrationAttestation() {
+    if (!this._hass || this._attestationBusy || this._migrationLoading) return;
+    this._attestationBusy = true;
+    this._attestationControls();
+    const status = this.querySelector("#migrationAttestationStatus");
+    if (status) status.textContent = this._t("migrationAttestationReading");
+    try {
+      const observed = await this._hass.callWS({
+        type: "ha_voice_label_sync/get_migration_review_attestation",
+      });
+      if (!observed || observed.cutover_allowed !== false ||
+          observed.review_is_not_execution_authorization !== true) {
+        throw new Error("attestation_state_invalid");
+      }
+      if (status) status.textContent = this._tf(
+        "migrationAttestationFresh", {status: observed.status}
+      );
+    } catch (_error) {
+      if (status) status.textContent = this._t("migrationAttestationUnavailable");
+    } finally {
+      this._attestationBusy = false;
+      this._attestationControls();
+    }
+  }
+
+  async _attestMigrationReview() {
+    if (!this._hass || this._attestationBusy || this._migrationLoading) return;
+    const report = this._migrationReport;
+    const status = this.querySelector("#migrationAttestationStatus");
+    if (this._migrationDirty || !report ||
+        report.protected_baseline_status !== "verified" ||
+        this._draftExpectedRevision == null) {
+      if (status) status.textContent = this._t("migrationAttestationNotReady");
+      return;
+    }
+    this._attestationBusy = true;
+    this._attestationControls();
+    if (status) status.textContent = this._t("migrationAttestationReading");
+    try {
+      // Fresh backend evidence is recomputed from the PROTECTED SAVED
+      // decisions, not from untrusted browser choices.
+      const current = await this._hass.callWS({
+        type: "ha_voice_label_sync/get_migration_review_attestation",
+      });
+      const evidence = current?.fresh_review_evidence;
+      if (!evidence ||
+          !["reviewed_with_open_issues",
+            "reviewed_without_detected_issues"].includes(evidence.status) ||
+          evidence.review_token_sha256 !== report.preflight?.review_token_sha256 ||
+          current.cutover_allowed !== false ||
+          typeof current.attestation_revision !== "number") {
+        throw new Error("review_changed");
+      }
+      // The server handles CAS for the draft and journal; a changed draft
+      // will be refused even if an old preview still appears on screen.
+      const saved = await this._hass.callWS({
+        type: "ha_voice_label_sync/get_migration_decision_draft",
+      });
+      if (saved?.status !== "saved_unapproved_draft" ||
+          saved.draft_revision !== this._draftExpectedRevision ||
+          saved.review_token_sha256 !== evidence.review_token_sha256 ||
+          typeof saved.journal_revision !== "number") {
+        throw new Error("saved_choices_changed");
+      }
+      const prompt = evidence.observed_issues
+        ? this._t("migrationAttestationConfirmIssues")
+        : this._t("migrationAttestationConfirm");
+      if (!window.confirm(prompt)) {
+        if (status) status.textContent = "";
+        return;
+      }
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/attest_migration_review",
+        confirmed: true,
+        acknowledge_issues: evidence.observed_issues === true,
+        attestation_revision: current.attestation_revision,
+        draft_revision: saved.draft_revision,
+        journal_revision: saved.journal_revision,
+        baseline_manifest_sha256: saved.baseline_manifest_sha256,
+        review_evidence_sha256: evidence.review_evidence_sha256,
+      });
+      if (!result || result.cutover_allowed !== false ||
+          result.review_is_not_execution_authorization !== true ||
+          !["reviewed_with_open_issues",
+            "reviewed_without_detected_issues"].includes(result.status)) {
+        throw new Error("attestation_result_invalid");
+      }
+      if (status) {
+        status.textContent = this._tf("migrationAttestationDone", {
+          revision: result.attestation_revision,
+        }) + (result.observed_issues
+          ? " " + this._t("migrationAttestationWithIssues") : "");
+      }
+    } catch (_error) {
+      if (status) status.textContent = this._t("migrationAttestationUnavailable");
+    } finally {
+      this._attestationBusy = false;
+      this._attestationControls();
     }
   }
 
