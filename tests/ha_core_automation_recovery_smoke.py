@@ -15,6 +15,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import ModuleType
 
+from homeassistant import loader
 from homeassistant.config_entries import ConfigEntries
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
@@ -54,6 +55,7 @@ def module(name: str):
 
 async def boot(root: Path) -> HomeAssistant:
     hass = HomeAssistant(str(root))
+    loader.async_setup(hass)
     hass.config_entries = ConfigEntries(hass, {})
     await hass.config_entries.async_initialize()
     await lr.async_load(hass)
