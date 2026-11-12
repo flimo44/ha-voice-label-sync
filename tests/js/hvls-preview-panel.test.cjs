@@ -1597,3 +1597,82 @@ test("Review evidence conflict cannot be silently acknowledged", async () => {
   assert.equal(calls.length, 1);
   assert.match(controls.migrationAttestationStatus.textContent, /périmée/);
 });
+
+
+test("Loaded manual Google impact appears as an explicitly non-authorizing status", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request.type);
+    return {
+      protected_baseline_status: "not_verified",
+      diagnostic: {
+        entities: [
+          {entity_id: "light.good", disk_ha_sync_projection: "exposed"},
+          {entity_id: "light.uncertain", disk_ha_sync_projection: "unknown"},
+        ],
+        review_status: "pending_review",
+      },
+      preflight: {
+        summary: {needs_review: 1, proposed_label_additions: 2},
+        entities: [],
+      },
+      pre_stage_impact: {
+        status: "local_review_pending",
+        stage_allowed: false,
+        cutover_allowed: false,
+        entities: [
+          {entity_id: "light.good", reasons: [],
+            status: "no_manual_policy_delta_detected"},
+          {entity_id: "light.uncertain",
+            reasons: ["manual_google_runtime_rule_disagreement"],
+            status: "needs_review"},
+        ],
+      },
+      simulation: null,
+      read_only: true, apply_allowed: false, cutover_allowed: false,
+    };
+  });
+  const controls = {
+    migrationAnalyze: {disabled: false},
+    migrationStatus: {textContent: ""},
+    migrationSummary: {textContent: ""},
+    migrationRows: {
+      children: [], replaceChildren(...children) { this.children = children; },
+      append(child) { this.children.push(child); },
+    },
+    migrationMore: {hidden: false},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  await panel._loadMigrationReview();
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_migration_review"]);
+  assert.match(controls.migrationSummary.textContent, /local_review_pending/);
+  assert.match(controls.migrationSummary.textContent, /Staging interdit/);
+  assert.match(controls.migrationSummary.textContent, /non vérifiés/);
+  assert.doesNotMatch(controls.migrationSummary.textContent, /stage_allowed=true/);
+  assert.equal(controls.migrationRows.children.length, 1);
+});
+
+test("Unknown Google staging impact is never rendered as permission to stage", () => {
+  const {panel} = makePanel(async () => ({}));
+  const controls = {
+    migrationStatus: {textContent: ""},
+    migrationSummary: {textContent: ""},
+    migrationRows: {replaceChildren() {}, append() {}},
+    migrationMore: {hidden: true},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {
+    protected_baseline_status: "not_verified",
+    preflight: {summary: {needs_review: 1}},
+    diagnostic: {entities: [{entity_id: "light.test"}]},
+    pre_stage_impact: {
+      status: "global_review_blocked",
+      stage_allowed: false,
+      entities: [],
+    },
+  };
+  panel._renderMigrationReview();
+  assert.match(controls.migrationSummary.textContent, /global_review_blocked/);
+  assert.match(controls.migrationSummary.textContent, /Staging interdit/);
+  assert.ok(!source.includes("ha_voice_label_sync/stage_one_approved_label"));
+});
