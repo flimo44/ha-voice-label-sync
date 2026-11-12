@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from hvls import GenerationRequest, run_google_assistant_workflow
-from hvls.writers import write_with_backup
+from hvls.owned_writer import write_owned_output
 
 from .preview_guard import (
     PreviewChangedError,
@@ -27,6 +27,8 @@ def apply_reviewed_preview(
     create_backup_enabled: bool,
     *,
     expected_production_digest: str | None,
+    entry_id: str,
+    ownership_registry_path: Path,
 ):
     """Regenerate, verify and write exactly the approved YAML."""
     if not isinstance(reviewed_digest, str) or not re.fullmatch(
@@ -66,9 +68,11 @@ def apply_reviewed_preview(
     validate_production_unchanged(request.output_path, expected_production_digest)
 
     # Write exactly the content that passed validation.
-    return write_with_backup(
+    return write_owned_output(
         output_path=request.output_path,
         content=generated.content,
+        entry_id=entry_id,
+        ownership_registry_path=ownership_registry_path,
         backup_directory=request.output_path.parent / ".hvls_backups",
         retention=backup_retention,
         create_backup_enabled=create_backup_enabled,

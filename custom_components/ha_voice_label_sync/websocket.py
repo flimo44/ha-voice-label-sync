@@ -1069,6 +1069,10 @@ async def websocket_apply_preview(
                     ),
                     settings.get(CONF_CREATE_BACKUP, DEFAULT_CREATE_BACKUP),
                     expected_production_digest=msg["production_sha256"],
+                    entry_id=entries[0].entry_id,
+                    ownership_registry_path=Path(
+                        hass.config.path(".hvls", "ownership.json")
+                    ),
                 )
             )
         except (
@@ -1319,12 +1323,19 @@ async def websocket_restore_backup(
     async with get_workflow_lock(hass):
         try:
             path = _configured_output(hass)
+            entries = hass.config_entries.async_entries(DOMAIN)
             result = await hass.async_add_executor_job(
-                restore_reviewed_backup,
-                path,
-                msg["backup_id"],
-                msg["backup_sha256"],
-                msg["production_sha256"],
+                partial(
+                    restore_reviewed_backup,
+                    path,
+                    msg["backup_id"],
+                    msg["backup_sha256"],
+                    msg["production_sha256"],
+                    entry_id=entries[0].entry_id,
+                    ownership_registry_path=Path(
+                        hass.config.path(".hvls", "ownership.json")
+                    ),
+                )
             )
         except (
             BackupRestoreError,

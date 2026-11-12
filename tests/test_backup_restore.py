@@ -8,6 +8,32 @@ from types import ModuleType
 import pytest
 
 
+def restore(backup_module, output, backup_id, backup_sha, production_sha):
+    return backup_module.restore_reviewed_backup(
+        output,
+        backup_id,
+        backup_sha,
+        production_sha,
+        entry_id="test-installation",
+        ownership_registry_path=output.parent / ".hvls" / "ownership.json",
+    )
+
+
+def make_owned(output):
+    from hvls.owned_writer import write_owned_output
+
+    content = output.read_text(encoding="utf-8")
+    output.unlink()
+
+    write_owned_output(
+        output_path=output,
+        content=content,
+        entry_id="test-installation",
+        ownership_registry_path=output.parent / ".hvls" / "ownership.json",
+        backup_directory=output.parent / ".hvls_backups",
+    )
+
+
 @pytest.fixture
 def backup_module(monkeypatch):
     prefix = "_test_hvls_restore"
@@ -71,9 +97,10 @@ def test_review_direction_is_restoration(backup_module, sample):
 
 def test_restore_creates_mandatory_safety_copy(backup_module, sample):
     output, backup_id, source = sample
+    make_owned(output)
     initial = output.read_text()
     review = backup_module.review_backup(output, backup_id)
-    result = backup_module.restore_reviewed_backup(
+    result = restore(backup_module,
         output, backup_id, review["backup_sha256"], review["production_sha256"]
     )
     assert result["restored"] is True
@@ -89,7 +116,7 @@ def test_changed_production_refused(backup_module, sample):
     review = backup_module.review_backup(output, backup_id)
     output.write_text("switch.external: {}\n")
     with pytest.raises(backup_module.PreviewChangedError, match="Production changed"):
-        backup_module.restore_reviewed_backup(
+        restore(backup_module,
             output, backup_id, review["backup_sha256"], review["production_sha256"]
         )
     assert output.read_text() == "switch.external: {}\n"
@@ -100,7 +127,7 @@ def test_changed_backup_refused(backup_module, sample):
     review = backup_module.review_backup(output, backup_id)
     source.write_text("switch.changed: {}\n")
     with pytest.raises(backup_module.PreviewChangedError, match="backup changed"):
-        backup_module.restore_reviewed_backup(
+        restore(backup_module,
             output, backup_id, review["backup_sha256"], review["production_sha256"]
         )
 
@@ -129,7 +156,7 @@ def test_symlink_backup_never_listed(backup_module, sample):
 def test_invalid_tokens_refused(backup_module, sample):
     output, backup_id, _ = sample
     with pytest.raises(backup_module.BackupRestoreError, match="Invalid review"):
-        backup_module.restore_reviewed_backup(
+        restore(backup_module,
             output, backup_id, "invalid", "f" * 64
         )
 
@@ -144,10 +171,11 @@ def test_invalid_production_prevents_review(backup_module, sample):
 def test_restore_does_not_touch_other_labels(backup_module, sample):
     # Restore writes only the output YAML, never HA registries.
     output, backup_id, _ = sample
+    make_owned(output)
     marker = output.parent / "entity_registry.json"
     marker.write_text('{"labels":["google_assistant","other"]}')
     review = backup_module.review_backup(output, backup_id)
-    backup_module.restore_reviewed_backup(
+    restore(backup_module,
         output, backup_id, review["backup_sha256"], review["production_sha256"]
     )
     assert marker.read_text() == '{"labels":["google_assistant","other"]}'
@@ -159,3 +187,175 @@ def test_empty_backup_not_offered_or_restored(backup_module, sample):
     assert backup_module.list_backups(output)["backups"] == []
     with pytest.raises(backup_module.BackupRestoreError, match="empty"):
         backup_module.review_backup(output, backup_id)
+
+
+def test_restore_refuses_unmanaged_production(backup_module, sample, tmp_path):
+    """Reviewed backup tokens do not prove ownership of production."""
+    from hvls import FileWriterError
+
+    output, backup_id, _ = sample
+    original = output.read_bytes()
+    backup_directory = tmp_path / ".hvls_backups"
+    existing_backups = {p.name for p in backup_directory.iterdir()}
+
+    review = backup_module.review_backup(output, backup_id)
+
+    with pytest.raises(
+        (backup_module.BackupRestoreError, FileWriterError),
+        match=r"(?i)ownership|unmanaged|not owned|unauthorized",
+    ):
+        restore(backup_module,
+            output,
+            backup_id,
+            review["backup_sha256"],
+            review["production_sha256"],
+        )
+
+    assert output.read_bytes() == original
+    assert {p.name for p in backup_directory.iterdir()} == existing_backups
+
+
+def test_restore_refuses_externally_modified_owned_file(
+    backup_module, sample, tmp_path
+):
+    """A valid review cannot override a broken ownership digest."""
+    from hvls import FileWriterError
+    from hvls.owned_writer import write_owned_output
+
+    output, backup_id, _ = sample
+    original_owned_content = "switch.owned:\n  expose: true\n"
+
+    # Replace the test fixture with a genuinely HVLS-owned output.
+    output.unlink()
+
+    write_owned_output(
+        output_path=output,
+        content=original_owned_content,
+        entry_id="test-installation",
+        ownership_registry_path=tmp_path / ".hvls" / "ownership.json",
+        backup_directory=tmp_path / ".hvls_backups",
+    )
+
+    # Simulate a manual modification BEFORE the review.
+    external_content = b"switch.manual_change:\n  expose: true\n"
+    output.write_bytes(external_content)
+
+    # Review hashes match the modified production, but ownership does not.
+    review = backup_module.review_backup(output, backup_id)
+
+    with pytest.raises(
+        (backup_module.BackupRestoreError, FileWriterError),
+        match=r"(?i)ownership|unmanaged|changed|not owned|unauthorized",
+    ):
+        restore(backup_module,
+            output,
+            backup_id,
+            review["backup_sha256"],
+            review["production_sha256"],
+        )
+
+    assert output.read_bytes() == external_content
+
+
+def test_restore_updates_ownership_digest(backup_module, sample):
+    """Restore must record the new SHA and permit later generation."""
+    import hashlib
+
+    from hvls.output_ownership_registry import OwnershipRegistry
+    from hvls.owned_writer import write_owned_output
+
+    output, backup_id, backup = sample
+    make_owned(output)
+
+    review = backup_module.review_backup(output, backup_id)
+
+    restore(
+        backup_module,
+        output,
+        backup_id,
+        review["backup_sha256"],
+        review["production_sha256"],
+    )
+
+    registry_path = output.parent / ".hvls" / "ownership.json"
+    record = OwnershipRegistry(registry_path).get_record("test-installation")
+
+    assert record["state"] == "managed"
+    assert record["sha256"] == hashlib.sha256(
+        backup.read_bytes()
+    ).hexdigest()
+
+    write_owned_output(
+        output_path=output,
+        content="switch.after_restore:\n  expose: true\n",
+        entry_id="test-installation",
+        ownership_registry_path=registry_path,
+        backup_directory=output.parent / ".hvls_backups",
+    )
+
+    assert "switch.after_restore:" in output.read_text()
+
+
+def test_generation_retention_preserves_restore_safety_backup(
+    backup_module, sample
+):
+    """Ordinary retention must not remove mandatory Restore safety copies."""
+    from hvls.owned_writer import write_owned_output
+
+    output, backup_id, _ = sample
+    make_owned(output)
+
+    review = backup_module.review_backup(output, backup_id)
+
+    result = restore(
+        backup_module,
+        output,
+        backup_id,
+        review["backup_sha256"],
+        review["production_sha256"],
+    )
+
+    safety_path = output.parent / ".hvls_backups" / result["safety_backup"]
+    safety_content = safety_path.read_bytes()
+
+    write_owned_output(
+        output_path=output,
+        content="switch.new_generation:\n  expose: true\n",
+        entry_id="test-installation",
+        ownership_registry_path=output.parent / ".hvls" / "ownership.json",
+        backup_directory=output.parent / ".hvls_backups",
+        retention=0,
+    )
+
+    assert safety_path.exists()
+    assert safety_path.read_bytes() == safety_content
+
+
+def test_restore_safety_backup_remains_reviewable(backup_module, sample):
+    """Safety backups must remain discoverable and restorable."""
+    output, backup_id, _ = sample
+    make_owned(output)
+
+    review = backup_module.review_backup(output, backup_id)
+
+    result = restore(
+        backup_module,
+        output,
+        backup_id,
+        review["backup_sha256"],
+        review["production_sha256"],
+    )
+
+    safety_id = result["safety_backup"]
+    assert safety_id.endswith(".safety.bak")
+
+    listed_ids = {
+        item["id"]
+        for item in backup_module.list_backups(output)["backups"]
+    }
+
+    assert safety_id in listed_ids
+    assert backup_id in listed_ids
+
+    safety_review = backup_module.review_backup(output, safety_id)
+    assert safety_review["backup_id"] == safety_id

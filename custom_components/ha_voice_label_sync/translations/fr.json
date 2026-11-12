@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Configurer HA Voice Label Sync",
-        "description": "Configurez la sélection des entités Home Assistant et leur exportation.",
+        "description": "Configurez HVLS et vérifiez la configuration Google Assistant.\n\n{diagnostic}",
         "data": {
           "backend": "Assistant vocal",
           "label": "Étiquette Home Assistant",
@@ -25,7 +25,10 @@
       "already_configured": "HA Voice Label Sync est déjà configuré."
     },
     "error": {
-      "label_setup_failed": "Impossible de créer ou de retrouver l’étiquette Home Assistant. Vérifiez les étiquettes existantes et les autorisations."
+      "label_setup_failed": "Impossible de créer ou de retrouver l’étiquette Home Assistant. Vérifiez les étiquettes existantes et les autorisations.",
+      "source_output_conflict": "La destination correspond au fichier Google Assistant. Choisissez un fichier distinct.",
+      "existing_output_not_owned": "Ce fichier existe déjà. Choisissez une autre destination.",
+      "unsafe_output_path": "Chemin de sortie non sûr ou extérieur à Home Assistant."
     }
   },
   "options": {

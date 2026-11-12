@@ -9,7 +9,8 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from hvls.writers import atomic_write
+from hvls import FileWriterError
+from hvls.owned_writer import write_owned_output
 
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_guard import (
@@ -34,7 +35,10 @@ def _backup_names(output_path: Path) -> list[str]:
     directory = _backup_directory(output_path)
     if not directory.is_dir() or directory.is_symlink():
         return []
-    pattern = re.compile(re.escape(output_path.name) + r"\.\d{8}-\d{6}\.bak\Z")
+    pattern = re.compile(
+        re.escape(output_path.name)
+        + r"\.\d{8}-\d{6}(?:\.(?:auto|safety))?\.bak\Z"
+    )
     return sorted(
         (p.name for p in directory.iterdir()
          if pattern.fullmatch(p.name) and p.is_file() and not p.is_symlink()),
@@ -149,6 +153,9 @@ def restore_reviewed_backup(
     backup_id: str,
     backup_sha256: str,
     production_sha256: str,
+    *,
+    entry_id: str,
+    ownership_registry_path: Path,
 ) -> dict:
     """Restore only an explicitly reviewed snapshot, after preserving production."""
     if not all(isinstance(value, str) and _SHA.fullmatch(value)
@@ -163,24 +170,36 @@ def restore_reviewed_backup(
         raise PreviewChangedError("Production changed since the review.")
     # Re-check bytes on disk immediately before writing.
     validate_production_unchanged(output_path, production_sha256)
-    safety_path = _safety_backup(output_path)
-    # Verify that the safety copy is an exact copy of the reviewed production.
-    # Never replace production if its original bytes could not be preserved.
-    if not hmac.compare_digest(
-        preview_digest(_read_yaml(safety_path)), production_sha256
-    ):
-        raise PreviewChangedError(
-            "Production changed while creating the safety backup."
-        )
-    validate_production_unchanged(output_path, production_sha256)
+    # Recheck the selected backup before the ownership transaction.
     if not hmac.compare_digest(
         preview_digest(_read_yaml(backup_path)), backup_sha256
     ):
-        raise PreviewChangedError("Selected backup changed before restore.")
-    bytes_written = atomic_write(output_path, candidate)
+        raise PreviewChangedError(
+            "Selected backup changed before restore."
+        )
+
+    try:
+        result = write_owned_output(
+            output_path=output_path,
+            content=candidate,
+            entry_id=entry_id,
+            ownership_registry_path=ownership_registry_path,
+            backup_directory=_backup_directory(output_path),
+            restore_mode=True,
+        )
+    except (FileWriterError, ValueError) as exc:
+        raise BackupRestoreError(
+            f"Restore ownership authorization failed: {exc}"
+        ) from exc
+
+    if result.backup_path is None:
+        raise BackupRestoreError(
+            "Restore safety backup was not created."
+        )
+
     return {
         "restored": True,
         "backup_id": backup_id,
-        "safety_backup": safety_path.name,
-        "bytes_written": bytes_written,
+        "safety_backup": result.backup_path.name,
+        "bytes_written": result.bytes_written,
     }

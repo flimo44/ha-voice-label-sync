@@ -200,3 +200,282 @@ def check_entity_config(
         result["status"] = "ok"
 
     return result
+
+
+def discover_existing_google_yaml(config_dir: str | Path) -> dict[str, Any]:
+    """Discover an existing manual Google Assistant entity YAML, read-only.
+
+    Discovery never implies permission to overwrite the source file.
+    Unsupported or ambiguous configurations require manual review.
+    """
+    base = Path(config_dir).resolve()
+    result: dict[str, Any] = {
+        "status": "ambiguous",
+        "source_path": None,
+        "source_exists": False,
+    }
+
+    config_file = base / "configuration.yaml"
+
+    try:
+        if config_file.is_symlink() or not config_file.is_file():
+            return result
+
+        if config_file.stat().st_size > MAX_CONFIG_SIZE:
+            return result
+
+        document = yaml.compose(
+            config_file.read_text(encoding="utf-8"),
+            Loader=yaml.BaseLoader,
+        )
+
+        if not isinstance(document, MappingNode):
+            return result
+
+        def unique_mapping(node: Any) -> dict[str, Any] | None:
+            if not isinstance(node, MappingNode):
+                return None
+            values: dict[str, Any] = {}
+            for key, value in node.value:
+                if not isinstance(key, ScalarNode) or key.tag.startswith("!"):
+                    return None
+                if key.value in values or key.value == "<<":
+                    return None
+                values[key.value] = value
+            return values
+
+        main = unique_mapping(document)
+        if main is None:
+            return result
+
+        # Packages can declare Google Assistant outside configuration.yaml.
+        # Do not claim there is no existing configuration in that case.
+        homeassistant = main.get("homeassistant")
+        if homeassistant is not None:
+            ha_settings = unique_mapping(homeassistant)
+            if ha_settings is None or "packages" in ha_settings:
+                return result
+
+        google = main.get("google_assistant")
+        if google is None:
+            result["status"] = "not_found"
+            return result
+
+        settings = unique_mapping(google)
+        if settings is None:
+            return result
+
+        entity_config = settings.get("entity_config")
+        if entity_config is None:
+            return result
+
+        if (
+            not isinstance(entity_config, ScalarNode)
+            or entity_config.tag != "!include"
+        ):
+            return result
+
+        include_name = entity_config.value.strip()
+
+        if not include_name:
+            return result
+
+        relative = Path(include_name)
+        if relative.is_absolute():
+            result["status"] = "unsafe_path"
+            return result
+
+        candidate = base / relative
+        resolved = candidate.resolve()
+
+        if not resolved.is_relative_to(base):
+            result["status"] = "unsafe_path"
+            return result
+
+        # Refuse symbolic links, including parent directory components.
+        current = base
+        for component in relative.parts:
+            current = current / component
+            if current.is_symlink():
+                result["status"] = "unsafe_path"
+                return result
+
+        if resolved.suffix.lower() not in {".yaml", ".yml"}:
+            result["status"] = "ambiguous"
+            return result
+
+        result["source_path"] = str(resolved)
+        result["source_exists"] = resolved.is_file()
+        result["status"] = (
+            "found" if result["source_exists"] else "file_missing"
+        )
+        return result
+
+    except (OSError, UnicodeError, ValueError, yaml.YAMLError):
+        return result
+
+
+def inspect_initial_setup(
+    config_dir: str | Path,
+    output_path: str | Path,
+) -> dict[str, Any]:
+    """Inspect initial HVLS setup without creating or modifying files.
+
+    Discovery is informational only and never establishes ownership.
+    """
+    import stat
+
+    base = Path(config_dir).resolve()
+    discovery = discover_existing_google_yaml(base)
+
+    result: dict[str, Any] = {
+        "discovery_status": discovery["status"],
+        "source_path": discovery["source_path"],
+        "source_exists": discovery["source_exists"],
+        "output_status": "unsafe",
+        "source_matches_output": False,
+        "review_required": True,
+    }
+
+    try:
+        requested = Path(output_path)
+
+        # No parent traversal, even when it would resolve inside /config.
+        if ".." in requested.parts:
+            return result
+
+        candidate = (
+            requested
+            if requested.is_absolute()
+            else base / requested
+        )
+
+        # Generated output must remain inside the HA config directory.
+        relative = candidate.relative_to(base)
+
+        # Refuse symbolic links in any output path component.
+        current = base
+        for component in relative.parts:
+            current = current / component
+            if current.is_symlink():
+                return result
+
+        resolved = candidate.resolve(strict=False)
+
+        if not resolved.is_relative_to(base):
+            return result
+
+        try:
+            metadata = candidate.lstat()
+        except FileNotFoundError:
+            output_status = "absent"
+        else:
+            output_status = (
+                "existing"
+                if stat.S_ISREG(metadata.st_mode)
+                else "unsafe"
+            )
+
+        result["output_status"] = output_status
+
+        source_path = discovery.get("source_path")
+        if source_path is not None:
+            result["source_matches_output"] = (
+                Path(source_path) == resolved
+            )
+
+        # Any preexisting source, ambiguous discovery or existing
+        # output requires review. This is NOT write authorization.
+        result["review_required"] = (
+            discovery["status"] != "not_found"
+            or output_status != "absent"
+        )
+
+        return result
+
+    except (OSError, ValueError, RuntimeError, TypeError):
+        # Fail closed when path inspection cannot be completed.
+        return result
+
+
+def initial_setup_output_error(report: dict[str, Any]) -> str | None:
+    """Validate a new installation's output destination, not ownership."""
+    if report.get("source_matches_output"):
+        return "source_output_conflict"
+
+    status = report.get("output_status")
+    if status == "existing":
+        return "existing_output_not_owned"
+    if status != "absent":
+        return "unsafe_output_path"
+
+    return None
+
+
+def render_initial_setup_diagnostic(
+    report: dict[str, Any],
+    language: str = "en",
+) -> str:
+    """Display a read-only installation diagnostic."""
+    french = str(language).lower().startswith("fr")
+
+    def tr(fr: str, en: str) -> str:
+        return fr if french else en
+
+    def safe(value: Any) -> str:
+        value = str(value).replace("\\r", " ").replace("\\n", " ")[:240]
+        for char in ("\\", "`", "*", "_", "[", "]", "(", ")", "<", ">", "|"):
+            value = value.replace(char, "\\" + char)
+        return value
+
+    discoveries = {
+        "found": tr("Fichier détecté", "File detected"),
+        "not_found": tr("Aucun fichier détecté", "No file detected"),
+        "file_missing": tr("Fichier déclaré mais absent", "Declared file missing"),
+        "ambiguous": tr("Configuration ambiguë", "Ambiguous configuration"),
+        "unsafe_path": tr("Chemin source non sûr", "Unsafe source path"),
+    }
+
+    outputs = {
+        "absent": tr("Fichier absent", "File does not exist"),
+        "existing": tr("Fichier déjà présent", "File already exists"),
+        "unsafe": tr("Chemin non sûr", "Unsafe path"),
+    }
+
+    discovery = report.get("discovery_status", "ambiguous")
+    output = report.get("output_status", "unsafe")
+
+    lines = [
+        "### " + tr("Diagnostic Google Assistant", "Google Assistant diagnostic"),
+        "**" + tr("Configuration", "Configuration") + " :** "
+        + safe(discoveries.get(discovery, discoveries["ambiguous"])),
+        "**" + tr("Fichier source", "Source file") + " :** "
+        + safe(report.get("source_path") or tr("Non identifié", "Not identified")),
+        "**" + tr("Destination HVLS", "HVLS output") + " :** "
+        + safe(outputs.get(output, outputs["unsafe"])),
+    ]
+
+    if report.get("source_matches_output"):
+        lines.append(
+            "⚠️ " + tr(
+                "La destination correspond au fichier Google Assistant déclaré.",
+                "The output matches the declared Google Assistant file.",
+            )
+        )
+
+    if report.get("review_required"):
+        lines.append(
+            "⚠️ " + tr(
+                "Vérification nécessaire. Aucune adoption automatique.",
+                "Review required. No automatic adoption.",
+            )
+        )
+
+    lines.append(
+        tr(
+            "La détection ne donne aucune autorisation de modification.",
+            "Discovery does not authorize file modification.",
+        )
+    )
+
+    return "\\n\\n".join(lines)

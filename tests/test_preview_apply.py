@@ -33,7 +33,7 @@ def apply_module(monkeypatch):
     return sys.modules[f"{prefix}.preview_apply"]
 
 
-def prepare(tmp_path):
+def prepare(tmp_path, *, owned=False):
     registries = make_registries()
     output = tmp_path / "production.yaml"
     preview = tmp_path / "preview.yaml"
@@ -50,13 +50,24 @@ def prepare(tmp_path):
         registries=registries,
     )
     preview.write_text(generated.generation.content, encoding="utf-8")
-    output.write_text("ancienne configuration\n", encoding="utf-8")
+    if owned:
+        from hvls.owned_writer import write_owned_output
+
+        write_owned_output(
+            output_path=output,
+            content="ancienne configuration\n",
+            entry_id="test-installation",
+            ownership_registry_path=tmp_path / ".hvls" / "ownership.json",
+            backup_directory=tmp_path / ".hvls_backups",
+        )
+    else:
+        output.write_text("ancienne configuration\n", encoding="utf-8")
 
     return registries, request, preview, output
 
 
 def test_apply_valid_reviewed_preview(apply_module, tmp_path):
-    registries, request, preview, output = prepare(tmp_path)
+    registries, request, preview, output = prepare(tmp_path, owned=True)
     digest = apply_module.preview_digest(preview.read_text())
 
     result = apply_module.apply_reviewed_preview(
@@ -67,6 +78,8 @@ def test_apply_valid_reviewed_preview(apply_module, tmp_path):
         10,
         True,
         expected_production_digest=apply_module.preview_digest(output.read_text()),
+        entry_id="test-installation",
+        ownership_registry_path=tmp_path / ".hvls" / "ownership.json",
     )
 
     assert output.read_text() == preview.read_text()
@@ -89,6 +102,8 @@ def test_reject_changed_entities(apply_module, tmp_path):
             10,
             True,
             expected_production_digest=apply_module.preview_digest(output.read_text()),
+            entry_id="test-installation",
+            ownership_registry_path=tmp_path / ".hvls" / "ownership.json",
         )
 
     assert output.read_text() == "ancienne configuration\n"
@@ -110,6 +125,8 @@ def test_reject_modified_preview(apply_module, tmp_path):
             10,
             True,
             expected_production_digest=apply_module.preview_digest(output.read_text()),
+            entry_id="test-installation",
+            ownership_registry_path=tmp_path / ".hvls" / "ownership.json",
         )
 
     assert output.read_text() == "ancienne configuration\n"
@@ -131,13 +148,15 @@ def test_reject_invalid_digest(apply_module, tmp_path, invalid_digest):
             10,
             True,
             expected_production_digest=apply_module.preview_digest(output.read_text()),
+            entry_id="test-installation",
+            ownership_registry_path=tmp_path / ".hvls" / "ownership.json",
         )
 
     assert output.read_text() == "ancienne configuration\n"
 
 
 def test_reject_changed_production(apply_module, tmp_path):
-    registries, request, preview, output = prepare(tmp_path)
+    registries, request, preview, output = prepare(tmp_path, owned=True)
 
     digest = apply_module.preview_digest(preview.read_text())
     production_digest = apply_module.preview_digest(output.read_text())
@@ -153,6 +172,38 @@ def test_reject_changed_production(apply_module, tmp_path):
             10,
             True,
             expected_production_digest=production_digest,
+            entry_id="test-installation",
+            ownership_registry_path=tmp_path / ".hvls" / "ownership.json",
         )
 
     assert output.read_text() == "modification externe\n"
+
+
+def test_apply_must_not_claim_unmanaged_output(apply_module, tmp_path):
+    """A matching preview digest never authorizes manual YAML replacement."""
+    from hvls import FileWriterError
+
+    registries, request, preview, output = prepare(tmp_path)
+
+    original = output.read_bytes()
+    reviewed = apply_module.preview_digest(preview.read_text())
+    production = apply_module.preview_digest(output.read_text())
+
+    with pytest.raises(
+        (apply_module.PreviewChangedError, ValueError, FileWriterError),
+        match=r"(?i)ownership|unmanaged|not owned|unauthorized",
+    ):
+        apply_module.apply_reviewed_preview(
+            request,
+            registries,
+            preview,
+            reviewed,
+            10,
+            True,
+            expected_production_digest=production,
+            entry_id="test-installation",
+            ownership_registry_path=tmp_path / ".hvls" / "ownership.json",
+        )
+
+    assert output.read_bytes() == original
+    assert not (tmp_path / ".hvls_backups").exists()
