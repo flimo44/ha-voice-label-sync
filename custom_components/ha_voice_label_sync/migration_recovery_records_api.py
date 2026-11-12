@@ -21,7 +21,6 @@ from .migration_recovery_confirmation import (
     _valid_request,
 )
 from .migration_recovery_records import (
-    RecoveryLedgerError,
     append_investigation_record,
     load_investigation_ledger,
 )
