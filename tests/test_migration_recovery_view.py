@@ -49,7 +49,7 @@ def setup(monkeypatch, tmp_path):
     loaded = {}
     for stem in (
         "migration_discovery", "migration_baseline", "migration_journal",
-        "migration_recovery_view",
+        "migration_resolution_scenarios", "migration_recovery_view",
     ):
         name = f"{prefix}.{stem}"
         spec = importlib.util.spec_from_file_location(
@@ -356,3 +356,181 @@ def test_websocket_only_reads_and_requires_admin():
         and n.name == "async_register_websocket_api"
     )
     assert name in ast.unparse(register)
+
+
+
+def test_pending_intent_present_produces_nonauthorizing_observation(setup):
+    _ready(setup)
+    j = setup.modules["migration_journal"]
+    j.advance_phase(setup.tmp, "labels_staging", expected_revision=0)
+    _intent(setup)
+    setup.entries["light.first"].labels = {"google_assistant"}
+    before = j.read_journal(setup.tmp)
+    result = _check(setup)
+    scenarios = result["resolution_scenarios"]
+    assert scenarios["status"] == "investigation_required"
+    assert scenarios["operations"][0]["scenario"] == (
+        "intent_desired_membership_observed"
+    )
+    assert scenarios["operations"][0]["resolution_authorized"] is False
+    assert scenarios["operations"][0]["human_investigation_required"] is True
+    assert "journal_intent_still_unconfirmed" in (
+        scenarios["operations"][0]["reason_codes"]
+    )
+    assert scenarios["automatic_recovery_allowed"] is False
+    assert scenarios["journal_ack_allowed"] is False
+    assert scenarios["retry_allowed"] is False
+    assert scenarios["rollback_allowed"] is False
+    assert j.read_journal(setup.tmp) == before
+
+
+def test_pending_intent_absent_is_not_permission_to_retry(setup):
+    _ready(setup)
+    j = setup.modules["migration_journal"]
+    j.advance_phase(setup.tmp, "labels_staging", expected_revision=0)
+    _intent(setup)
+    result = _check(setup)
+    scenario = result["resolution_scenarios"]["operations"][0]
+    assert scenario["scenario"] == "intent_original_membership_observed"
+    assert scenario["current_membership"] == "absent"
+    assert scenario["resolution_authorized"] is False
+    assert result["resolution_scenarios"]["retry_allowed"] is False
+
+
+def test_reverse_expected_membership_intent_classifies_correctly(setup):
+    _ready(setup)
+    j = setup.modules["migration_journal"]
+    j.advance_phase(setup.tmp, "labels_staging", expected_revision=0)
+    j.record_label_intent(
+        setup.tmp, operation_id="reverse",
+        entity_id="light.first", registry_id="entity_native_first",
+        label_id="google_assistant", expected_before=True,
+        expected_after=False, expected_revision=1,
+    )
+    result = _check(setup)
+    hypothesis = result["resolution_scenarios"]["operations"][0]
+    assert hypothesis["expected_before"] is True
+    assert hypothesis["expected_after"] is False
+    assert hypothesis["scenario"] == "intent_desired_membership_observed"
+    assert hypothesis["resolution_authorized"] is False
+
+
+def test_label_identity_or_entity_identity_missing_is_quarantined(setup):
+    _ready(setup)
+    j = setup.modules["migration_journal"]
+    j.advance_phase(setup.tmp, "labels_staging", expected_revision=0)
+    _intent(setup)
+    setup.labels.clear()
+    scenario = _check(setup)["resolution_scenarios"]["operations"][0]
+    assert scenario["category"] == "quarantine"
+    assert scenario["scenario"] == "identity_or_membership_unknown"
+    assert "label_identity_missing" in scenario["reason_codes"]
+    setup.labels["google_assistant"] = object()
+    setup.entries["light.first"].id = "recreated_entity"
+    scenario = _check(setup)["resolution_scenarios"]["operations"][0]
+    assert "registry_identity_missing_or_changed" in scenario["reason_codes"]
+    assert scenario["resolution_authorized"] is False
+
+
+def test_source_drift_keeps_entity_specific_hypotheses_visible(setup):
+    _ready(setup)
+    j = setup.modules["migration_journal"]
+    j.advance_phase(setup.tmp, "labels_staging", expected_revision=0)
+    _intent(setup)
+    (setup.tmp / "google_entities.yaml").write_bytes(ENTITIES + b"# changed\n")
+    result = _check(setup)["resolution_scenarios"]
+    assert result["status"] == "investigation_required"
+    assert result["global_cautions"] == ["source_integrity_not_verified"]
+    assert result["operations"][0]["scenario"] == (
+        "intent_original_membership_observed"
+    )
+    assert "global_review_required_before_any_resolution" in (
+        result["operations"][0]["reason_codes"]
+    )
+    assert result["journal_ack_allowed"] is False
+
+
+def test_recorded_applied_remains_observation_not_correction(setup):
+    _ready(setup)
+    j = setup.modules["migration_journal"]
+    j.advance_phase(setup.tmp, "labels_staging", expected_revision=0)
+    _intent(setup)
+    j.mark_label_applied(
+        setup.tmp, "op_first", registry_id="entity_native_first",
+        current_membership=True, expected_revision=2,
+    )
+    setup.entries["light.first"].labels = {"google_assistant"}
+    result = _check(setup)
+    scenario = result["resolution_scenarios"]["operations"][0]
+    assert scenario["scenario"] == "applied_record_matches_observation"
+    assert scenario["category"] == "observation_only"
+    assert scenario["resolution_authorized"] is False
+    assert result["resolution_scenarios"]["status"] == "observations_only"
+    setup.entries["light.first"].labels = frozenset()
+    mismatch = _check(setup)["resolution_scenarios"]["operations"][0]
+    assert mismatch["scenario"] == "recorded_state_no_longer_matches"
+    assert mismatch["category"] == "investigation"
+
+
+def test_pending_and_corrupt_records_remain_non_authorizing(setup):
+    scenario_module = setup.modules["migration_resolution_scenarios"]
+    assert scenario_module.build_resolution_scenarios({
+        "status": "unavailable", "read_only": True,
+        "automatic_recovery_allowed": False,
+        "stage_allowed": False, "cutover_allowed": False,
+    })["status"] == "unavailable"
+    assert scenario_module.build_resolution_scenarios({
+        "status": "review_required", "read_only": True,
+        "automatic_recovery_allowed": False,
+        "stage_allowed": False, "cutover_allowed": False,
+        "phase": "labels_staging", "journal_revision": 2,
+        "source_integrity": "verified_unchanged",
+        "operations": [{"entity_id": "light.secret\nprivate"}],
+    })["status"] == "unavailable"
+
+
+def test_multiple_rows_one_corrupt_row_fails_closed_without_data_leak(setup):
+    _ready(setup)
+    j = setup.modules["migration_journal"]
+    j.advance_phase(setup.tmp, "labels_staging", expected_revision=0)
+    _intent(setup)
+    _intent(
+        setup, entity="light.second", operation="second",
+        registry="entity_native_second", revision=2,
+    )
+    result = _check(setup)["resolution_scenarios"]
+    assert result["summary"]["unconfirmed"] == 2
+    assert len(result["operations"]) == 2
+    assert result["summary"]["requires_investigation"] == 2
+    assert all(
+        row["resolution_authorized"] is False for row in result["operations"]
+    )
+
+
+def test_uninitialized_storage_has_no_fake_resolution_scenarios(setup):
+    result = _check(setup)
+    assert result["resolution_scenarios"]["status"] == "not_initialized"
+    assert result["resolution_scenarios"]["operations"] == []
+    assert result["resolution_scenarios"]["cutover_allowed"] is False
+    assert not (setup.tmp / ".storage").exists()
+
+
+def test_concurrent_revision_change_invalidates_all_investigation_rows(setup):
+    _ready(setup)
+    j = setup.modules["migration_journal"]
+    old = setup.hass.async_add_executor_job
+    calls = 0
+
+    async def concurrent(fn, *args):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            j.advance_phase(
+                setup.tmp, "labels_staging", expected_revision=0
+            )
+        return await old(fn, *args)
+    setup.hass.async_add_executor_job = concurrent
+    result = _check(setup)
+    assert result["status"] == "snapshot_changed"
+    assert result["resolution_scenarios"]["status"] == "unavailable"
+    assert result["resolution_scenarios"]["operations"] == []
