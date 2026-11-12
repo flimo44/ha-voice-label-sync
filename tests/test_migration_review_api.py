@@ -57,6 +57,15 @@ def facade(monkeypatch):
         "candidate_yaml_sha256": "c" * 64,
     })
 
+    impact = ModuleType(f"{prefix}.migration_staging_impact")
+    impact.capture_loaded_ga_label_impact = Mock(return_value={
+        "status": "captured", "observations": {}
+    })
+    impact.assess_label_staging_impact = Mock(return_value={
+        "status": "no_label_additions_proposed",
+        "stage_allowed": False, "cutover_allowed": False, "read_only": True,
+    })
+
     diagnostic = ModuleType(f"{prefix}.migration_diagnostic")
     async def read_diagnostic(_hass):
         return {
@@ -79,7 +88,7 @@ def facade(monkeypatch):
 
     dependencies = (
         const, services, registry, baseline, plan,
-        simulation, diagnostic, executor,
+        simulation, diagnostic, executor, impact,
     )
     for dep in dependencies:
         monkeypatch.setitem(sys.modules, dep.__name__, dep)
@@ -113,7 +122,7 @@ def facade(monkeypatch):
         module=module, hass=hass, calls=calls,
         baseline=baseline, plan=plan,
         simulation=simulation, registry=registry,
-        executor=executor,
+        executor=executor, impact=impact,
     )
 
 
@@ -135,6 +144,10 @@ def test_verified_baseline_produces_review_without_any_write(facade):
     facade.simulation.build_readonly_migration_review.assert_called_once()
     assert result["protected_baseline_status"] == "verified"
     assert result["simulation"]["candidate_yaml_sha256"] == "c" * 64
+    assert result["pre_stage_impact"]["stage_allowed"] is False
+    assert result["pre_stage_impact"]["cutover_allowed"] is False
+    assert facade.impact.capture_loaded_ga_label_impact.call_count == 1
+    assert facade.impact.assess_label_staging_impact.call_count == 1
     assert result["read_only"] is True
     assert result["apply_allowed"] is False
     assert result["cutover_allowed"] is False
@@ -152,6 +165,7 @@ def test_missing_baseline_still_returns_diagnostic_and_safe_plan(facade):
     assert result["simulation"] is None
     assert result["apply_allowed"] is False
     facade.simulation.build_readonly_migration_review.assert_not_called()
+    assert result["pre_stage_impact"]["stage_allowed"] is False
 
 
 def test_corrupted_baseline_is_never_automatically_replaced(facade):
@@ -223,3 +237,26 @@ def test_read_only_websocket_handler_is_admin_only_and_registered():
         and node.name == "async_register_websocket_api"
     )
     assert "websocket_get_migration_review" in ast.unparse(register)
+
+
+
+def test_runtime_impact_capture_occurs_before_executor(facade):
+    order = []
+    def capture(_hass, ids):
+        order.append("capture_on_loop")
+        assert ids == ["light.test"]
+        return {"status": "captured", "observations": {}}
+    original = facade.hass.async_add_executor_job
+    async def executor(fn, *args):
+        order.append("executor")
+        return await original(fn, *args)
+    facade.impact.capture_loaded_ga_label_impact.side_effect = capture
+    facade.hass.async_add_executor_job = executor
+    result = _run(facade, {"light.test": {"action": "import"}})
+    assert order == ["capture_on_loop", "executor"]
+    assert result["pre_stage_impact"]["stage_allowed"] is False
+
+
+def test_all_nonimport_entities_excluded_from_native_ga_capture(facade):
+    _run(facade, {"light.test": {"action": "keep"}})
+    assert facade.impact.capture_loaded_ga_label_impact.call_args.args[1] == []
