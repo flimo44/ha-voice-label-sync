@@ -40,6 +40,112 @@ from .preview_guard import PreviewChangedError, preview_digest
 from .services import DEFAULT_DOMAINS, async_run_workflow
 from .workflow_lock import get_workflow_lock
 
+WS_TYPE_RECOVERY_HISTORY = f"{DOMAIN}/get_migration_investigation_history"
+WS_TYPE_RECOVERY_HISTORY_PREPARE = (
+    f"{DOMAIN}/prepare_migration_investigation_record"
+)
+WS_TYPE_RECOVERY_HISTORY_CONFIRM = (
+    f"{DOMAIN}/confirm_migration_investigation_record"
+)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_RECOVERY_HISTORY,
+})
+async def websocket_get_migration_investigation_history(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Read verified non-authorizing recovery investigation history."""
+    try:
+        from .migration_recovery_records_api import (
+            async_get_investigation_records,
+        )
+        result = await async_get_investigation_records(hass)
+    except Exception:
+        connection.send_error(
+            msg["id"], "migration_investigation_history_unavailable",
+            "Protected history unavailable; no changes made.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_RECOVERY_HISTORY_PREPARE,
+    vol.Required("entity_id"): str,
+    vol.Required("disposition"): str,
+})
+async def websocket_prepare_migration_investigation_record(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Prepare protected investigation record, without any disk changes."""
+    try:
+        from .migration_recovery_records_api import (
+            async_prepare_investigation_record,
+        )
+        result = await async_prepare_investigation_record(
+            hass,
+            administrator_id=connection.user.id,
+            entity_id=msg["entity_id"],
+            disposition=msg["disposition"],
+        )
+    except Exception:
+        connection.send_error(
+            msg["id"], "migration_investigation_prepare_refused",
+            "Investigation preparation refused; nothing saved.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_RECOVERY_HISTORY_CONFIRM,
+    vol.Required("entity_id"): str,
+    vol.Required("disposition"): str,
+    vol.Required("confirmation_token"): str,
+    vol.Required("confirmed"): bool,
+    vol.Required("acknowledge_external_uncertainty"): bool,
+})
+async def websocket_confirm_migration_investigation_record(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Store signed-off investigation evidence; NO execution authorization."""
+    try:
+        from .migration_recovery_records_api import (
+            async_confirm_investigation_record,
+        )
+        result = await async_confirm_investigation_record(
+            hass,
+            administrator_id=connection.user.id,
+            entity_id=msg["entity_id"],
+            disposition=msg["disposition"],
+            confirmation_token=msg["confirmation_token"],
+            confirmed=msg["confirmed"],
+            acknowledge_external_uncertainty=(
+                msg["acknowledge_external_uncertainty"]
+            ),
+        )
+    except Exception:
+        connection.send_error(
+            msg["id"], "migration_investigation_confirmation_refused",
+            "Investigation evidence changed or storage unavailable.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
 WS_TYPE_MIGRATION_RECOVERY_STATUS = f"{DOMAIN}/get_migration_recovery_status"
 
 
@@ -885,6 +991,15 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_get_migration_diagnostic)
     websocket_api.async_register_command(
         hass, websocket_get_migration_recovery_status
+    )
+    websocket_api.async_register_command(
+        hass, websocket_get_migration_investigation_history
+    )
+    websocket_api.async_register_command(
+        hass, websocket_prepare_migration_investigation_record
+    )
+    websocket_api.async_register_command(
+        hass, websocket_confirm_migration_investigation_record
     )
     websocket_api.async_register_command(
         hass, websocket_prepare_migration_recovery_decision

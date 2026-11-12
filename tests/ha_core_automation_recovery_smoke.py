@@ -298,6 +298,32 @@ async def verify_after_process_restart(root: Path, *, should_have_label: bool):
     assert confirmed["retry_allowed"] is False
     assert confirmed["rollback_allowed"] is False
     assert confirmed["cutover_allowed"] is False
+    # Verify a real disk-backed record can be appended and reloaded after
+    # this separate Python interpreter loaded the native HA registries.
+    durable = module("migration_recovery_records_api")
+    durable_store = module("migration_recovery_records")
+    prepared_record = await durable.async_prepare_investigation_record(
+        hass, administrator_id="synthetic_admin",
+        entity_id=entity_id, disposition="inspect_external_effects",
+    )
+    assert prepared_record["status"] == (
+        "awaiting_durable_investigation_confirmation"
+    )
+    written = await durable.async_confirm_investigation_record(
+        hass, administrator_id="synthetic_admin",
+        entity_id=entity_id, disposition="inspect_external_effects",
+        confirmation_token=prepared_record["confirmation_token"],
+        confirmed=True, acknowledge_external_uncertainty=True,
+    )
+    assert written["status"] == "durable_investigation_recorded_no_execution"
+    assert written["record_count"] == 1
+    assert written["record_fsync_completed"] is True
+    assert written["journal_ack_allowed"] is False
+    verified_history = durable_store.load_investigation_ledger(str(root))
+    assert verified_history["record_count"] == 1
+    assert verified_history["records"][0]["record_is_not_execution_authorization"]
+    assert verified_history["records"][0]["execution_authorized"] is False
+    assert (root / "configuration.yaml").read_bytes() == SOURCE
     assert reviewed["stage_allowed"] is False
     assert reviewed["cutover_allowed"] is False
     assert recovery["operations"][0]["status"] == "unconfirmed_intent"

@@ -51,6 +51,7 @@ def setup(monkeypatch, tmp_path):
         "migration_discovery", "migration_baseline", "migration_journal",
         "migration_resolution_scenarios", "migration_recovery_view",
         "migration_recovery_confirmation",
+        "migration_recovery_records", "migration_recovery_records_api",
     ):
         name = f"{prefix}.{stem}"
         spec = importlib.util.spec_from_file_location(
@@ -841,3 +842,330 @@ def test_websocket_dryrun_endpoints_require_admin_and_no_mutators():
     )
     for name in funcs:
         assert name in ast.unparse(register)
+
+
+
+def _prepare_history(
+    env, *,
+    admin="admin_1", entity_id="light.first",
+    disposition="inspect_external_effects",
+):
+    return asyncio.run(
+        env.modules[
+            "migration_recovery_records_api"
+        ].async_prepare_investigation_record(
+            env.hass, administrator_id=admin,
+            entity_id=entity_id, disposition=disposition,
+        )
+    )
+
+
+def _confirm_history(
+    env, challenge, *,
+    admin="admin_1", entity_id="light.first",
+    disposition="inspect_external_effects",
+    acknowledged=True,
+):
+    return asyncio.run(
+        env.modules[
+            "migration_recovery_records_api"
+        ].async_confirm_investigation_record(
+            env.hass, administrator_id=admin, entity_id=entity_id,
+            disposition=disposition,
+            confirmation_token=challenge["confirmation_token"],
+            confirmed=True,
+            acknowledge_external_uncertainty=acknowledged,
+        )
+    )
+
+
+def _read_history(env):
+    return asyncio.run(
+        env.modules[
+            "migration_recovery_records_api"
+        ].async_get_investigation_records(env.hass)
+    )
+
+
+@pytest.mark.parametrize("membership", [False, True])
+def test_durable_investigation_writes_only_private_audit_not_source_or_journal(
+    setup, membership,
+):
+    _make_pending(setup)
+    if membership:
+        setup.entries["light.first"].labels = {"google_assistant"}
+    migration_before = setup.modules["migration_journal"].read_journal(setup.tmp)
+    yaml_before = (setup.tmp / "configuration.yaml").read_bytes()
+    included_before = (setup.tmp / "google_entities.yaml").read_bytes()
+    target = (
+        setup.tmp / ".storage" / "hvls_migration"
+        / "recovery-investigation-records"
+    )
+    prepared = _prepare_history(setup)
+    assert prepared["status"] == "awaiting_durable_investigation_confirmation"
+    assert not target.exists()  # Prepare never creates a record or directory.
+    assert prepared["expected_record_count"] == 0
+    assert prepared["execution_authorized"] is False
+    assert prepared["journal_ack_allowed"] is False
+    written = _confirm_history(setup, prepared)
+    assert written["status"] == "durable_investigation_recorded_no_execution"
+    assert written["record_fsync_completed"] is True
+    assert written["execution_authorized"] is False
+    assert written["journal_ack_allowed"] is False
+    assert written["retry_allowed"] is False
+    assert written["rollback_allowed"] is False
+    assert written["stage_allowed"] is False
+    assert written["cutover_allowed"] is False
+    assert written["label_changed"] is False
+    assert written["journal_changed"] is False
+    assert written["production_yaml_changed"] is False
+    assert written["record"]["sequence"] == 1
+    assert (target.stat().st_mode & 0o077) == 0
+    record_path = target / "000001.json"
+    assert record_path.is_file()
+    assert (record_path.stat().st_mode & 0o077) == 0
+    saved = record_path.read_bytes()
+    assert b"admin_1" not in saved
+    assert b"PRIVATE ENTITY NAME" not in saved
+    assert b"PRIVATE_PROJECT_ID_NEVER_EXPOSE" not in saved
+    assert b"record_is_not_execution_authorization" not in saved
+    assert (
+        setup.modules["migration_journal"].read_journal(setup.tmp)
+        == migration_before
+    )
+    assert (setup.tmp / "configuration.yaml").read_bytes() == yaml_before
+    assert (setup.tmp / "google_entities.yaml").read_bytes() == included_before
+    assert setup.entries["light.first"].labels == (
+        {"google_assistant"} if membership else frozenset()
+    )
+    hist = _read_history(setup)
+    assert hist["status"] == "verified_investigation_history"
+    assert hist["record_count"] == 1
+    assert hist["records"][0]["evidence_relation"] == (
+        "matching_current_observation"
+    )
+    assert hist["execution_authorized"] is False
+
+
+def test_durable_audit_history_is_append_only_and_chained(setup):
+    _make_pending(setup)
+    old = _prepare_history(setup)
+    first = _confirm_history(setup, old)
+    folder = (
+        setup.tmp / ".storage" / "hvls_migration"
+        / "recovery-investigation-records"
+    )
+    original = (folder / "000001.json").read_bytes()
+    next_step = _prepare_history(
+        setup, disposition="defer_until_further_evidence"
+    )
+    second = _confirm_history(
+        setup, next_step, disposition="defer_until_further_evidence"
+    )
+    assert (folder / "000001.json").read_bytes() == original
+    second_record = __import__("json").loads(
+        (folder / "000002.json").read_bytes()
+    )
+    assert second_record["previous_sha256"] == first["record"]["record_sha256"]
+    assert second_record["record_sha256"] == second["record"]["record_sha256"]
+    history = _read_history(setup)
+    assert history["record_count"] == 2
+    assert [row["sequence"] for row in history["records"]] == [1, 2]
+    assert history["history_read_only"] is True
+
+
+@pytest.mark.parametrize("tamper", [
+    "bad_json", "changed_record", "missing_first", "unexpected_file",
+    "symlink_record", "permissive_record", "permissive_directory",
+])
+def test_durable_history_corruption_or_crash_fails_closed(setup, tamper):
+    _make_pending(setup)
+    _confirm_history(setup, _prepare_history(setup))
+    folder = (
+        setup.tmp / ".storage" / "hvls_migration"
+        / "recovery-investigation-records"
+    )
+    rec = folder / "000001.json"
+    if tamper == "bad_json":
+        rec.write_text("{CORRUPT_PRIVATE_SECRET", encoding="utf-8")
+    elif tamper == "changed_record":
+        raw = __import__("json").loads(rec.read_bytes())
+        raw["disposition"] = "defer_until_further_evidence"
+        rec.write_text(__import__("json").dumps(raw), encoding="utf-8")
+    elif tamper == "missing_first":
+        rec.rename(folder / "000002.json")
+    elif tamper == "unexpected_file":
+        (folder / ".pending-crash").write_text("intentionally interrupted")
+    elif tamper == "symlink_record":
+        rec.unlink()
+        rec.symlink_to(setup.tmp / "configuration.yaml")
+    elif tamper == "permissive_record":
+        rec.chmod(0o644)
+    elif tamper == "permissive_directory":
+        folder.chmod(0o755)
+    with pytest.raises(
+        setup.modules["migration_recovery_records"].RecoveryLedgerError
+    ):
+        _read_history(setup)
+    with pytest.raises(
+        setup.modules["migration_recovery_records"].RecoveryLedgerError
+    ):
+        _prepare_history(setup)
+    assert setup.modules["migration_journal"].read_journal(setup.tmp)[
+        "operations"
+    ][0]["status"] == "intent"
+
+
+@pytest.mark.parametrize("drift", [
+    "membership", "journal", "source", "entity_id", "label_id",
+])
+def test_durable_record_rejects_any_stale_review_before_write(setup, drift):
+    _make_pending(setup)
+    prepared = _prepare_history(setup)
+    target = (
+        setup.tmp / ".storage" / "hvls_migration"
+        / "recovery-investigation-records"
+    )
+    if drift == "membership":
+        setup.entries["light.first"].labels = {"google_assistant"}
+    elif drift == "journal":
+        setup.modules["migration_journal"].record_label_intent(
+            setup.tmp, operation_id="op_second",
+            entity_id="light.second", registry_id="entity_native_second",
+            label_id="google_assistant", expected_before=False,
+            expected_after=True, expected_revision=2,
+        )
+    elif drift == "source":
+        (setup.tmp / "google_entities.yaml").write_bytes(
+            ENTITIES + b"# altered\n"
+        )
+    elif drift == "entity_id":
+        setup.entries["light.first"].id = "new_native_id"
+    elif drift == "label_id":
+        setup.labels.clear()
+    with pytest.raises(ValueError):
+        _confirm_history(setup, prepared)
+    assert not target.exists()
+    with pytest.raises(ValueError):
+        _confirm_history(setup, prepared)
+
+
+def test_durable_record_two_admins_ledger_head_conflict_is_refused(setup):
+    _make_pending(setup)
+    first = _prepare_history(setup, admin="admin_1")
+    second = _prepare_history(setup, admin="admin_2")
+    saved = _confirm_history(setup, second, admin="admin_2")
+    assert saved["record_count"] == 1
+    with pytest.raises(
+        setup.modules["migration_recovery_records"].RecoveryLedgerError,
+        match="ledger_changed_since_prepare",
+    ):
+        _confirm_history(setup, first, admin="admin_1")
+    assert _read_history(setup)["record_count"] == 1
+
+
+def test_wrong_admin_wrong_scope_expiry_and_reuse_denied(setup, monkeypatch):
+    _make_pending(setup)
+    mod = setup.modules["migration_recovery_records_api"]
+    first = _prepare_history(setup)
+    with pytest.raises(mod.RecoveryRecordError,
+                       match="challenge_expired_or_invalid"):
+        _confirm_history(setup, first, admin="admin_2")
+    with pytest.raises(mod.RecoveryRecordError,
+                       match="challenge_scope_mismatch"):
+        _confirm_history(
+            setup, first, disposition="defer_until_further_evidence"
+        )
+    with pytest.raises(mod.RecoveryRecordError,
+                       match="challenge_expired_or_invalid"):
+        _confirm_history(setup, first)
+    clock = [300.0]
+    monkeypatch.setattr(mod.time, "monotonic", lambda: clock[0])
+    expiring = _prepare_history(setup)
+    clock[0] += 181
+    with pytest.raises(mod.RecoveryRecordError,
+                       match="challenge_expired_or_invalid"):
+        _confirm_history(setup, expiring)
+    assert _read_history(setup)["record_count"] == 0
+
+
+def test_durable_history_marks_stale_evidence_without_deleting_entry(setup):
+    _make_pending(setup)
+    _confirm_history(setup, _prepare_history(setup))
+    setup.entries["light.first"].labels = {"google_assistant"}
+    report = _read_history(setup)
+    assert report["record_count"] == 1
+    assert report["records"][0]["evidence_relation"] == (
+        "historical_stale_observation"
+    )
+    assert report["records"][0]["execution_authorized"] is False
+
+
+def test_external_drift_refused_by_disk_level_compare_and_swap(setup):
+    _make_pending(setup)
+    good = _prepare_history(setup)
+    disk = setup.modules["migration_recovery_records"]
+    baseline = setup.modules["migration_baseline"].verify_baseline(setup.tmp)
+    with pytest.raises(disk.RecoveryLedgerError,
+                       match="ledger_changed_since_prepare"):
+        disk.append_investigation_record(
+            str(setup.tmp),
+            expected_record_count=1,
+            expected_last_record_sha256="0" * 64,
+            expected_journal_revision=2,
+            expected_journal_evidence_sha256=good["journal_evidence_sha256"],
+            expected_observed_evidence_sha256=good[
+                "recovery_evidence_sha256"
+            ],
+            entity_id="light.first",
+            disposition="inspect_external_effects",
+            administrator_id="admin_1",
+        )
+    assert baseline["verified"] is True
+    assert _read_history(setup)["record_count"] == 0
+
+
+def test_existing_durable_record_is_not_execution_permission(setup):
+    _make_pending(setup)
+    saved = _confirm_history(setup, _prepare_history(setup))
+    assert saved["record"]["record_is_not_execution_authorization"] is True
+    code = (ROOT / "migration_stage_executor.py").read_text()
+    assert "migration_recovery_records" not in code
+    assert "migration_recovery_records_api" not in code
+    assert "investigation_recorded_no_execution" not in code
+    assert setup.modules["migration_journal"].read_journal(setup.tmp)[
+        "operations"
+    ][0]["status"] == "intent"
+
+
+def test_durable_investigation_ws_is_admin_only_and_has_no_stage_code():
+    import ast
+
+    tree = ast.parse((ROOT / "websocket.py").read_text())
+    names = [
+        "websocket_get_migration_investigation_history",
+        "websocket_prepare_migration_investigation_record",
+        "websocket_confirm_migration_investigation_record",
+    ]
+    for name in names:
+        fn = next(
+            x for x in tree.body if isinstance(x, ast.AsyncFunctionDef)
+            and x.name == name
+        )
+        assert any(
+            isinstance(dec, ast.Attribute) and dec.attr == "require_admin"
+            for dec in fn.decorator_list
+        )
+        body = ast.unparse(fn)
+        for forbidden in [
+            "update_entity_label", "mark_label_applied",
+            "stage_one_approved_label", "restore_reviewed_backup",
+            "advance_phase", "async_run_workflow",
+        ]:
+            assert forbidden not in body
+    reg = next(
+        n for n in tree.body if isinstance(n, ast.FunctionDef)
+        and n.name == "async_register_websocket_api"
+    )
+    for name in names:
+        assert name in ast.unparse(reg)
