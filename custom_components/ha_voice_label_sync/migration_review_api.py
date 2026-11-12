@@ -13,7 +13,11 @@ from functools import partial
 from typing import Any
 
 from .const import (
-    CONF_LABEL, CONF_OUTPUT, DEFAULT_LABEL, DEFAULT_OUTPUT, DOMAIN,
+    CONF_LABEL,
+    CONF_OUTPUT,
+    DEFAULT_LABEL,
+    DEFAULT_OUTPUT,
+    DOMAIN,
 )
 from .ha_registries import get_live_registries
 from .migration_baseline import BaselineError, verify_baseline
