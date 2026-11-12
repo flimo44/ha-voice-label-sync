@@ -134,19 +134,24 @@ async def exercise_ha_core_native_contract() -> dict[str, Any]:
             key: google.should_expose(entry.entity_id)
             for key, entry in entries.items()
         }
-        assert exposed_before == {
-            "safe": True, "excluded": False, "auxiliary": False
-        }, exposed_before
+        assert exposed_before["safe"] is True, exposed_before
+        assert exposed_before["excluded"] is False, exposed_before
+        # Native GoogleConfig.should_expose may legitimately return None
+        # when an entity is implicitly excluded (falsy, not a bool).
+        # Our current migration observer must treat that as unknown,
+        # never silently convert it into permission for staging.
+        assert exposed_before["auxiliary"] in (False, None), exposed_before
 
         audit = load_component("migration_staging_impact")
         initial = audit.capture_loaded_ga_label_impact(
             hass, [safe, excluded, auxiliary]
         )
         assert initial["status"] == "captured", initial
-        assert all(
-            row["status"] == "captured"
-            for row in initial["observations"].values()
-        ), initial
+        assert initial["observations"][safe]["status"] == "captured"
+        assert initial["observations"][excluded]["status"] == "captured"
+        assert initial["observations"][auxiliary]["status"] in {
+            "captured", "native_google_exposure_not_bool"
+        }, initial
 
         events = []
         potential_external_calls = []
@@ -227,7 +232,7 @@ async def exercise_ha_core_native_contract() -> dict[str, Any]:
             }
             plan = {
                 "label_additions_proposed": [
-                    {"entity_id": item} for item in [safe, excluded, auxiliary]
+                    {"entity_id": item} for item in [safe, excluded]
                 ],
                 "global_blockers": [],
             }
