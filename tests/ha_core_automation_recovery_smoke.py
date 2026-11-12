@@ -330,7 +330,43 @@ async def test_real_dormant_staging_native_cas(hass, label_id, other_label):
             "intent", "intent"
         ]
         assert (root / "configuration.yaml").read_bytes() == SOURCE
+
+        # Admission is a separate, read-only diagnostic from the real
+        # persisted journal and this real native HA registry observation.
+        # The review envelope below is deliberately incomplete: it cannot
+        # ever become an authorization or a bypass for an unresolved intent.
+        gate = module("migration_execution_admission")
+        real_native = guard.capture_native_boundary(
+            hass, entity_id=raced.entity_id,
+            configured_label="Google Assistant", desired_present=True,
+        )
+        assert real_native["status"] == "captured", real_native
+        manifest = baseline.verify_baseline(root)
+        sources = stage.verify_current_sources(
+            root, inventory["source"]["locations"],
+            manifest["manifest_sha256"],
+        )
+        gate_result = gate.assess_stage_admission(
+            entity_id=raced.entity_id,
+            saved_draft={
+                "status": "not_saved", "decisions": {},
+                "baseline_manifest_sha256": manifest["manifest_sha256"],
+                "journal_revision": 3, "journal_phase": "labels_staging",
+            },
+            review={}, attestation={},
+            journal=journal.read_journal(root),
+            sources_verified=sources,
+            native_capture=real_native,
+        )
+        assert "journal_phase_or_entity_operation_not_safe" in (
+            gate_result["technical_blockers"]
+        )
+        assert gate_result["execution_authorized"] is False
+        assert gate_result["journal_ack_allowed"] is False
+        assert gate_result["stage_allowed"] is False
+        assert gate_result["cutover_allowed"] is False
         return {
+            "execution_admission_rejected_pending_intent": True,
             "native_private_writer_checked": True,
             "third_party_label_race_refused": True,
             "both_intents_unconfirmed": True,
