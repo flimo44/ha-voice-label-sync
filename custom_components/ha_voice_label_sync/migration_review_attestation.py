@@ -65,18 +65,24 @@ def review_evidence(report: Mapping[str, Any]) -> dict[str, Any]:
     """
     if not isinstance(report, Mapping):
         raise AttestationError("review_unavailable")
-    diag, plan, simulation = (
+    diag, plan, simulation, impact = (
         report.get("diagnostic"), report.get("preflight"),
-        report.get("simulation"),
+        report.get("simulation"), report.get("pre_stage_impact"),
     )
     if (
         not isinstance(diag, Mapping)
         or not isinstance(plan, Mapping)
         or report.get("protected_baseline_status") != "verified"
         or not isinstance(simulation, Mapping)
+        or not isinstance(impact, Mapping)
         or diag.get("read_only") is not True
         or plan.get("read_only") is not True
         or simulation.get("read_only") is not True
+        or impact.get("read_only") is not True
+        or impact.get("stage_allowed") is not False
+        or impact.get("cutover_allowed") is not False
+        or impact.get("other_label_consumers_verified") is not False
+        or impact.get("google_home_state_verified") is not False
         or plan.get("cutover_allowed") is not False
         or simulation.get("cutover_allowed") is not False
         or simulation.get("stage_review_token_sha256")
@@ -99,6 +105,12 @@ def review_evidence(report: Mapping[str, Any]) -> dict[str, Any]:
         )
         or simulation.get("status") != "hypothetical_preview_consistent"
         or plan.get("summary", {}).get("needs_review", 0) > 0
+        or impact.get("status") not in {
+            "no_manual_policy_delta_detected",
+            "no_label_additions_proposed",
+        }
+        or bool(impact.get("global_blockers"))
+        or impact.get("summary", {}).get("needs_review", 0) > 0
     )
     if (
         type(summary.get("needs_review")) is not int
@@ -110,6 +122,7 @@ def review_evidence(report: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "review_evidence_sha256": _digest({
             "diagnostic": diag, "plan": plan, "simulation": simulation,
+            "pre_stage_impact": impact,
         }),
         "review_token_sha256": plan["review_token_sha256"],
         "observed_issues": bool(issues),
