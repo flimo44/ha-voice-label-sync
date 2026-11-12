@@ -40,6 +40,34 @@ from .preview_guard import PreviewChangedError, preview_digest
 from .services import DEFAULT_DOMAINS, async_run_workflow
 from .workflow_lock import get_workflow_lock
 
+WS_TYPE_MIGRATION_RECOVERY_STATUS = f"{DOMAIN}/get_migration_recovery_status"
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_TYPE_MIGRATION_RECOVERY_STATUS}
+)
+async def websocket_get_migration_recovery_status(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Inspect recovery state, never acknowledge intent, write or retry."""
+    try:
+        from .migration_recovery_view import async_get_admin_migration_recovery
+
+        result = await async_get_admin_migration_recovery(hass)
+    except Exception:
+        # No source content, raw exceptions, system paths or secrets.
+        connection.send_error(
+            msg["id"], "migration_recovery_unavailable",
+            "Recovery review unavailable; no migration operation was attempted.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
 WS_TYPE_MIGRATION_DIAGNOSTIC = f"{DOMAIN}/get_migration_diagnostic"
 
 
@@ -777,6 +805,9 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register the HVLS WebSocket API."""
     websocket_api.async_register_command(hass, websocket_get_preview)
     websocket_api.async_register_command(hass, websocket_get_migration_diagnostic)
+    websocket_api.async_register_command(
+        hass, websocket_get_migration_recovery_status
+    )
     websocket_api.async_register_command(hass, websocket_get_migration_review)
     websocket_api.async_register_command(hass, websocket_prepare_migration_baseline)
     websocket_api.async_register_command(hass, websocket_initialize_migration_baseline)

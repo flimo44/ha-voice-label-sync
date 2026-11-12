@@ -68,6 +68,17 @@ const HVLS_TRANSLATIONS = {
     migrationAttestationFresh: "État de la revue enregistrée : {status}. Aucun droit d’exécution.",
     migrationAttestationUnavailable: "Attestation indisponible ou périmée. Rechargez les choix enregistrés, actualisez la simulation et vérifiez les anomalies.",
     migrationAttestationNotReady: "Enregistrez d’abord vos choix et actualisez la simulation. Aucun changement n’a été effectué.",
+    migrationRecoveryTitle: "État de reprise après interruption (lecture seule)",
+    migrationRecoveryRead: "Revérifier le journal et les labels",
+    migrationRecoveryLoading: "Lecture du journal protégé et des registres natifs…",
+    migrationRecoveryNotInitialized: "Journal non initialisé. Aucune opération de migration enregistrée ici.",
+    migrationRecoveryUnavailable: "État de reprise indisponible ou incomplet. Vérification manuelle nécessaire.",
+    migrationRecoveryChanged: "Journal modifié pendant la lecture : actualiser et examiner avant toute décision.",
+    migrationRecoveryRequired: "Examen manuel requis — une intention peut être restée en suspens ; aucune reprise automatique.",
+    migrationRecoveryObserved: "État observé, non autorisant. Aucune reprise automatique ni bascule Google.",
+    migrationRecoverySummary: "Phase : {phase} · Révision : {revision} · Opérations : {total} · Intentions non acquittées : {pending} · Autres anomalies : {issues} · Sources YAML : {sources}.",
+    migrationRecoveryRow: "{entity} · journal : {journal} · registre : {observed} · label : {membership} · revue : {review}",
+    migrationRecoverySafeView: "Observation instantanée uniquement ; aucun droit de staging ni de bascule.",
     migrationStagingImpact: "Impact prévisionnel des labels sur Google Assistant manuel : {status}. Les autres consommateurs de labels et Google Home restent non vérifiés. Staging interdit.",
     migrationConsumerAudit: "Audit indirect limité : {files} fichiers YAML inspectés, {writers} références à la génération HVLS, {events} références à un événement du registre, {labels} références à des fonctions de label. Effets externes non certifiés ; staging interdit.",
     migrationConsumerOverlap: "Attention : le fichier de sortie HVLS correspond à une source Google manuelle protégée. Toute génération V1 pourrait modifier cette source.",
@@ -260,6 +271,17 @@ const HVLS_TRANSLATIONS = {
     migrationAttestationFresh: "Saved review status: {status}. No execution capability.",
     migrationAttestationUnavailable: "Attestation unavailable or stale. Restore saved choices, refresh the simulation and inspect anomalies.",
     migrationAttestationNotReady: "Save choices and refresh the simulation first. No changes were made.",
+    migrationRecoveryTitle: "Interrupted operation recovery status (read-only)",
+    migrationRecoveryRead: "Recheck journal and labels",
+    migrationRecoveryLoading: "Reading protected journal and native registries…",
+    migrationRecoveryNotInitialized: "Journal not initialized. No migration operations recorded here.",
+    migrationRecoveryUnavailable: "Recovery status unavailable or incomplete. Manual verification required.",
+    migrationRecoveryChanged: "Journal changed while reading: refresh and inspect before any decision.",
+    migrationRecoveryRequired: "Manual review required — an intent may still be pending; no automatic recovery.",
+    migrationRecoveryObserved: "Observed state, not authorization. No automatic recovery or Google cutover.",
+    migrationRecoverySummary: "Phase: {phase} · Revision: {revision} · Operations: {total} · Unacknowledged intents: {pending} · Other issues: {issues} · Source YAML: {sources}.",
+    migrationRecoveryRow: "{entity} · journal: {journal} · registry: {observed} · label: {membership} · review: {review}",
+    migrationRecoverySafeView: "Snapshot only; no staging or cutover permission.",
     migrationStagingImpact: "Projected label impact on manual Google Assistant: {status}. Other label consumers and Google Home remain unverified. Staging is forbidden.",
     migrationConsumerAudit: "Limited indirect audit: {files} YAML files inspected, {writers} HVLS generation references, {events} entity-registry event references, {labels} label-function references. External effects remain unverified; staging forbidden.",
     migrationConsumerOverlap: "Warning: the HVLS output file overlaps a protected manual Google Assistant source. Any V1 generation may change that source.",
@@ -496,6 +518,11 @@ class HVLSPreviewPanel extends HTMLElement {
     if (migrationReadAttestation) migrationReadAttestation.textContent = this._t("migrationAttestationRead");
     const migrationAttestReview = this.querySelector("#migrationAttestReview");
     if (migrationAttestReview) migrationAttestReview.textContent = this._t("migrationAttestationConfirmAction");
+    const recoveryTitle = this.querySelector("#migrationRecoveryTitle");
+    if (recoveryTitle) recoveryTitle.textContent = this._t("migrationRecoveryTitle");
+    const recoveryRead = this.querySelector("#migrationRecoveryRefresh");
+    if (recoveryRead) recoveryRead.textContent = this._t("migrationRecoveryRead");
+    if (this._migrationRecoveryReport) this._renderMigrationRecovery();
     const migrationMore = this.querySelector("#migrationMore");
     if (migrationMore) migrationMore.textContent = this._t("migrationMore");
     const nav = this.querySelector(".hvls-tabs");
@@ -1846,6 +1873,12 @@ class HVLSPreviewPanel extends HTMLElement {
             </button>
           </div>
           <p id="migrationAttestationStatus" role="status" class="diagnostic-note"></p>
+          <h3 id="migrationRecoveryTitle">${this._t("migrationRecoveryTitle")}</h3>
+          <button id="migrationRecoveryRefresh" type="button" class="secondary">
+            ${this._t("migrationRecoveryRead")}
+          </button>
+          <p id="migrationRecoveryStatus" role="status" class="diagnostic-note"></p>
+          <div id="migrationRecoveryRows" class="migration-scroll"></div>
 
           <p id="migrationStatus" role="status">${this._t("migrationEmpty")}</p>
           <div id="migrationSummary" class="migration-review-note"></div>
@@ -1897,6 +1930,7 @@ class HVLSPreviewPanel extends HTMLElement {
     this.querySelector("#migrationSaveDraft").addEventListener("click", () => this._saveMigrationDecisionDraft());
     this.querySelector("#migrationReadAttestation").addEventListener("click", () => this._readMigrationAttestation());
     this.querySelector("#migrationAttestReview").addEventListener("click", () => this._attestMigrationReview());
+    this.querySelector("#migrationRecoveryRefresh").addEventListener("click", () => this._loadMigrationRecovery());
     this.querySelector("#migrationMore").addEventListener("click", () => {
       this._migrationLimit = (this._migrationLimit || 100) + 100;
       this._renderMigrationReview();
@@ -2575,6 +2609,84 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  _renderMigrationRecovery() {
+    const status = this.querySelector("#migrationRecoveryStatus");
+    const container = this.querySelector("#migrationRecoveryRows");
+    if (!status || !container) return;
+    container.replaceChildren();
+    const result = this._migrationRecoveryReport;
+    if (!result) return;
+    if (result.status === "not_initialized") {
+      status.textContent = this._t("migrationRecoveryNotInitialized");
+      return;
+    }
+    if (result.status === "unavailable") {
+      status.textContent = this._t("migrationRecoveryUnavailable");
+      return;
+    }
+    if (result.status === "snapshot_changed") {
+      status.textContent = this._t("migrationRecoveryChanged");
+      return;
+    }
+    if (!["review_required", "observed_no_pending"].includes(result.status)) {
+      status.textContent = this._t("migrationRecoveryUnavailable");
+      return;
+    }
+    status.textContent =
+      this._t(result.needs_review
+        ? "migrationRecoveryRequired" : "migrationRecoveryObserved") +
+      " " + this._tf("migrationRecoverySummary", {
+        phase: result.phase,
+        revision: result.journal_revision,
+        total: result.summary?.total ?? 0,
+        pending: result.summary?.unconfirmed ?? 0,
+        issues: result.summary?.other_issues ?? 0,
+        sources: result.source_integrity,
+      }) + " " + this._t("migrationRecoverySafeView");
+    // Bound rendering independently of the backend's 2,000-operation cap.
+    for (const row of (result.operations || []).slice(0, 100)) {
+      const line = document.createElement("p");
+      line.className = "diagnostic-note";
+      line.textContent = this._tf("migrationRecoveryRow", {
+        entity: row.entity_id,
+        journal: row.operation_status,
+        observed: row.observed_status,
+        membership: row.membership,
+        review: row.needs_review ? "required" : "observed",
+      });
+      container.append(line);
+    }
+  }
+
+  async _loadMigrationRecovery() {
+    if (!this._hass || this._migrationRecoveryLoading) return;
+    this._migrationRecoveryLoading = true;
+    const button = this.querySelector("#migrationRecoveryRefresh");
+    const status = this.querySelector("#migrationRecoveryStatus");
+    if (button) button.disabled = true;
+    if (status) status.textContent = this._t("migrationRecoveryLoading");
+    try {
+      const report = await this._hass.callWS({
+        type: "ha_voice_label_sync/get_migration_recovery_status",
+      });
+      if (!report || report.read_only !== true ||
+          report.automatic_recovery_allowed !== false ||
+          report.stage_allowed !== false ||
+          report.cutover_allowed !== false) {
+        throw new Error("invalid_recovery_response");
+      }
+      this._migrationRecoveryReport = report;
+      this._renderMigrationRecovery();
+    } catch (_error) {
+      this._migrationRecoveryReport = null;
+      this.querySelector("#migrationRecoveryRows")?.replaceChildren();
+      if (status) status.textContent = this._t("migrationRecoveryUnavailable");
+    } finally {
+      this._migrationRecoveryLoading = false;
+      if (button) button.disabled = false;
+    }
+  }
+
   _attestationControls() {
     const read = this.querySelector("#migrationReadAttestation");
     const attest = this.querySelector("#migrationAttestReview");
@@ -3044,6 +3156,7 @@ class HVLSPreviewPanel extends HTMLElement {
     });
     // Read the live filesystem each time the Backups tab is opened.
     if (tab === "backups") this._loadBackups();
+    if (tab === "migration") this._loadMigrationRecovery();
     if (tab === "migration" && !this._migrationReport && !this._migrationLoading) {
       this._loadMigrationReview();
     }
