@@ -356,7 +356,11 @@ def test_live_capture_never_modifies_labels_or_ga_configuration(
     )
     assert result["status"] == "captured"
     assert result["observations"]["light.kitchen"]["native_before"] is True
-    registry.async_get.assert_called_once_with("light.kitchen")
+    assert registry.async_get.call_count == 2
+    assert all(
+        call.args == ("light.kitchen",)
+        for call in registry.async_get.call_args_list
+    )
     updates.assert_not_called()
     payload = json.dumps(result)
     for secret in (
