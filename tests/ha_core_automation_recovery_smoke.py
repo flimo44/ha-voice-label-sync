@@ -376,7 +376,58 @@ async def test_real_dormant_staging_native_cas(hass, label_id, other_label):
             assert str(exc) == "technical_admission_not_consistent"
         else:
             raise AssertionError("pending HA intent promoted to approval")
+        # Separate, durable APPROVAL INTENT AUDIT only. The native HA
+        # registry is real, as are the verified baseline and journal.
+        # The saved-draft substitute is intentionally synthetic here, so
+        # this exercises storage and non-execution rather than claiming
+        # a fully approved Google migration or an auth grant.
+        audit_candidate, _audit_capture = await one_entity(
+            "stage_cas_approval_audit"
+        )
+        records = module("migration_execution_approval_records")
+        original_load_draft = records.load_review_draft
+        draft = {
+            "status": "saved_unapproved_draft",
+            "stored_choices_unapproved": True,
+            "baseline_manifest_sha256": manifest["manifest_sha256"],
+            "decisions": {
+                audit_candidate.entity_id: {"action": "import"}
+            },
+        }
+        records.load_review_draft = lambda _config: draft
+        try:
+            journal_before = journal.read_journal(root)
+            history_before = records.load_approval_intent_history(str(root))
+            assert history_before["record_count"] == 0
+            persisted = records.append_approval_intent_evidence(
+                str(root),
+                expected_record_count=0,
+                expected_last_record_sha256="0" * 64,
+                expected_journal_sha256=records._hash(journal_before),
+                expected_journal_revision=journal_before["revision"],
+                expected_draft_sha256=records._hash(draft),
+                admission_evidence_sha256="e" * 64,
+                entity_id=audit_candidate.entity_id,
+                action="stage_one_label_addition",
+                administrator_id="sandbox_synthetic_admin",
+            )
+            assert persisted["record_count"] == 1
+            assert persisted["execution_authorized"] is False
+            assert persisted["journal_ack_allowed"] is False
+            reloaded = records.load_approval_intent_history(str(root))
+            assert reloaded["record_count"] == 1
+            assert reloaded["records"][0]["record_sha256"] == (
+                persisted["record"]["record_sha256"]
+            )
+            assert journal.read_journal(root) == journal_before
+            assert registry.async_get(audit_candidate.entity_id).labels == {
+                other_label
+            }
+            assert (root / "configuration.yaml").read_bytes() == SOURCE
+        finally:
+            records.load_review_draft = original_load_draft
         return {
+            "durable_approval_intent_audit_no_execution": True,
             "approval_rehearsal_refused_pending_intent": True,
             "execution_admission_rejected_pending_intent": True,
             "native_private_writer_checked": True,

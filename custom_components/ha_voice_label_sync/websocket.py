@@ -146,6 +146,110 @@ async def websocket_confirm_migration_investigation_record(
     connection.send_result(msg["id"], result)
 
 
+WS_TYPE_DURABLE_APPROVAL_INTENT_HISTORY = (
+    f"{DOMAIN}/get_migration_durable_approval_intent_history"
+)
+WS_TYPE_DURABLE_APPROVAL_INTENT_PREPARE = (
+    f"{DOMAIN}/prepare_migration_durable_approval_intent"
+)
+WS_TYPE_DURABLE_APPROVAL_INTENT_CONFIRM = (
+    f"{DOMAIN}/confirm_migration_durable_approval_intent"
+)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_DURABLE_APPROVAL_INTENT_HISTORY,
+})
+async def websocket_get_migration_durable_approval_intent_history(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Read-only protected history of NON-executing admin approval intent."""
+    try:
+        from .migration_execution_approval_records_api import (
+            async_get_approval_intent_history,
+        )
+        result = await async_get_approval_intent_history(hass)
+    except Exception:
+        connection.send_error(
+            msg["id"], "durable_approval_intent_history_unavailable",
+            "Protected approval-intent history unavailable; no change made.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_DURABLE_APPROVAL_INTENT_PREPARE,
+    vol.Required("entity_id"): str,
+    vol.Required("action"): str,
+})
+async def websocket_prepare_migration_durable_approval_intent(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Prepare evidence-only approval-intent audit, never stage permission."""
+    try:
+        from .migration_execution_approval_records_api import (
+            prepare_admin_durable_approval_intent,
+        )
+        result = await prepare_admin_durable_approval_intent(
+            hass, administrator_id=connection.user.id,
+            entity_id=msg["entity_id"], action=msg["action"],
+        )
+    except Exception:
+        connection.send_error(
+            msg["id"], "durable_approval_intent_prepare_refused",
+            "Durable approval-intent preparation refused; no action performed.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_DURABLE_APPROVAL_INTENT_CONFIRM,
+    vol.Required("entity_id"): str,
+    vol.Required("action"): str,
+    vol.Required("confirmation_token"): str,
+    vol.Required("confirmed"): bool,
+    vol.Required("acknowledge_external_uncertainty"): bool,
+})
+async def websocket_confirm_migration_durable_approval_intent(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Append audit evidence only; NO staging, rollback, or journal ACK."""
+    try:
+        from .migration_execution_approval_records_api import (
+            confirm_admin_durable_approval_intent,
+        )
+        result = await confirm_admin_durable_approval_intent(
+            hass, administrator_id=connection.user.id,
+            entity_id=msg["entity_id"], action=msg["action"],
+            confirmation_token=msg["confirmation_token"],
+            confirmed=msg["confirmed"],
+            acknowledge_external_uncertainty=(
+                msg["acknowledge_external_uncertainty"]
+            ),
+        )
+    except Exception:
+        connection.send_error(
+            msg["id"], "durable_approval_intent_confirmation_refused",
+            "Approval-intent evidence changed or storage unavailable.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
 WS_TYPE_APPROVAL_DRYRUN_PREPARE = (
     f"{DOMAIN}/prepare_migration_execution_approval_dryrun"
 )
@@ -1107,6 +1211,15 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     )
     websocket_api.async_register_command(
         hass, websocket_get_migration_execution_admission_preview
+    )
+    websocket_api.async_register_command(
+        hass, websocket_get_migration_durable_approval_intent_history
+    )
+    websocket_api.async_register_command(
+        hass, websocket_prepare_migration_durable_approval_intent
+    )
+    websocket_api.async_register_command(
+        hass, websocket_confirm_migration_durable_approval_intent
     )
     websocket_api.async_register_command(
         hass, websocket_prepare_migration_execution_approval_dryrun
