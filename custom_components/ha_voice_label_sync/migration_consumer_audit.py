@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import re
+import stat
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -172,6 +173,8 @@ def audit_indirect_label_consumers(
         elif any(
             not isinstance(row, Mapping)
             or not isinstance(row.get("path"), str)
+            or Path(row["path"]).is_absolute()
+            or ".." in Path(row["path"]).parts
             for row in original_sources
         ):
             warnings.append("original_source_inventory_invalid")
@@ -198,8 +201,17 @@ def audit_indirect_label_consumers(
                 if file.is_symlink() or not file.resolve().is_relative_to(root):
                     warnings.append("yaml_path_changed_during_scan")
                     continue
-                with file.open("rb") as reader:
-                    # Reject oversized files even if they grow after stat().
+                # O_NOFOLLOW prevents swapping a final YAML file for a
+                # symlink after its preliminary path validation.
+                fd = os.open(
+                    file, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+                )
+                with os.fdopen(fd, "rb") as reader:
+                    meta = os.fstat(reader.fileno())
+                    if not stat.S_ISREG(meta.st_mode):
+                        warnings.append("yaml_file_unavailable")
+                        continue
+                    # Reject files that grow after stat().
                     raw = reader.read(_MAX_FILE_BYTES + 1)
                 if len(raw) > _MAX_FILE_BYTES:
                     warnings.append("yaml_file_size_limit")
