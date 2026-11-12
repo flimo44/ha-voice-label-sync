@@ -15,9 +15,6 @@ import time
 from typing import Any
 
 from .const import DOMAIN
-from .migration_execution_admission_api import (
-    async_get_stage_admission_preview,
-)
 from .workflow_lock import get_workflow_lock
 
 _PENDING_KEY = "_migration_execution_approval_dryrun"
