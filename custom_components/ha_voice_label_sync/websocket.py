@@ -146,6 +146,39 @@ async def websocket_confirm_migration_investigation_record(
     connection.send_result(msg["id"], result)
 
 
+WS_TYPE_MIGRATION_EXECUTION_ADMISSION = (
+    f"{DOMAIN}/get_migration_execution_admission_preview"
+)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_MIGRATION_EXECUTION_ADMISSION,
+    vol.Required("entity_id"): str,
+})
+async def websocket_get_migration_execution_admission_preview(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Read-only, fail-closed future admission preview: NEVER a stage call."""
+    try:
+        from .migration_execution_admission_api import (
+            async_get_stage_admission_preview,
+        )
+        report = await async_get_stage_admission_preview(
+            hass, entity_id=msg["entity_id"]
+        )
+    except Exception:
+        connection.send_error(
+            msg["id"], "migration_execution_admission_unavailable",
+            "Execution admission cannot be inspected; no action was performed.",
+        )
+        return
+    connection.send_result(msg["id"], report)
+
+
 WS_TYPE_MIGRATION_RECOVERY_STATUS = f"{DOMAIN}/get_migration_recovery_status"
 
 
@@ -991,6 +1024,9 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_get_migration_diagnostic)
     websocket_api.async_register_command(
         hass, websocket_get_migration_recovery_status
+    )
+    websocket_api.async_register_command(
+        hass, websocket_get_migration_execution_admission_preview
     )
     websocket_api.async_register_command(
         hass, websocket_get_migration_investigation_history
