@@ -740,3 +740,304 @@ def test_durable_history_read_is_non_authorizing_and_not_live_verified(
     assert read["stage_allowed"] is False
     assert read["record_count"] == 0
     assert disk.appends == []
+
+
+
+def _one_shot_api(app, monkeypatch):
+    """Exercise public flow with protected evidence from real #130 facade.
+
+    The lower-level on-disk chain has its own real-storage test matrix.
+    """
+    import hashlib
+    import json
+
+    prefix = app.api.__name__.rsplit(".", 1)[0]
+    _approval(app, monkeypatch)
+    fresh = _request(app)
+    assert fresh["technical_prerequisites_consistent"]
+    evidence_sha = fresh["server_evidence_sha256"]
+    approvals = ModuleType(f"{prefix}.migration_execution_approval_records")
+    approval_record = {
+        "entity_id": "light.good",
+        "action": "stage_one_label_addition",
+        "admission_evidence_sha256": evidence_sha,
+        "record_sha256": "f" * 64,
+    }
+    approvals.load_approval_intent_history = lambda _: {
+        "records": [deepcopy(approval_record)],
+    }
+    monkeypatch.setitem(sys.modules, approvals.__name__, approvals)
+    rehearsal = ModuleType(f"{prefix}.migration_execution_one_shot_rehearsal")
+    rehearsal._hash = lambda value: hashlib.sha256(
+        json.dumps(value, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    state = SimpleNamespace(
+        count=0, head="0" * 64, receipts=[], calls=[], fail_cas=False,
+    )
+
+    def history(_config):
+        return {
+            "status": "verified_non_authorizing_reservation_rehearsals",
+            "event_count": state.count, "head_sha256": state.head,
+            "receipts": deepcopy(state.receipts),
+            "execution_authorized": False, "stage_allowed": False,
+        }
+
+    def append(_config, **kwargs):
+        if (
+            state.fail_cas or
+            kwargs["expected_event_count"] != state.count
+            or kwargs["expected_head_sha256"] != state.head
+        ):
+            raise ValueError("one_shot_transition_cas_conflict")
+        state.calls.append(kwargs)
+        state.count += 1
+        state.head = f"{state.count:064x}"
+        if kwargs["event"] == "reserve_non_authorizing":
+            row = {
+                "receipt_id": "9" * 32,
+                "entity_id": kwargs["entity_id"],
+                "action": kwargs["action"] if "action" in kwargs
+                else "stage_one_label_addition",
+                "lifecycle": "reserved_non_authorizing",
+                "execution_authorized": False,
+            }
+            state.receipts.append(row)
+        else:
+            row = next(
+                x for x in state.receipts
+                if x["receipt_id"] == kwargs["receipt_id"]
+            )
+            if row["lifecycle"] != "reserved_non_authorizing":
+                raise ValueError("already_burned")
+            row["lifecycle"] = "burned_without_execution"
+        return {
+            "status": (
+                "one_shot_reserved_non_authorizing" if
+                kwargs["event"] == "reserve_non_authorizing" else
+                "one_shot_burned_without_execution"
+            ),
+            "receipt": deepcopy(row),
+            "event_count": state.count, "head_sha256": state.head,
+            "record_fsync_completed": True, "head_fsync_completed": True,
+        }
+
+    rehearsal.read_one_shot_rehearsals = history
+    rehearsal.append_rehearsal_transition = append
+    monkeypatch.setitem(sys.modules, rehearsal.__name__, rehearsal)
+
+    spec = importlib.util.spec_from_file_location(
+        f"{prefix}.migration_execution_one_shot_api",
+        ROOT / "migration_execution_one_shot_api.py",
+    )
+    assert spec and spec.loader
+    api = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, api)
+    spec.loader.exec_module(api)
+    app.hass.data = {}
+    return api, state
+
+
+def _prepare_one_shot(api, app, *, admin="admin_a", entity="light.good",
+                      action="stage_one_label_addition"):
+    return asyncio.run(api.prepare_one_shot_rehearsal(
+        app.hass, administrator_id=admin, entity_id=entity, action=action,
+    ))
+
+
+def _confirm_one_shot(api, app, prepared, *, admin="admin_a",
+                      entity="light.good", action="stage_one_label_addition",
+                      confirmed=True, acknowledge=True):
+    return asyncio.run(api.confirm_one_shot_rehearsal(
+        app.hass, administrator_id=admin, entity_id=entity, action=action,
+        confirmation_token=prepared["confirmation_token"],
+        confirmed=confirmed, acknowledge_external_uncertainty=acknowledge,
+    ))
+
+
+def _burn_one_shot(api, app, receipt, *, admin="admin_a",
+                   entity="light.good", action="stage_one_label_addition",
+                   confirmed=True, acknowledge=True):
+    return asyncio.run(api.burn_one_shot_rehearsal(
+        app.hass, administrator_id=admin, entity_id=entity,
+        action=action, receipt_id=receipt,
+        confirmed=confirmed, acknowledge_external_uncertainty=acknowledge,
+    ))
+
+
+def test_one_shot_admin_flow_is_durable_rehearsal_without_stage(app, monkeypatch):
+    api, state = _one_shot_api(app, monkeypatch)
+    prepared = _prepare_one_shot(api, app)
+    assert prepared["expires_in_seconds"] == 180
+    assert prepared["execution_authorized"] is False
+    assert prepared["stage_allowed"] is False
+    assert state.count == 0
+    confirmed = _confirm_one_shot(api, app, prepared)
+    assert confirmed["status"] == (
+        "one_shot_reservation_recorded_without_execution"
+    )
+    assert confirmed["receipt"]["lifecycle"] == "reserved_non_authorizing"
+    assert confirmed["receipt_is_not_execution_capability"] is True
+    assert confirmed["journal_ack_allowed"] is False
+    assert state.count == 1
+    received = _burn_one_shot(
+        api, app, confirmed["receipt"]["receipt_id"]
+    )
+    assert received["status"] == (
+        "one_shot_receipt_consumed_without_execution"
+    )
+    assert received["receipt"]["lifecycle"] == "burned_without_execution"
+    assert received["consumed_on_disk"] is True
+    assert received["execution_authorized"] is False
+    assert received["retry_allowed"] is False
+    assert received["stage_allowed"] is False
+    assert state.count == 2
+    with pytest.raises(ValueError, match="one_shot_receipt_unavailable"):
+        _burn_one_shot(
+            api, app, confirmed["receipt"]["receipt_id"]
+        )
+    assert [r["event"] for r in state.calls] == [
+        "reserve_non_authorizing", "burn_without_execution"
+    ]
+
+
+def test_one_shot_authn_and_token_scoping(app, monkeypatch):
+    api, state = _one_shot_api(app, monkeypatch)
+    prepared = _prepare_one_shot(api, app)
+    with pytest.raises(ValueError, match="one_shot_challenge_invalid_or_expired"):
+        _confirm_one_shot(api, app, prepared, admin="different_admin")
+    bad = {**prepared, "confirmation_token": "forged"}
+    with pytest.raises(ValueError, match="one_shot_challenge_invalid_or_expired"):
+        _confirm_one_shot(api, app, bad)
+    with pytest.raises(ValueError, match="invalid_one_shot_scope"):
+        _confirm_one_shot(api, app, prepared, action="rollback")
+    assert _confirm_one_shot(
+        api, app, prepared
+    )["execution_authorized"] is False
+    assert state.count == 1
+
+
+@pytest.mark.parametrize("change", [
+    "native", "journal", "draft", "policy", "head", "approval_audit",
+])
+def test_one_shot_fresh_admission_or_cas_change_prevents_reservation(
+    app, monkeypatch, change,
+):
+    api, state = _one_shot_api(app, monkeypatch)
+    prepared = _prepare_one_shot(api, app)
+    if change == "native":
+        app.native["snapshot"]["before_labels"] = ["replaced"]
+    elif change == "journal":
+        app.journal["revision"] += 1
+    elif change == "draft":
+        app.draft["draft_revision"] += 1
+    elif change == "policy":
+        app.review["diagnostic"]["loaded_policy"]["rule_changes"] = ["changed"]
+    elif change == "head":
+        state.head = "f" * 64
+    elif change == "approval_audit":
+        record = sys.modules[
+            app.api.__name__.rsplit(".", 1)[0] +
+            ".migration_execution_approval_records"
+        ]
+        record.load_approval_intent_history = lambda _: {"records": []}
+    with pytest.raises(ValueError):
+        _confirm_one_shot(api, app, prepared)
+    with pytest.raises(ValueError, match="one_shot_challenge_invalid_or_expired"):
+        _confirm_one_shot(api, app, prepared)
+    assert state.count == 0
+
+
+def test_one_shot_expiry_replay_and_restart_refuse(app, monkeypatch):
+    api, state = _one_shot_api(app, monkeypatch)
+    clock = [300.0]
+    monkeypatch.setattr(api.time, "monotonic", lambda: clock[0])
+    old = _prepare_one_shot(api, app)
+    clock[0] += 181
+    with pytest.raises(ValueError, match="one_shot_challenge_invalid_or_expired"):
+        _confirm_one_shot(api, app, old)
+    fresh = _prepare_one_shot(api, app)
+    app.hass.data = {}
+    with pytest.raises(ValueError, match="one_shot_challenge_invalid_or_expired"):
+        _confirm_one_shot(api, app, fresh)
+    assert state.count == 0
+
+
+def test_second_admin_preparation_revokes_first_and_burn_is_scoped(
+    app, monkeypatch,
+):
+    api, state = _one_shot_api(app, monkeypatch)
+    old = _prepare_one_shot(api, app, admin="admin_a")
+    fresh = _prepare_one_shot(api, app, admin="admin_b")
+    with pytest.raises(ValueError, match="one_shot_challenge_invalid_or_expired"):
+        _confirm_one_shot(api, app, old)
+    recorded = _confirm_one_shot(api, app, fresh, admin="admin_b")
+    assert recorded["receipt"]["lifecycle"] == "reserved_non_authorizing"
+    # The on-disk writer rejects another admin even if they know the id;
+    # the pure API also leaves all execution flags false.
+    burned = _burn_one_shot(
+        api, app, recorded["receipt"]["receipt_id"], admin="admin_b"
+    )
+    assert burned["stage_allowed"] is False
+    assert state.count == 2
+
+
+@pytest.mark.parametrize("action", [
+    "rollback", "retry", "ack_intent", "stage_all_entities",
+    "stage_one_label_removal", "cutover", "",
+])
+def test_one_shot_never_accepts_other_operations(app, monkeypatch, action):
+    api, state = _one_shot_api(app, monkeypatch)
+    with pytest.raises(ValueError, match="invalid_one_shot_scope"):
+        _prepare_one_shot(api, app, action=action)
+    assert state.count == 0
+
+
+def test_one_shot_confirmation_and_burn_require_positive_acknowledgement(
+    app, monkeypatch,
+):
+    api, state = _one_shot_api(app, monkeypatch)
+    prepared = _prepare_one_shot(api, app)
+    with pytest.raises(ValueError, match="one_shot_explicit_confirmation_required"):
+        _confirm_one_shot(api, app, prepared, acknowledge=False)
+    with pytest.raises(ValueError, match="one_shot_explicit_confirmation_required"):
+        _confirm_one_shot(api, app, prepared, confirmed=False)
+    good = _confirm_one_shot(api, app, prepared)
+    receipt = good["receipt"]["receipt_id"]
+    with pytest.raises(ValueError, match="one_shot_burn_confirmation_required"):
+        _burn_one_shot(api, app, receipt, confirmed=False)
+    with pytest.raises(ValueError, match="one_shot_burn_confirmation_required"):
+        _burn_one_shot(api, app, receipt, acknowledge=False)
+    assert _burn_one_shot(
+        api, app, receipt
+    )["execution_authorized"] is False
+    assert state.count == 2
+
+
+def test_one_shot_endpoints_are_admin_only_and_have_no_stage_writer():
+    import ast
+
+    tree = ast.parse((ROOT / "websocket.py").read_text())
+    names = (
+        "websocket_get_migration_one_shot_rehearsal_history",
+        "websocket_prepare_migration_one_shot_rehearsal",
+        "websocket_confirm_migration_one_shot_rehearsal",
+        "websocket_burn_migration_one_shot_rehearsal",
+    )
+    for name in names:
+        fn = next(
+            node for node in tree.body
+            if isinstance(node, ast.AsyncFunctionDef) and node.name == name
+        )
+        assert any(
+            isinstance(dec, ast.Attribute) and dec.attr == "require_admin"
+            for dec in fn.decorator_list
+        )
+        for forbidden in (
+            "stage_one_approved_label", "mark_label_applied",
+            "record_label_intent", "async_update_entity",
+            "advance_phase",
+        ):
+            assert forbidden not in ast.unparse(fn)
+    stage = (ROOT / "migration_stage_executor.py").read_text()
+    assert "migration_execution_one_shot" not in stage
