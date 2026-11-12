@@ -2067,7 +2067,8 @@ test("Recovery simulation runs two admin-only steps without mutation requests", 
   panel._migrationRecoveryReport = recoverySimulationFixture();
   panel._renderMigrationRecovery();
   const first = controls.migrationRecoveryRows.children[0];
-  assert.equal(first.children.length, 2);
+  assert.equal(first.children.length, 3);
+  assert.equal(first.children[2].tag, "button");
   assert.equal(first.children[0].tag, "select");
   assert.equal(first.children[1].tag, "button");
   assert.equal(first.children[0].value, "inspect_external_effects");
@@ -2170,4 +2171,169 @@ test("Forged recovery confirmation claiming writes is refused in UI", async () =
   );
   assert.match(controls.migrationRecoveryDecisionStatus.textContent,
     /Simulation refusée/);
+});
+
+
+test("Recording recovery investigation sends exactly two non-execution calls", async () => {
+  const calls = [];
+  const {panel} = makePanel(async req => {
+    calls.push(req);
+    if (req.type === "ha_voice_label_sync/prepare_migration_investigation_record") {
+      return {
+        status: "awaiting_durable_investigation_confirmation",
+        confirmation_token: "one_time",
+        entity_id: "light.sandbox", disposition: "inspect_external_effects",
+        journal_ack_allowed: false, execution_authorized: false,
+        stage_allowed: false, cutover_allowed: false,
+      };
+    }
+    if (req.type === "ha_voice_label_sync/confirm_migration_investigation_record") {
+      assert.equal(req.confirmed, true);
+      assert.equal(req.acknowledge_external_uncertainty, true);
+      assert.equal(req.confirmation_token, "one_time");
+      return {
+        status: "durable_investigation_recorded_no_execution",
+        record: {sequence: 1, entity_id: "light.sandbox",
+          disposition: "inspect_external_effects"},
+        execution_authorized: false, journal_ack_allowed: false,
+        retry_allowed: false, rollback_allowed: false,
+        stage_allowed: false, apply_allowed: false,
+        cutover_allowed: false, label_changed: false,
+        journal_changed: false, production_yaml_changed: false,
+      };
+    }
+    if (req.type === "ha_voice_label_sync/get_migration_investigation_history") {
+      return {
+        status: "verified_investigation_history",
+        history_read_only: true, record_count: 1,
+        execution_authorized: false, stage_allowed: false,
+        cutover_allowed: false, records: [{
+          sequence: 1, entity_id: "light.sandbox",
+          disposition: "inspect_external_effects",
+          evidence_relation: "matching_current_observation",
+        }],
+      };
+    }
+    throw Error("unexpected or mutating request: " + req.type);
+  });
+  const controls = {
+    migrationRecoveryStatus: {textContent: ""},
+    migrationRecoveryDecisionStatus: {textContent: ""},
+    migrationRecoveryRows: {
+      children: [], replaceChildren() {this.children = [];},
+      append(node) {this.children.push(node);},
+    },
+    migrationLedgerStatus: {textContent: ""},
+    migrationLedgerRefresh: {disabled: false},
+    migrationLedgerRows: {
+      children: [], replaceChildren() {this.children = [];},
+      append(node) {this.children.push(node);},
+    },
+  };
+  panel.querySelector = s => controls[s.slice(1)] || null;
+  panel._migrationRecoveryReport = recoverySimulationFixture();
+  panel._renderMigrationRecovery();
+  assert.equal(controls.migrationRecoveryRows.children[0].children.length, 3);
+  assert.equal(controls.migrationRecoveryRows.children[0].children[2].tag, "button");
+  await panel._recordRecoveryInvestigation(
+    "light.sandbox", "inspect_external_effects"
+  );
+  assert.deepEqual(calls.map(c => c.type), [
+    "ha_voice_label_sync/prepare_migration_investigation_record",
+    "ha_voice_label_sync/confirm_migration_investigation_record",
+    "ha_voice_label_sync/get_migration_investigation_history",
+  ]);
+  assert.match(controls.migrationRecoveryDecisionStatus.textContent,
+    /n°1 enregistrée/);
+  assert.match(controls.migrationLedgerStatus.textContent,
+    /1 décisions d’enquête/);
+  assert.equal(controls.migrationLedgerRows.children.length, 1);
+  assert.ok(!calls.some(c => /rollback|stage|ack|apply|retry/.test(c.type)));
+});
+
+test("Cancelled protected history prompt does not send confirm or create record", async () => {
+  const calls = [];
+  const {panel} = makePanel(async req => {
+    calls.push(req.type);
+    return {
+      status: "awaiting_durable_investigation_confirmation",
+      entity_id: "light.sandbox",
+      disposition: "quarantine_for_investigation",
+      confirmation_token: "not_used",
+      execution_authorized: false, journal_ack_allowed: false,
+      stage_allowed: false, cutover_allowed: false,
+    };
+  }, () => false);
+  const controls = {
+    migrationRecoveryStatus: {textContent: ""},
+    migrationRecoveryRows: {replaceChildren() {}, append() {}},
+    migrationRecoveryDecisionStatus: {textContent: ""},
+  };
+  panel.querySelector = s => controls[s.slice(1)] || null;
+  panel._migrationRecoveryReport = recoverySimulationFixture();
+  await panel._recordRecoveryInvestigation(
+    "light.sandbox", "quarantine_for_investigation"
+  );
+  assert.deepEqual(calls, [
+    "ha_voice_label_sync/prepare_migration_investigation_record"
+  ]);
+  assert.match(controls.migrationRecoveryDecisionStatus.textContent, /annulé/);
+});
+
+test("Forged durable history success is rejected without pretending anything saved", async () => {
+  const calls = [];
+  const {panel} = makePanel(async req => {
+    calls.push(req.type);
+    if (req.type.includes("prepare")) return {
+      status: "awaiting_durable_investigation_confirmation",
+      entity_id: "light.sandbox", disposition: "inspect_external_effects",
+      confirmation_token: "ephemeral", execution_authorized: false,
+      journal_ack_allowed: false, stage_allowed: false,
+      cutover_allowed: false,
+    };
+    return {
+      status: "durable_investigation_recorded_no_execution",
+      record: {sequence: 1, entity_id: "light.sandbox",
+        disposition: "inspect_external_effects"},
+      execution_authorized: true, journal_ack_allowed: true,
+      stage_allowed: true, apply_allowed: true,
+      cutover_allowed: true, label_changed: true,
+      journal_changed: true, production_yaml_changed: true,
+    };
+  });
+  const controls = {
+    migrationRecoveryDecisionStatus: {textContent: ""},
+    migrationRecoveryStatus: {textContent: ""},
+    migrationRecoveryRows: {replaceChildren() {}, append() {}},
+  };
+  panel.querySelector = s => controls[s.slice(1)] || null;
+  panel._migrationRecoveryReport = recoverySimulationFixture();
+  await panel._recordRecoveryInvestigation(
+    "light.sandbox", "inspect_external_effects"
+  );
+  assert.match(controls.migrationRecoveryDecisionStatus.textContent,
+    /Enregistrement refusé/);
+  assert.equal(calls.length, 2);
+});
+
+test("Invalid protected history response is never displayed as verified", async () => {
+  const {panel} = makePanel(async req => {
+    assert.equal(req.type,
+      "ha_voice_label_sync/get_migration_investigation_history");
+    return {
+      status: "verified_investigation_history", record_count: 1,
+      history_read_only: true, execution_authorized: true,
+      stage_allowed: true, cutover_allowed: true,
+      records: [{sequence: 1, entity_id: "light.sandbox"}],
+    };
+  });
+  const controls = {
+    migrationLedgerRefresh: {disabled: false},
+    migrationLedgerStatus: {textContent: ""},
+    migrationLedgerRows: {replaceChildren() {}, append() {}},
+  };
+  panel.querySelector = s => controls[s.slice(1)] || null;
+  await panel._loadMigrationInvestigationHistory();
+  assert.match(controls.migrationLedgerStatus.textContent, /indisponible/);
+  assert.equal(controls.migrationLedgerRefresh.disabled, false);
 });
