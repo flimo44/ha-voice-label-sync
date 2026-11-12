@@ -25,7 +25,7 @@ from .migration_baseline import (
     storage_directory,
 )
 from .migration_discovery import discover_google_assistant
-from .migration_journal import JournalError, _read as _read_journal
+from .migration_journal import JournalError, read_journal
 from .migration_stage_executor import MigrationStageError, verify_current_sources
 from .migration_stage_plan import _decision_data, _source_token, _valid_entity_id
 
@@ -195,7 +195,7 @@ def load_review_draft(config_dir: str | Path) -> dict[str, Any]:
     """Read saved choices without changing files; flag stale journal evidence."""
     try:
         storage = storage_directory(config_dir)
-        journal = _read_journal(storage)
+        journal = read_journal(config_dir)
         baseline_sha = journal["baseline_manifest_sha256"]
         draft = _verified_draft(storage, baseline_sha)
         source_stale = False
@@ -259,7 +259,7 @@ def save_review_draft(
     try:
         storage = storage_directory(config_dir)
         with migration_lock(storage):
-            journal = _read_journal(storage)
+            journal = read_journal(config_dir)
             baseline_sha = _verified_baseline(storage)["manifest_sha256"]
             if (
                 baseline_sha != expected_baseline_manifest_sha256
