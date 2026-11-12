@@ -2662,15 +2662,23 @@ class HVLSPreviewPanel extends HTMLElement {
         sources: result.source_integrity,
       }) + " " + this._t("migrationRecoverySafeView");
     const scenarios = result.resolution_scenarios;
-    const scenarioRows = new Map((scenarios?.operations || []).map(
-      item => [item.entity_id, item]
-    ));
-    if (scenarios?.read_only === true &&
-        scenarios?.automatic_recovery_allowed === false &&
-        scenarios?.journal_ack_allowed === false &&
-        scenarios?.retry_allowed === false &&
-        scenarios?.rollback_allowed === false &&
-        scenarios?.cutover_allowed === false) {
+    const scenariosSafe = scenarios?.read_only === true &&
+      scenarios?.automatic_recovery_allowed === false &&
+      scenarios?.journal_ack_allowed === false &&
+      scenarios?.retry_allowed === false &&
+      scenarios?.rollback_allowed === false &&
+      scenarios?.stage_allowed === false &&
+      scenarios?.apply_allowed === false &&
+      scenarios?.cutover_allowed === false &&
+      scenarios?.evidence_is_not_execution_authorization === true &&
+      Array.isArray(scenarios?.operations) &&
+      scenarios.operations.every(item => item.resolution_authorized === false);
+    const scenarioRows = new Map(
+      (scenariosSafe ? scenarios.operations : []).map(
+        item => [item.entity_id, item]
+      )
+    );
+    if (scenariosSafe) {
       status.textContent += " " + this._tf("migrationResolutionSummary", {
         pending: scenarios.summary?.unconfirmed ?? 0,
         investigate: scenarios.summary?.requires_investigation ?? 0,
