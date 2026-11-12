@@ -65,9 +65,10 @@ def review_evidence(report: Mapping[str, Any]) -> dict[str, Any]:
     """
     if not isinstance(report, Mapping):
         raise AttestationError("review_unavailable")
-    diag, plan, simulation, impact = (
+    diag, plan, simulation, impact, consumers = (
         report.get("diagnostic"), report.get("preflight"),
         report.get("simulation"), report.get("pre_stage_impact"),
+        report.get("indirect_consumer_audit"),
     )
     if (
         not isinstance(diag, Mapping)
@@ -75,6 +76,11 @@ def review_evidence(report: Mapping[str, Any]) -> dict[str, Any]:
         or report.get("protected_baseline_status") != "verified"
         or not isinstance(simulation, Mapping)
         or not isinstance(impact, Mapping)
+        or not isinstance(consumers, Mapping)
+        or consumers.get("read_only") is not True
+        or consumers.get("stage_allowed") is not False
+        or consumers.get("cutover_allowed") is not False
+        or consumers.get("external_consumers_verified") is not False
         or diag.get("read_only") is not True
         or plan.get("read_only") is not True
         or simulation.get("read_only") is not True
@@ -111,6 +117,10 @@ def review_evidence(report: Mapping[str, Any]) -> dict[str, Any]:
         }
         or bool(impact.get("global_blockers"))
         or impact.get("summary", {}).get("needs_review", 0) > 0
+        # The bounded scan cannot certify all HA/third-party listeners.
+        # An attestation can only record the unverified observation.
+        or consumers.get("status") != "indirect_effects_unverified"
+        or bool(consumers.get("reason_codes", []))
     )
     if (
         type(summary.get("needs_review")) is not int
@@ -123,6 +133,7 @@ def review_evidence(report: Mapping[str, Any]) -> dict[str, Any]:
         "review_evidence_sha256": _digest({
             "diagnostic": diag, "plan": plan, "simulation": simulation,
             "pre_stage_impact": impact,
+            "indirect_consumer_audit": consumers,
         }),
         "review_token_sha256": plan["review_token_sha256"],
         "observed_issues": bool(issues),
