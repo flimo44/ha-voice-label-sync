@@ -68,6 +68,91 @@ async def websocket_get_migration_recovery_status(
     connection.send_result(msg["id"], result)
 
 
+WS_TYPE_RECOVERY_SIMULATION_PREPARE = (
+    f"{DOMAIN}/prepare_migration_recovery_decision"
+)
+WS_TYPE_RECOVERY_SIMULATION_CONFIRM = (
+    f"{DOMAIN}/confirm_migration_recovery_decision"
+)
+_RECOVERY_DISPOSITIONS = (
+    "inspect_external_effects",
+    "quarantine_for_investigation",
+    "defer_until_further_evidence",
+)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_RECOVERY_SIMULATION_PREPARE,
+    vol.Required("entity_id"): str,
+    vol.Required("disposition"): vol.In(_RECOVERY_DISPOSITIONS),
+})
+async def websocket_prepare_migration_recovery_decision(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Prepare a human investigation *simulation*, without any mutations."""
+    try:
+        from .migration_recovery_confirmation import (
+            prepare_admin_recovery_decision,
+        )
+        result = await prepare_admin_recovery_decision(
+            hass,
+            administrator_id=connection.user.id,
+            entity_id=msg["entity_id"],
+            disposition=msg["disposition"],
+        )
+    except Exception:
+        connection.send_error(
+            msg["id"], "recovery_simulation_prepare_refused",
+            "Fresh recovery investigation unavailable; no action performed.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_RECOVERY_SIMULATION_CONFIRM,
+    vol.Required("entity_id"): str,
+    vol.Required("disposition"): vol.In(_RECOVERY_DISPOSITIONS),
+    vol.Required("confirmation_token"): str,
+    vol.Required("confirmed"): bool,
+    vol.Required("acknowledge_external_uncertainty"): bool,
+})
+async def websocket_confirm_migration_recovery_decision(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Consume one-time challenge; recheck the evidence; NEVER execute."""
+    try:
+        from .migration_recovery_confirmation import (
+            confirm_admin_recovery_decision,
+        )
+        result = await confirm_admin_recovery_decision(
+            hass,
+            administrator_id=connection.user.id,
+            entity_id=msg["entity_id"],
+            disposition=msg["disposition"],
+            confirmation_token=msg["confirmation_token"],
+            confirmed=msg["confirmed"],
+            acknowledge_external_uncertainty=(
+                msg["acknowledge_external_uncertainty"]
+            ),
+        )
+    except Exception:
+        connection.send_error(
+            msg["id"], "recovery_simulation_confirmation_refused",
+            "Recovery evidence or confirmation changed; no action performed.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
 WS_TYPE_MIGRATION_DIAGNOSTIC = f"{DOMAIN}/get_migration_diagnostic"
 
 
@@ -807,6 +892,12 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_get_migration_diagnostic)
     websocket_api.async_register_command(
         hass, websocket_get_migration_recovery_status
+    )
+    websocket_api.async_register_command(
+        hass, websocket_prepare_migration_recovery_decision
+    )
+    websocket_api.async_register_command(
+        hass, websocket_confirm_migration_recovery_decision
     )
     websocket_api.async_register_command(hass, websocket_get_migration_review)
     websocket_api.async_register_command(hass, websocket_prepare_migration_baseline)
