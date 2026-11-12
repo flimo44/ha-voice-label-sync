@@ -114,6 +114,7 @@ def _setup(tmp_path, modules, diag_module, monkeypatch):
     hass.async_add_executor_job = executor
     diag_module.build_admin_migration_diagnostic = get_diagnostic
     stage = modules["migration_stage_executor"]
+    hass.native_writer = stage._write_one_ha_label
     guard = modules["migration_write_boundary"]
     hass.unrelated_labels = {"unrelated"}
 
@@ -575,3 +576,170 @@ def test_native_registry_refuses_stale_or_ineligible_entity(
             configured_label="Google Assistant",
             expected_boundary_capture=snapshot,
         )
+
+
+
+def _use_real_guarded_writer(hass, stage, monkeypatch):
+    """Native registry fake; real dormant writer and real full-set CAS."""
+    entry = SimpleNamespace(
+        id=hass.registry_id, labels=set(hass.unrelated_labels),
+        entity_id="light.good", disabled_by=None, hidden_by=None,
+    )
+
+    class NativeRegistry:
+        def async_get(self, entity_id):
+            return entry if entity_id == "light.good" else None
+
+        def async_update_entity(self, entity_id, *, labels):
+            assert entity_id == "light.good"
+            hass.writes.append(entity_id)
+            entry.labels = set(labels)
+            hass.label_present = "google_assistant" in labels
+            if getattr(hass, "corrupt_postwrite", False):
+                entry.labels.add("third")
+
+    registry = NativeRegistry()
+    helpers = ModuleType("homeassistant.helpers")
+    fake_er = ModuleType("homeassistant.helpers.entity_registry")
+    fake_er.async_get = lambda _hass: registry
+    helpers.entity_registry = fake_er
+    homeassistant = ModuleType("homeassistant")
+    homeassistant.__path__ = []
+    homeassistant.helpers = helpers
+    monkeypatch.setitem(sys.modules, "homeassistant", homeassistant)
+    monkeypatch.setitem(sys.modules, "homeassistant.helpers", helpers)
+    monkeypatch.setitem(sys.modules, "homeassistant.helpers.entity_registry", fake_er)
+    hass.native_entry = entry
+    monkeypatch.setattr(stage, "_write_one_ha_label", hass.native_writer)
+    return registry
+
+
+def test_dormant_stage_writer_enforces_full_native_cas_before_one_write(
+    tmp_path, modules, monkeypatch,
+):
+    group, diag = modules
+    hass, stage, journal, request = _setup(
+        tmp_path, group, diag, monkeypatch
+    )
+    _use_real_guarded_writer(hass, stage, monkeypatch)
+    result = _run(stage, hass, request)
+    assert result["status"] == "label_staged"
+    assert hass.writes == ["light.good"]
+    assert hass.native_entry.labels == {"unrelated", "google_assistant"}
+    assert journal.read_journal(tmp_path)["operations"][0]["status"] == "applied"
+    assert (tmp_path / "configuration.yaml").read_bytes() == SOURCE
+
+
+@pytest.mark.parametrize(
+    ("race", "expected"),
+    [
+        ("unrelated_added", "native_full_label_set_changed"),
+        ("unrelated_removed", "native_full_label_set_changed"),
+        ("target_added", "registry_prewrite_conflict"),
+        ("entity_recreated", "registry_prewrite_conflict"),
+    ],
+)
+def test_dormant_stage_native_races_after_intent_leave_unconfirmed_intent(
+    tmp_path, modules, monkeypatch, race, expected,
+):
+    group, diag = modules
+    hass, stage, journal, request = _setup(
+        tmp_path, group, diag, monkeypatch
+    )
+    _use_real_guarded_writer(hass, stage, monkeypatch)
+    executor = hass.async_add_executor_job
+    injected = False
+
+    async def concurrent_change(fn, *args):
+        nonlocal injected
+        result = await executor(fn, *args)
+        if (
+            getattr(fn, "__name__", "") == "verify_current_sources"
+            and journal.read_journal(tmp_path)["operations"]
+            and not injected
+        ):
+            injected = True
+            if race == "unrelated_added":
+                hass.unrelated_labels.add("third")
+                hass.native_entry.labels.add("third")
+            elif race == "unrelated_removed":
+                hass.unrelated_labels.clear()
+                hass.native_entry.labels.clear()
+            elif race == "target_added":
+                hass.label_present = True
+                hass.native_entry.labels.add("google_assistant")
+            elif race == "entity_recreated":
+                hass.registry_id = "recreated_02"
+                hass.native_entry.id = "recreated_02"
+        return result
+
+    hass.async_add_executor_job = concurrent_change
+    with pytest.raises(stage.MigrationStageError, match=expected):
+        _run(stage, hass, request)
+    assert injected is True
+    assert hass.writes == []
+    assert journal.read_journal(tmp_path)["operations"][0]["status"] == "intent"
+    assert (tmp_path / "configuration.yaml").read_bytes() == SOURCE
+
+
+def test_dormant_stage_preflight_refuses_invalid_label_before_intent(
+    tmp_path, modules, monkeypatch,
+):
+    group, diag = modules
+    hass, stage, journal, request = _setup(
+        tmp_path, group, diag, monkeypatch
+    )
+    _use_real_guarded_writer(hass, stage, monkeypatch)
+    hass.unrelated_labels.add("dangling_label")
+    hass.native_entry.labels.add("dangling_label")
+    with pytest.raises(
+        stage.MigrationStageError, match="native_boundary_preflight_refused"
+    ):
+        _run(stage, hass, request)
+    assert hass.writes == []
+    assert journal.read_journal(tmp_path)["operations"] == []
+
+
+def test_dormant_stage_postwrite_registry_discrepancy_never_acks_intent(
+    tmp_path, modules, monkeypatch,
+):
+    group, diag = modules
+    hass, stage, journal, request = _setup(
+        tmp_path, group, diag, monkeypatch
+    )
+    _use_real_guarded_writer(hass, stage, monkeypatch)
+    hass.corrupt_postwrite = True
+    with pytest.raises(stage.MigrationStageError, match="registry_postwrite_conflict"):
+        _run(stage, hass, request)
+    assert hass.writes == ["light.good"]
+    assert journal.read_journal(tmp_path)["operations"][0]["status"] == "intent"
+    assert (tmp_path / "configuration.yaml").read_bytes() == SOURCE
+
+
+def test_dormant_native_cas_and_write_share_one_sync_event_loop_section(
+    modules,
+):
+    import ast
+
+    stage = modules[0]["migration_stage_executor"]
+    tree = ast.parse(Path(stage.__file__).read_text())
+    fn = next(
+        item for item in tree.body
+        if isinstance(item, ast.FunctionDef)
+        and item.name == "_write_one_ha_label"
+    )
+    names = [
+        node.func.id if isinstance(node.func, ast.Name) else node.func.attr
+        for node in ast.walk(fn)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, (ast.Name, ast.Attribute))
+    ]
+    assert "assess_native_boundary" in names
+    assert "async_update_entity" in names
+    assert names.index("assess_native_boundary") < names.index(
+        "async_update_entity"
+    )
+    assert not any(isinstance(node, ast.Await) for node in ast.walk(fn))
+    source = (COMPONENT / "websocket.py").read_text()
+    assert "stage_one_approved_label" not in source
+    assert "migration_write_boundary" not in source
