@@ -50,6 +50,7 @@ def setup(monkeypatch, tmp_path):
     for stem in (
         "migration_discovery", "migration_baseline", "migration_journal",
         "migration_resolution_scenarios", "migration_recovery_view",
+        "migration_recovery_confirmation",
     ):
         name = f"{prefix}.{stem}"
         spec = importlib.util.spec_from_file_location(
@@ -534,3 +535,309 @@ def test_concurrent_revision_change_invalidates_all_investigation_rows(setup):
     assert result["status"] == "snapshot_changed"
     assert result["resolution_scenarios"]["status"] == "unavailable"
     assert result["resolution_scenarios"]["operations"] == []
+
+
+
+def _prepare_dryrun(
+    env, *,
+    administrator="admin_1", entity_id="light.first",
+    disposition="inspect_external_effects",
+):
+    return asyncio.run(
+        env.modules[
+            "migration_recovery_confirmation"
+        ].prepare_admin_recovery_decision(
+            env.hass, administrator_id=administrator,
+            entity_id=entity_id, disposition=disposition,
+        )
+    )
+
+
+def _confirm_dryrun(
+    env, prepared, *,
+    administrator="admin_1", entity_id="light.first",
+    disposition="inspect_external_effects",
+    confirmed=True, acknowledge=True,
+):
+    return asyncio.run(
+        env.modules[
+            "migration_recovery_confirmation"
+        ].confirm_admin_recovery_decision(
+            env.hass, administrator_id=administrator,
+            entity_id=entity_id, disposition=disposition,
+            confirmation_token=prepared["confirmation_token"],
+            confirmed=confirmed,
+            acknowledge_external_uncertainty=acknowledge,
+        )
+    )
+
+
+def _make_pending(env):
+    _ready(env)
+    journal = env.modules["migration_journal"]
+    journal.advance_phase(
+        env.tmp, "labels_staging", expected_revision=0
+    )
+    _intent(env)
+
+
+@pytest.mark.parametrize("membership", [False, True])
+def test_recovery_dryrun_confirmation_never_writes_or_authorizes(
+    setup, membership
+):
+    _make_pending(setup)
+    if membership:
+        setup.entries["light.first"].labels = {"google_assistant"}
+    before = setup.modules["migration_journal"].read_journal(setup.tmp)
+    yaml_before = (setup.tmp / "configuration.yaml").read_bytes()
+    source_before = (setup.tmp / "google_entities.yaml").read_bytes()
+    prepared = _prepare_dryrun(setup)
+    assert prepared["status"] == "awaiting_simulated_human_confirmation"
+    assert prepared["expires_in_seconds"] == 180
+    assert prepared["journal_revision"] == 2
+    assert len(prepared["journal_evidence_sha256"]) == 64
+    assert prepared["execution_authorized"] is False
+    assert prepared["journal_ack_allowed"] is False
+    assert prepared["retry_allowed"] is False
+    assert prepared["rollback_allowed"] is False
+    assert prepared["cutover_allowed"] is False
+    done = _confirm_dryrun(setup, prepared)
+    assert done["status"] == "simulated_review_confirmation_no_execution"
+    assert done["human_confirmation_received"] is True
+    assert done["fresh_evidence_rechecked"] is True
+    assert done["no_action_was_performed"] is True
+    assert done["decision_not_durably_saved"] is True
+    assert done["execution_authorized"] is False
+    assert done["journal_ack_allowed"] is False
+    assert done["retry_allowed"] is False
+    assert done["rollback_allowed"] is False
+    assert done["stage_allowed"] is False
+    assert done["apply_allowed"] is False
+    assert done["cutover_allowed"] is False
+    assert setup.modules["migration_journal"].read_journal(setup.tmp) == before
+    assert (setup.tmp / "configuration.yaml").read_bytes() == yaml_before
+    assert (setup.tmp / "google_entities.yaml").read_bytes() == source_before
+    assert setup.entries["light.first"].labels == (
+        {"google_assistant"} if membership else frozenset()
+    )
+
+
+@pytest.mark.parametrize("changed", [
+    "membership", "journal", "source", "entity_identity", "label_identity"
+])
+def test_dryrun_rejects_any_changes_between_prepare_confirm(
+    setup, changed
+):
+    _make_pending(setup)
+    prepared = _prepare_dryrun(setup)
+    j = setup.modules["migration_journal"]
+    if changed == "membership":
+        setup.entries["light.first"].labels = {"google_assistant"}
+    elif changed == "journal":
+        j.record_label_intent(
+            setup.tmp, operation_id="second",
+            entity_id="light.second", registry_id="entity_native_second",
+            label_id="google_assistant", expected_before=False,
+            expected_after=True, expected_revision=2,
+        )
+    elif changed == "source":
+        (setup.tmp / "google_entities.yaml").write_bytes(
+            ENTITIES + b"# drift\n"
+        )
+    elif changed == "entity_identity":
+        setup.entries["light.first"].id = "recreated_entity"
+    elif changed == "label_identity":
+        setup.labels.clear()
+    with pytest.raises(
+        setup.modules["migration_recovery_confirmation"].RecoveryConfirmationError
+    ):
+        _confirm_dryrun(setup, prepared)
+    assert setup.hass.data[
+        "ha_voice_label_sync"
+    ]["_migration_recovery_dryrun_pending"] == {}
+    # Replaying the same valid token cannot succeed after a failed attempt.
+    with pytest.raises(
+        setup.modules["migration_recovery_confirmation"].RecoveryConfirmationError,
+        match="challenge_expired_or_invalid",
+    ):
+        _confirm_dryrun(setup, prepared)
+
+
+def test_confirmation_is_one_use_and_other_admin_cannot_steal_it(setup):
+    _make_pending(setup)
+    prepared = _prepare_dryrun(setup)
+    mod = setup.modules["migration_recovery_confirmation"]
+    with pytest.raises(mod.RecoveryConfirmationError,
+                       match="challenge_expired_or_invalid"):
+        _confirm_dryrun(setup, prepared, administrator="admin_2")
+    assert _confirm_dryrun(
+        setup, prepared
+    )["status"] == "simulated_review_confirmation_no_execution"
+    with pytest.raises(mod.RecoveryConfirmationError,
+                       match="challenge_expired_or_invalid"):
+        _confirm_dryrun(setup, prepared)
+
+
+def test_confirmation_fails_closed_when_user_does_not_acknowledge_unknowns(
+    setup,
+):
+    _make_pending(setup)
+    prepared = _prepare_dryrun(setup)
+    mod = setup.modules["migration_recovery_confirmation"]
+    with pytest.raises(mod.RecoveryConfirmationError,
+                       match="explicit_confirmation_required"):
+        _confirm_dryrun(setup, prepared, acknowledge=False)
+    with pytest.raises(mod.RecoveryConfirmationError,
+                       match="explicit_confirmation_required"):
+        _confirm_dryrun(setup, prepared, confirmed=False)
+    assert _confirm_dryrun(
+        setup, prepared
+    )["status"] == "simulated_review_confirmation_no_execution"
+
+
+def test_challenge_wrong_entity_or_disposition_consumes_one_use_token(setup):
+    _make_pending(setup)
+    prepared = _prepare_dryrun(setup)
+    mod = setup.modules["migration_recovery_confirmation"]
+    with pytest.raises(mod.RecoveryConfirmationError,
+                       match="challenge_scope_mismatch"):
+        _confirm_dryrun(setup, prepared, disposition="defer_until_further_evidence")
+    with pytest.raises(mod.RecoveryConfirmationError,
+                       match="challenge_expired_or_invalid"):
+        _confirm_dryrun(setup, prepared)
+
+
+def test_prepare_replaces_previous_user_challenge_without_cross_user_damage(
+    setup,
+):
+    _make_pending(setup)
+    first = _prepare_dryrun(setup)
+    other = _prepare_dryrun(setup, administrator="admin_2")
+    latest = _prepare_dryrun(
+        setup, disposition="quarantine_for_investigation"
+    )
+    mod = setup.modules["migration_recovery_confirmation"]
+    with pytest.raises(mod.RecoveryConfirmationError,
+                       match="challenge_expired_or_invalid"):
+        _confirm_dryrun(setup, first)
+    assert _confirm_dryrun(
+        setup, latest, disposition="quarantine_for_investigation"
+    )["status"] == "simulated_review_confirmation_no_execution"
+    assert _confirm_dryrun(
+        setup, other, administrator="admin_2"
+    )["status"] == "simulated_review_confirmation_no_execution"
+
+
+def test_recovery_simulation_expires_and_does_not_allow_replay(
+    setup, monkeypatch
+):
+    _make_pending(setup)
+    mod = setup.modules["migration_recovery_confirmation"]
+    now = [1000.0]
+    monkeypatch.setattr(mod.time, "monotonic", lambda: now[0])
+    prepared = _prepare_dryrun(setup)
+    now[0] += 181.0
+    with pytest.raises(mod.RecoveryConfirmationError,
+                       match="challenge_expired_or_invalid"):
+        _confirm_dryrun(setup, prepared)
+    assert _check(setup)["operations"][0]["observed_status"] == (
+        "unconfirmed_intent"
+    )
+
+
+def test_clean_applied_or_baseline_state_cannot_be_simulated_as_crash(
+    setup,
+):
+    _ready(setup)
+    mod = setup.modules["migration_recovery_confirmation"]
+    with pytest.raises(mod.RecoveryConfirmationError):
+        _prepare_dryrun(setup)
+    journal = setup.modules["migration_journal"]
+    journal.advance_phase(setup.tmp, "labels_staging", expected_revision=0)
+    _intent(setup)
+    journal.mark_label_applied(
+        setup.tmp, "op_first", registry_id="entity_native_first",
+        current_membership=True, expected_revision=2,
+    )
+    setup.entries["light.first"].labels = {"google_assistant"}
+    with pytest.raises(mod.RecoveryConfirmationError):
+        _prepare_dryrun(setup)
+
+
+def test_faulty_second_entity_does_not_block_healthy_pending_entity(setup):
+    _ready(setup)
+    journal = setup.modules["migration_journal"]
+    journal.advance_phase(setup.tmp, "labels_staging", expected_revision=0)
+    _intent(setup)
+    _intent(
+        setup, entity="light.second", operation="second",
+        registry="entity_native_second", revision=2,
+    )
+    del setup.entries["light.second"]
+    prepared = _prepare_dryrun(setup)
+    assert prepared["entity_id"] == "light.first"
+    assert _confirm_dryrun(
+        setup, prepared
+    )["status"] == "simulated_review_confirmation_no_execution"
+    quarantined = _prepare_dryrun(
+        setup, entity_id="light.second",
+        disposition="quarantine_for_investigation",
+    )
+    assert quarantined["category"] == "quarantine"
+    assert _confirm_dryrun(
+        setup, quarantined, entity_id="light.second",
+        disposition="quarantine_for_investigation"
+    )["execution_authorized"] is False
+
+
+def test_invalid_disposition_and_entity_are_denied_without_writes(setup):
+    _make_pending(setup)
+    mod = setup.modules["migration_recovery_confirmation"]
+    for entity, disposition in [
+        ("light.first", "acknowledge_as_applied"),
+        ("light.first", "retry_label_update"),
+        ("light.first", "rollback"),
+        ("light.first", "cutover"),
+        ("light.first", ""),
+        ("light.first\nprivate", "inspect_external_effects"),
+    ]:
+        with pytest.raises(mod.RecoveryConfirmationError,
+                           match="invalid_investigation_choice"):
+            _prepare_dryrun(
+                setup, entity_id=entity, disposition=disposition
+            )
+    assert setup.hass.data.get("ha_voice_label_sync", {}).get(
+        "_migration_recovery_dryrun_pending", {}
+    ) == {}
+
+
+def test_websocket_dryrun_endpoints_require_admin_and_no_mutators():
+    import ast
+
+    tree = ast.parse((ROOT / "websocket.py").read_text(encoding="utf-8"))
+    funcs = [
+        "websocket_prepare_migration_recovery_decision",
+        "websocket_confirm_migration_recovery_decision",
+    ]
+    for name in funcs:
+        node = next(
+            n for n in tree.body
+            if isinstance(n, ast.AsyncFunctionDef) and n.name == name
+        )
+        assert any(
+            isinstance(d, ast.Attribute) and d.attr == "require_admin"
+            for d in node.decorator_list
+        )
+        source = ast.unparse(node)
+        assert "stage_one_approved_label" not in source
+        assert "mark_label_applied" not in source
+        assert "update_entity_label" not in source
+        assert "record_label_intent" not in source
+        assert "restore_reviewed_backup" not in source
+    register = next(
+        n for n in tree.body
+        if isinstance(n, ast.FunctionDef)
+        and n.name == "async_register_websocket_api"
+    )
+    for name in funcs:
+        assert name in ast.unparse(register)

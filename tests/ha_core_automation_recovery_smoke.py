@@ -13,7 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 from homeassistant import loader
 from homeassistant.config_entries import ConfigEntries
@@ -262,6 +262,42 @@ async def verify_after_process_restart(root: Path, *, should_have_label: bool):
     assert hypotheses["retry_allowed"] is False
     assert hypotheses["rollback_allowed"] is False
     assert reviewed["automatic_recovery_allowed"] is False
+    assert len(reviewed["journal_evidence_sha256"]) == 64
+    # The two-phase human confirmation runs against real persisted HA data
+    # loaded by this SECOND interpreter, never against a user installation.
+    # Supply only the one synthetic HVLS entry; no actual integration setup
+    # or external Google Assistant is started in this sandbox.
+    hass.config_entries = SimpleNamespace(
+        async_entries=lambda domain: (
+            [SimpleNamespace(entry_id="sandbox_only")]
+            if domain == "ha_voice_label_sync" else []
+        )
+    )
+    dryrun = module("migration_recovery_confirmation")
+    prepared = await dryrun.prepare_admin_recovery_decision(
+        hass, administrator_id="synthetic_admin",
+        entity_id=entity_id,
+        disposition="inspect_external_effects",
+    )
+    assert prepared["status"] == "awaiting_simulated_human_confirmation"
+    assert prepared["journal_evidence_sha256"] == (
+        reviewed["journal_evidence_sha256"]
+    )
+    confirmed = await dryrun.confirm_admin_recovery_decision(
+        hass, administrator_id="synthetic_admin",
+        entity_id=entity_id,
+        disposition="inspect_external_effects",
+        confirmation_token=prepared["confirmation_token"],
+        confirmed=True, acknowledge_external_uncertainty=True,
+    )
+    assert confirmed["status"] == "simulated_review_confirmation_no_execution"
+    assert confirmed["fresh_evidence_rechecked"] is True
+    assert confirmed["no_action_was_performed"] is True
+    assert confirmed["execution_authorized"] is False
+    assert confirmed["journal_ack_allowed"] is False
+    assert confirmed["retry_allowed"] is False
+    assert confirmed["rollback_allowed"] is False
+    assert confirmed["cutover_allowed"] is False
     assert reviewed["stage_allowed"] is False
     assert reviewed["cutover_allowed"] is False
     assert recovery["operations"][0]["status"] == "unconfirmed_intent"

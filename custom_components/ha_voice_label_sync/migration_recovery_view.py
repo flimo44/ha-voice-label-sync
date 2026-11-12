@@ -7,6 +7,8 @@ matched registry state is NOT evidence that Google Home is up to date.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -34,6 +36,7 @@ def _answer(status: str, *, reason: str | None = None) -> dict[str, Any]:
         "reason": reason,
         "phase": None,
         "journal_revision": None,
+        "journal_evidence_sha256": None,
         "source_integrity": "not_verified",
         "needs_review": status != "not_initialized",
         "summary": {"total": 0, "unconfirmed": 0, "other_issues": 0},
@@ -170,6 +173,14 @@ def _finalize_disk_snapshot(
     result.update({
         "phase": phase,
         "journal_revision": original["revision"],
+        # Fingerprint the complete validated journal, including exact
+        # operation/registry/label identifiers, not just its revision.
+        "journal_evidence_sha256": hashlib.sha256(
+            json.dumps(
+                current, sort_keys=True, separators=(",", ":"),
+                ensure_ascii=False, allow_nan=False,
+            ).encode("utf-8")
+        ).hexdigest(),
         "source_integrity": source_status,
         "needs_review": issues,
         "summary": {
@@ -183,37 +194,42 @@ def _finalize_disk_snapshot(
     return result
 
 
+async def _async_collect_recovery_locked(hass: Any) -> dict[str, Any]:
+    """Read a fresh native view while caller holds the shared workflow lock."""
+    config_dir = hass.config.config_dir
+    disk = await hass.async_add_executor_job(
+        _read_disk_snapshot, config_dir
+    )
+    if disk["status"] != "loaded":
+        return _answer(
+            disk["status"],
+            reason=(
+                "protected_journal_or_baseline_invalid"
+                if disk["status"] == "unavailable" else None
+            ),
+        )
+    try:
+        observed, labels_exist = _native_observations(
+            hass, disk["journal"]["operations"]
+        )
+    except (ImportError, AttributeError, RuntimeError, KeyError, TypeError):
+        return _answer(
+            "unavailable", reason="native_registries_unavailable"
+        )
+    return await hass.async_add_executor_job(
+        partial(
+            _finalize_disk_snapshot,
+            config_dir,
+            disk,
+            observed,
+            labels_exist,
+        )
+    )
+
+
 async def async_get_admin_migration_recovery(hass: Any) -> dict[str, Any]:
-    """Read private journal and current native registry under shared HA lock."""
+    """Administrator-only read-only recovery view."""
     if len(hass.config_entries.async_entries(DOMAIN)) != 1:
         raise RecoveryViewError("integration_not_uniquely_configured")
     async with get_workflow_lock(hass):
-        config_dir = hass.config.config_dir
-        disk = await hass.async_add_executor_job(
-            _read_disk_snapshot, config_dir
-        )
-        if disk["status"] != "loaded":
-            return _answer(
-                disk["status"],
-                reason=(
-                    "protected_journal_or_baseline_invalid"
-                    if disk["status"] == "unavailable" else None
-                ),
-            )
-        try:
-            observed, labels_exist = _native_observations(
-                hass, disk["journal"]["operations"]
-            )
-        except (ImportError, AttributeError, RuntimeError, KeyError, TypeError):
-            return _answer(
-                "unavailable", reason="native_registries_unavailable"
-            )
-        return await hass.async_add_executor_job(
-            partial(
-                _finalize_disk_snapshot,
-                config_dir,
-                disk,
-                observed,
-                labels_exist,
-            )
-        )
+        return await _async_collect_recovery_locked(hass)
