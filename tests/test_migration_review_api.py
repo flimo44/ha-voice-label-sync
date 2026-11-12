@@ -27,6 +27,9 @@ def facade(monkeypatch):
     const = ModuleType(f"{prefix}.const")
     const.CONF_LABEL = "label"
     const.DEFAULT_LABEL = "google_assistant"
+    const.CONF_OUTPUT = "output"
+    const.DEFAULT_OUTPUT = "google_generated.yaml"
+    const.DOMAIN = "ha_voice_label_sync"
     services = ModuleType(f"{prefix}.services")
     services.DEFAULT_DOMAINS = frozenset({"light", "switch"})
 
@@ -55,6 +58,14 @@ def facade(monkeypatch):
         "entities": [],
         "cutover_allowed": False,
         "candidate_yaml_sha256": "c" * 64,
+    })
+
+    consumer = ModuleType(f"{prefix}.migration_consumer_audit")
+    consumer.audit_indirect_label_consumers = Mock(return_value={
+        "status": "indirect_effects_unverified",
+        "stage_allowed": False,
+        "cutover_allowed": False,
+        "read_only": True,
     })
 
     impact = ModuleType(f"{prefix}.migration_staging_impact")
@@ -88,7 +99,7 @@ def facade(monkeypatch):
 
     dependencies = (
         const, services, registry, baseline, plan,
-        simulation, diagnostic, executor, impact,
+        simulation, diagnostic, executor, impact, consumer,
     )
     for dep in dependencies:
         monkeypatch.setitem(sys.modules, dep.__name__, dep)
@@ -122,7 +133,7 @@ def facade(monkeypatch):
         module=module, hass=hass, calls=calls,
         baseline=baseline, plan=plan,
         simulation=simulation, registry=registry,
-        executor=executor, impact=impact,
+        executor=executor, impact=impact, consumer=consumer,
     )
 
 
@@ -146,6 +157,8 @@ def test_verified_baseline_produces_review_without_any_write(facade):
     assert result["simulation"]["candidate_yaml_sha256"] == "c" * 64
     assert result["pre_stage_impact"]["stage_allowed"] is False
     assert result["pre_stage_impact"]["cutover_allowed"] is False
+    assert result["indirect_consumer_audit"]["stage_allowed"] is False
+    facade.consumer.audit_indirect_label_consumers.assert_called_once()
     assert facade.impact.capture_loaded_ga_label_impact.call_count == 1
     assert facade.impact.assess_label_staging_impact.call_count == 1
     assert result["read_only"] is True
@@ -260,3 +273,25 @@ def test_runtime_impact_capture_occurs_before_executor(facade):
 def test_all_nonimport_entities_excluded_from_native_ga_capture(facade):
     _run(facade, {"light.test": {"action": "keep"}})
     assert facade.impact.capture_loaded_ga_label_impact.call_args.args[1] == []
+
+
+def test_indirect_consumer_audit_receives_bounded_source_inventory(facade):
+    _run(facade, {"light.test": {"action": "import"}})
+    kwargs = facade.consumer.audit_indirect_label_consumers.call_args.kwargs
+    assert kwargs["original_sources"] == []
+    assert kwargs["configured_output"] == "google_generated.yaml"
+    assert kwargs["generate_service_registered"] is None
+
+
+def test_active_legacy_service_detected_without_invoking_it(facade):
+    called = []
+    def has_service(domain, name):
+        called.append((domain, name))
+        return True
+    facade.hass.services = SimpleNamespace(has_service=has_service)
+    _run(facade)
+    assert called == [("ha_voice_label_sync", "generate")]
+    assert facade.consumer.audit_indirect_label_consumers.call_args.kwargs[
+        "generate_service_registered"
+    ] is True
+    assert facade.simulation.build_readonly_migration_review.call_count == 1

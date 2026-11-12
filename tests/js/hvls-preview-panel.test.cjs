@@ -1676,3 +1676,71 @@ test("Unknown Google staging impact is never rendered as permission to stage", (
   assert.match(controls.migrationSummary.textContent, /Staging interdit/);
   assert.ok(!source.includes("ha_voice_label_sync/stage_one_approved_label"));
 });
+
+
+test("Indirect consumer audit warns even without references or Google delta", () => {
+  const {panel} = makePanel(async () => ({}));
+  const controls = {
+    migrationStatus: {textContent: ""},
+    migrationSummary: {textContent: ""},
+    migrationRows: {replaceChildren() {}, append() {}},
+    migrationMore: {hidden: true},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {
+    protected_baseline_status: "not_verified",
+    preflight: {summary: {needs_review: 0, proposed_label_additions: 1}},
+    diagnostic: {entities: [{entity_id: "light.test"}]},
+    pre_stage_impact: {
+      status: "no_manual_policy_delta_detected",
+      stage_allowed: false, entities: [],
+    },
+    indirect_consumer_audit: {
+      status: "indirect_effects_unverified",
+      observed_standard_yaml_files: 3,
+      original_google_source_overlap: false,
+      reference_counts: {
+        explicit_hvls_generate_references: 0,
+        registry_event_references: 0,
+        label_template_references: 0,
+      },
+      stage_allowed: false,
+    },
+  };
+  panel._renderMigrationReview();
+  assert.match(controls.migrationSummary.textContent, /3 fichiers YAML inspectés/);
+  assert.match(controls.migrationSummary.textContent, /Effets externes non certifiés/);
+  assert.match(controls.migrationSummary.textContent, /staging interdit/i);
+  assert.ok(!source.includes("ha_voice_label_sync/stage_one_approved_label"));
+});
+
+test("V1 output overlap produces persistent no-write warning", () => {
+  const {panel} = makePanel(async () => ({}));
+  const controls = {
+    migrationStatus: {textContent: ""},
+    migrationSummary: {textContent: ""},
+    migrationRows: {replaceChildren() {}, append() {}},
+    migrationMore: {hidden: true},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {
+    protected_baseline_status: "verified",
+    preflight: {summary: {}},
+    diagnostic: {entities: [{entity_id: "light.test"}]},
+    indirect_consumer_audit: {
+      status: "indirect_effects_unverified",
+      observed_standard_yaml_files: 3,
+      reference_counts: {
+        explicit_hvls_generate_references: 1,
+        registry_event_references: 1,
+        label_template_references: 1,
+      },
+      original_google_source_overlap: true,
+      stage_allowed: false,
+    },
+  };
+  panel._renderMigrationReview();
+  assert.match(controls.migrationSummary.textContent, /1 références à la génération/);
+  assert.match(controls.migrationSummary.textContent, /source Google manuelle protégée/);
+  assert.match(controls.migrationSummary.textContent, /staging interdit/i);
+});
