@@ -93,6 +93,12 @@ async def async_get_stage_admission_preview(
             )
             if end_journal != journal or end_saved != saved:
                 return _unavailable(entity_id, "protected_evidence_changed")
+            await hass.async_add_executor_job(
+                verify_current_sources,
+                config_dir,
+                locations,
+                journal["baseline_manifest_sha256"],
+            )
             # Also ensure no native registry drift during disk I/O. This is
             # another OBSERVATION only, never a write-time atomicity claim.
             from .migration_write_boundary import assess_native_boundary
@@ -111,5 +117,5 @@ async def async_get_stage_admission_preview(
                 sources_verified=verified,
                 native_capture=native,
             )
-        except (OSError, ValueError, KeyError, TypeError, RuntimeError):
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError, AttributeError):
             return _unavailable(entity_id, "protected_evidence_unavailable")
