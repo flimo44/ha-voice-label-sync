@@ -46,6 +46,14 @@ def setup(monkeypatch, tmp_path):
         id(hass), asyncio.Lock()
     )
     monkeypatch.setitem(sys.modules, lock_mod.__name__, lock_mod)
+    # Disk-only approval tests substitute a deterministic saved draft;
+    # loading the production draft dependency would pull the full stage
+    # executor into this deliberately isolated native-registry fixture.
+    fake_draft = ModuleType(f"{prefix}.migration_decision_draft")
+    fake_draft.load_review_draft = lambda _path: {
+        "status": "not_saved", "decisions": {},
+    }
+    monkeypatch.setitem(sys.modules, fake_draft.__name__, fake_draft)
     loaded = {}
     for stem in (
         "migration_discovery", "migration_baseline", "migration_journal",
