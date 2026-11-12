@@ -1,6 +1,7 @@
 """Integration tests for the ownership-aware generation workflow."""
 
 import pytest
+from test_live_registries import make_registries
 
 from hvls import (
     FileWriterError,
@@ -9,7 +10,6 @@ from hvls import (
     run_google_assistant_workflow,
 )
 from hvls.output_ownership_registry import OwnershipRegistry
-from test_live_registries import make_registries
 
 
 def request(path, dry_run=False):

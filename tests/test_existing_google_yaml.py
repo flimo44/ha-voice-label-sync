@@ -3,9 +3,6 @@
 import importlib.util
 from pathlib import Path
 
-import pytest
-
-
 MODULE = (
     Path(__file__).resolve().parents[1]
     / "custom_components/ha_voice_label_sync/google_config.py"

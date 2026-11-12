@@ -1,6 +1,5 @@
 """Safety rules for HVLS output ownership."""
 
-from pathlib import Path
 
 import pytest
 

@@ -1,6 +1,7 @@
 """An unowned existing YAML must never be replaced by generation."""
 
 import pytest
+from test_live_registries import make_registries
 
 from hvls import (
     FileWriterError,
@@ -8,7 +9,6 @@ from hvls import (
     WorkflowError,
     run_google_assistant_workflow,
 )
-from test_live_registries import make_registries
 
 
 def test_generation_refuses_unmanaged_existing_file(tmp_path):

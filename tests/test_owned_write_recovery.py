@@ -5,9 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from hvls import FileWriterError
+from hvls import FileWriterError, owned_writer
 from hvls.output_ownership_registry import OwnershipRegistry
-from hvls import owned_writer
 
 
 def write(root, content, *, entry_id="A", registry_path=None, retention=10):
@@ -241,6 +240,7 @@ def test_generation_never_overwrites_existing_backup(
 ):
     """A standard generation must preserve an existing safety backup."""
     from datetime import datetime
+
     import hvls.writers.filesystem as filesystem
 
     class FrozenDatetime:

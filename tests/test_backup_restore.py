@@ -8,7 +8,6 @@ from types import ModuleType
 import pytest
 
 
-
 def restore(backup_module, output, backup_id, backup_sha, production_sha):
     return backup_module.restore_reviewed_backup(
         output,

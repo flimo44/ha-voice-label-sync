@@ -1,6 +1,5 @@
 """Durable ownership registry: recovery and safety contract."""
 
-import json
 
 import pytest
 

@@ -35,7 +35,10 @@ def _backup_names(output_path: Path) -> list[str]:
     directory = _backup_directory(output_path)
     if not directory.is_dir() or directory.is_symlink():
         return []
-    pattern = re.compile(re.escape(output_path.name) + r"\.\d{8}-\d{6}(?:\.(?:auto|safety))?\.bak\Z")
+    pattern = re.compile(
+        re.escape(output_path.name)
+        + r"\.\d{8}-\d{6}(?:\.(?:auto|safety))?\.bak\Z"
+    )
     return sorted(
         (p.name for p in directory.iterdir()
          if pattern.fullmatch(p.name) and p.is_file() and not p.is_symlink()),
