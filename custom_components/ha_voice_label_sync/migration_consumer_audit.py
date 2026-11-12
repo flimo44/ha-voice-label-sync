@@ -32,7 +32,9 @@ _LABEL_FUNCTIONS = re.compile(
     r"\b(?:label_entities|label_devices|label_areas|labels)\s*\("
 )
 _WRITER = re.compile(r"(?<![a-zA-Z0-9_])ha_voice_label_sync\.generate(?![a-zA-Z0-9_])")
-_REGISTRY_EVENT = re.compile(r"(?<![a-zA-Z0-9_])entity_registry_updated(?![a-zA-Z0-9_])")
+_REGISTRY_EVENT = re.compile(
+    r"(?<![a-zA-Z0-9_])entity_registry_updated(?![a-zA-Z0-9_])"
+)
 _BUTTON_PRESS = re.compile(r"(?<![a-zA-Z0-9_])button\.press(?![a-zA-Z0-9_])")
 _DYNAMIC_ACTION_KEYS = frozenset({"service_template", "action", "service"})
 _COUNT_KEYS = (
