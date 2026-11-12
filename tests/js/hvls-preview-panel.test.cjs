@@ -1744,3 +1744,154 @@ test("V1 output overlap produces persistent no-write warning", () => {
   assert.match(controls.migrationSummary.textContent, /source Google manuelle protégée/);
   assert.match(controls.migrationSummary.textContent, /staging interdit/i);
 });
+
+
+test("Recovery view is strictly read-only and displays pending intent", async () => {
+  const calls = [];
+  const {panel} = makePanel(async message => {
+    calls.push(message.type);
+    return {
+      read_only: true, automatic_recovery_allowed: false,
+      stage_allowed: false, cutover_allowed: false,
+      status: "review_required", needs_review: true,
+      phase: "labels_staging", journal_revision: 2,
+      source_integrity: "verified_unchanged",
+      summary: {total: 1, unconfirmed: 1, other_issues: 0},
+      operations: [{
+        entity_id: "light.test", operation_status: "intent",
+        observed_status: "unconfirmed_intent", membership: "present",
+        needs_review: true,
+      }],
+    };
+  });
+  const controls = {
+    migrationRecoveryRefresh: {disabled: false},
+    migrationRecoveryStatus: {textContent: ""},
+    migrationRecoveryRows: {
+      children: [], replaceChildren() {this.children = [];},
+      append(row) {this.children.push(row);},
+    },
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  await panel._loadMigrationRecovery();
+  assert.deepEqual(calls, [
+    "ha_voice_label_sync/get_migration_recovery_status",
+  ]);
+  assert.match(controls.migrationRecoveryStatus.textContent, /Examen manuel requis/);
+  assert.match(controls.migrationRecoveryStatus.textContent, /non acquittées : 1/);
+  assert.match(controls.migrationRecoveryStatus.textContent, /aucun droit de staging/);
+  assert.equal(controls.migrationRecoveryRows.children.length, 1);
+  assert.match(controls.migrationRecoveryRows.children[0].textContent, /unconfirmed_intent/);
+  assert.equal(controls.migrationRecoveryRefresh.disabled, false);
+  assert.ok(!calls.some(c => /apply|stage|resume|rollback|ack/.test(c)));
+});
+
+test("Missing migration journal is displayed without any initialization", async () => {
+  const calls = [];
+  const {panel} = makePanel(async message => {
+    calls.push(message.type);
+    return {
+      read_only: true, automatic_recovery_allowed: false,
+      stage_allowed: false, cutover_allowed: false,
+      status: "not_initialized", operations: [],
+    };
+  });
+  const controls = {
+    migrationRecoveryRefresh: {disabled: false},
+    migrationRecoveryStatus: {textContent: ""},
+    migrationRecoveryRows: {
+      replaceChildren() {}, append() { throw Error("unexpected rows"); },
+    },
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  await panel._loadMigrationRecovery();
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_migration_recovery_status"]);
+  assert.match(controls.migrationRecoveryStatus.textContent, /Journal non initialisé/);
+});
+
+test("Corrupted or stale recovery status never becomes permission", async () => {
+  const {panel} = makePanel(async message => {
+    assert.equal(message.type, "ha_voice_label_sync/get_migration_recovery_status");
+    return {
+      read_only: true, automatic_recovery_allowed: false,
+      stage_allowed: false, cutover_allowed: false,
+      status: "unavailable", operations: [],
+      reason: "protected_journal_or_baseline_invalid",
+    };
+  });
+  const controls = {
+    migrationRecoveryRefresh: {disabled: false},
+    migrationRecoveryStatus: {textContent: ""},
+    migrationRecoveryRows: {replaceChildren() {}, append() {}},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  await panel._loadMigrationRecovery();
+  assert.match(controls.migrationRecoveryStatus.textContent, /indisponible/);
+});
+
+test("Any allegedly authorized recovery backend payload is rejected", async () => {
+  const calls = [];
+  const {panel} = makePanel(async message => {
+    calls.push(message.type);
+    return {
+      read_only: true,
+      automatic_recovery_allowed: true,
+      stage_allowed: true, cutover_allowed: false,
+      status: "observed_no_pending",
+    };
+  });
+  const controls = {
+    migrationRecoveryRefresh: {disabled: false},
+    migrationRecoveryStatus: {textContent: ""},
+    migrationRecoveryRows: {replaceChildren() {}, append() {}},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  await panel._loadMigrationRecovery();
+  assert.match(controls.migrationRecoveryStatus.textContent, /indisponible/);
+  assert.equal(panel._migrationRecoveryReport, null);
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_migration_recovery_status"]);
+});
+
+test("A long recovery report is bounded to 100 visible rows", () => {
+  const {panel} = makePanel(async () => ({}));
+  const controls = {
+    migrationRecoveryStatus: {textContent: ""},
+    migrationRecoveryRows: {
+      children: [], replaceChildren() {this.children = [];},
+      append(row) {this.children.push(row);},
+    },
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationRecoveryReport = {
+    status: "review_required", phase: "labels_staging",
+    journal_revision: 201, needs_review: true,
+    source_integrity: "verified_unchanged",
+    summary: {total: 150, unconfirmed: 150, other_issues: 0},
+    operations: Array.from({length: 150}, (_, i) => ({
+      entity_id: "light.test_" + i, operation_status: "intent",
+      observed_status: "unconfirmed_intent",
+      membership: "unknown", needs_review: true,
+    })),
+  };
+  panel._renderMigrationRecovery();
+  assert.equal(controls.migrationRecoveryRows.children.length, 100);
+  assert.match(controls.migrationRecoveryStatus.textContent, /Opérations : 150/);
+});
+
+test("Opening migration tab always rechecks recovery independently of review", () => {
+  const {panel} = makePanel(async () => ({}));
+  const opened = [];
+  const panels = {};
+  for (const id of [
+    "tab-summary", "tab-exclusions", "entityManager", "tab-preview",
+    "tab-backups", "tab-migration",
+  ]) panels["#" + id] = {hidden: false};
+  panel.querySelector = selector => panels[selector] || null;
+  panel.querySelectorAll = () => [];
+  panel._migrationReport = {};
+  panel._loadMigrationRecovery = () => opened.push("recovery");
+  panel._loadMigrationReview = () => opened.push("review");
+  panel._activateTab("migration");
+  panel._activateTab("migration");
+  assert.deepEqual(opened, ["recovery", "recovery"]);
+});
