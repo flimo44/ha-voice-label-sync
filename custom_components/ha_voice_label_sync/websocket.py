@@ -782,7 +782,9 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_initialize_migration_baseline)
     websocket_api.async_register_command(hass, websocket_get_migration_decision_draft)
     websocket_api.async_register_command(hass, websocket_save_migration_decision_draft)
-    websocket_api.async_register_command(hass, websocket_get_migration_review_attestation)
+    websocket_api.async_register_command(
+        hass, websocket_get_migration_review_attestation
+    )
     websocket_api.async_register_command(hass, websocket_attest_migration_review)
     websocket_api.async_register_command(hass, websocket_get_entities)
     websocket_api.async_register_command(hass, websocket_set_entity_label)
