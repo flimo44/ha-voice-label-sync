@@ -255,6 +255,81 @@ async def websocket_save_migration_decision_draft(
     connection.send_result(msg["id"], result)
 
 
+WS_TYPE_MIGRATION_GET_ATTESTATION = f"{DOMAIN}/get_migration_review_attestation"
+WS_TYPE_MIGRATION_ATTEST_REVIEW = f"{DOMAIN}/attest_migration_review"
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command(
+    {vol.Required("type"): WS_TYPE_MIGRATION_GET_ATTESTATION}
+)
+async def websocket_get_migration_review_attestation(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Read human review state, never claim approval for label staging."""
+    try:
+        from .migration_attestation_api import async_get_review_attestation
+
+        result = await async_get_review_attestation(hass)
+    except Exception:
+        connection.send_error(
+            msg["id"], "migration_attestation_unavailable",
+            "Review status unavailable; check saved decisions and original files.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_TYPE_MIGRATION_ATTEST_REVIEW,
+        vol.Required("confirmed"): bool,
+        vol.Required("acknowledge_issues"): bool,
+        vol.Required("attestation_revision"): int,
+        vol.Required("draft_revision"): int,
+        vol.Required("journal_revision"): int,
+        vol.Required("baseline_manifest_sha256"): str,
+        vol.Required("review_evidence_sha256"): str,
+    }
+)
+async def websocket_attest_migration_review(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Durably acknowledge reviewed findings; no execution capability."""
+    try:
+        from .migration_attestation_api import async_attest_admin_review
+
+        result = await async_attest_admin_review(
+            hass,
+            administrator_id=connection.user.id,
+            confirmed=msg["confirmed"],
+            acknowledge_issues=msg["acknowledge_issues"],
+            expected_attestation_revision=msg["attestation_revision"],
+            expected_draft_revision=msg["draft_revision"],
+            expected_journal_revision=msg["journal_revision"],
+            expected_baseline_manifest_sha256=(
+                msg["baseline_manifest_sha256"]
+            ),
+            expected_review_evidence_sha256=msg["review_evidence_sha256"],
+        )
+    except Exception:
+        # Filesystem paths, raw YAML and server exceptions must never leak.
+        connection.send_error(
+            msg["id"], "migration_attestation_refused",
+            "Review attestation refused. Refresh the saved draft and "
+            "review findings before confirming again.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
 WS_TYPE_GET_PREVIEW = f"{DOMAIN}/get_preview"
 
 
@@ -707,6 +782,8 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_initialize_migration_baseline)
     websocket_api.async_register_command(hass, websocket_get_migration_decision_draft)
     websocket_api.async_register_command(hass, websocket_save_migration_decision_draft)
+    websocket_api.async_register_command(hass, websocket_get_migration_review_attestation)
+    websocket_api.async_register_command(hass, websocket_attest_migration_review)
     websocket_api.async_register_command(hass, websocket_get_entities)
     websocket_api.async_register_command(hass, websocket_set_entity_label)
     websocket_api.async_register_command(hass, websocket_apply_preview)
