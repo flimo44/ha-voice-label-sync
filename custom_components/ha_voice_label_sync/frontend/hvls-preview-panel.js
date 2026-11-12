@@ -57,6 +57,7 @@ const HVLS_TRANSLATIONS = {
     migrationDraftSaveConfirm: "Enregistrer ces {count} décisions comme brouillon privé et non autorisant ? Les labels et fichiers Google Assistant resteront inchangés.",
     migrationDraftNotReady: "Actualisez d’abord la simulation après vos modifications et vérifiez la sauvegarde protégée.",
     migrationDraftError: "Lecture ou sauvegarde des choix refusée. Revérifiez le diagnostic, le journal et les fichiers protégés.",
+    migrationDraftConflict: "Un brouillon existe ou a changé. Rechargez-le avant de remplacer vos décisions, puis relancez la simulation.",
     backupIntro: "Choisissez une sauvegarde pour voir ses différences avec la production. Seul le YAML Google Assistant sera restauré, jamais les étiquettes Home Assistant.",
     backupLoading: "Chargement des sauvegardes…",
     backupEmpty: "Aucune sauvegarde disponible.",
@@ -235,6 +236,7 @@ const HVLS_TRANSLATIONS = {
     migrationDraftSaveConfirm: "Save these {count} decisions as a private non-authorizing draft? HA labels and Google Assistant YAML will remain unchanged.",
     migrationDraftNotReady: "Refresh simulation after editing selections and verify the protected baseline first.",
     migrationDraftError: "Cannot restore or save selections. Recheck diagnostic, journal and protected files.",
+    migrationDraftConflict: "A draft already exists or has changed. Restore it before replacing selections, then refresh the simulation.",
     backupIntro: "Select a backup to compare it with current production. Only the Google Assistant YAML file is restored, never Home Assistant labels.",
     backupLoading: "Loading backups…",
     backupEmpty: "No backups available.",
@@ -2557,6 +2559,7 @@ class HVLSPreviewPanel extends HTMLElement {
       this._migrationDecisions = Object.assign(
         Object.create(null), saved.decisions
       );
+      this._draftExpectedRevision = saved.draft_revision;
       this._migrationDirty = true;
       await this._loadMigrationReview();
       if (status) {
@@ -2602,26 +2605,37 @@ class HVLSPreviewPanel extends HTMLElement {
           typeof current.baseline_manifest_sha256 !== "string") {
         throw new Error("draft_state_invalid");
       }
+      if (this._draftExpectedRevision == null) {
+        if (current.draft_revision !== -1) {
+          throw new Error("draft_conflict_needs_restore");
+        }
+        this._draftExpectedRevision = -1;
+      }
+      if (current.draft_revision !== this._draftExpectedRevision) {
+        throw new Error("draft_conflict_needs_restore");
+      }
       const result = await this._hass.callWS({
         type: "ha_voice_label_sync/save_migration_decision_draft",
         decisions,
         review_token_sha256: plan.review_token_sha256,
         baseline_manifest_sha256: current.baseline_manifest_sha256,
         journal_revision: current.journal_revision,
-        draft_revision: current.draft_revision,
+        draft_revision: this._draftExpectedRevision,
       });
       if (result?.status !== "saved_unapproved_draft" ||
           result.cutover_allowed !== false) {
         throw new Error("draft_result_invalid");
       }
+      this._draftExpectedRevision = result.draft_revision;
       if (status) status.textContent = this._tf("migrationDraftSaved", {
         count: result.saved_decision_count,
         revision: result.draft_revision,
       });
-    } catch (_error) {
+    } catch (error) {
       // A lost WS response may follow a durable write. Don't retry on a
       // guessed revision; the administrator must inspect and refresh.
-      if (status) status.textContent = this._t("migrationDraftError");
+      if (status) status.textContent = error?.message === "draft_conflict_needs_restore"
+        ? this._t("migrationDraftConflict") : this._t("migrationDraftError");
     } finally {
       this._draftBusy = false;
       this._draftControls();
