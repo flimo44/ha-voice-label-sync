@@ -21,6 +21,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
+from homeassistant.helpers import trigger as trigger_helper
 
 COMPONENT = (
     Path(__file__).resolve().parents[1]
@@ -98,6 +99,9 @@ async def test_real_automation_event(hass, entity_id, label_id, other_label):
     async def record_action(call):
         observed.append(call.data.get("marker", "observed"))
 
+    # In the intentionally minimal HA bootstrap, trigger platforms must
+    # be explicitly registered before loading the automation component.
+    await trigger_helper.async_setup(hass)
     hass.services.async_register("hvls_sandbox", "record", record_action)
     config = {
         "automation": [
