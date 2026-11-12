@@ -29,6 +29,7 @@ from homeassistant.components.google_assistant.http import GoogleConfig
 from homeassistant.config_entries import SOURCE_IMPORT
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import label_registry as lr
 
@@ -75,7 +76,10 @@ async def exercise_ha_core_native_contract() -> dict[str, Any]:
         config = base / "configuration.yaml"
         config.write_bytes(GOOGLE_SOURCE)
         hass = HomeAssistant(str(base))
+        # Core requires the device registry to be initialized before
+        # loading the entity registry. Match its real bootstrap order.
         await lr.async_load(hass, load_empty=True)
+        await dr.async_load(hass, load_empty=True)
         await er.async_load(hass, load_empty=True)
 
         labels = lr.async_get(hass)
