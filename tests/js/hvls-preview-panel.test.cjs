@@ -1359,3 +1359,241 @@ test("Cancel save migration selections sends no write", async () => {
   await panel._saveMigrationDecisionDraft();
   assert.equal(requests.length, 0);
 });
+
+
+test("Read-only human attestation check never calls any write API", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {
+      status: "stale_review_attestation",
+      attestation_revision: 1,
+      review_is_not_execution_authorization: true,
+      cutover_allowed: false,
+    };
+  });
+  const controls = {
+    migrationReadAttestation: {disabled: false},
+    migrationAttestReview: {disabled: false},
+    migrationAttestationStatus: {textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  await panel._readMigrationAttestation();
+  assert.deepEqual(calls.map(r => r.type), [
+    "ha_voice_label_sync/get_migration_review_attestation",
+  ]);
+  assert.match(controls.migrationAttestationStatus.textContent, /stale_review_attestation/);
+  assert.match(controls.migrationAttestationStatus.textContent, /Aucun droit d’exécution/);
+});
+
+test("Explicit no-issue review attestation never stages a label", async () => {
+  const requests = [];
+  const sha = "a".repeat(64);
+  const fingerprint = "c".repeat(64);
+  const {panel} = makePanel(async request => {
+    requests.push(request);
+    if (request.type === "ha_voice_label_sync/get_migration_review_attestation") {
+      return {
+        status: "not_attested",
+        attestation_revision: -1,
+        cutover_allowed: false,
+        review_is_not_execution_authorization: true,
+        fresh_review_evidence: {
+          status: "reviewed_without_detected_issues",
+          review_evidence_sha256: fingerprint,
+          review_token_sha256: sha,
+          observed_issues: false,
+        },
+      };
+    }
+    if (request.type === "ha_voice_label_sync/get_migration_decision_draft") {
+      return {
+        status: "saved_unapproved_draft",
+        draft_revision: 2, journal_revision: 0,
+        baseline_manifest_sha256: "b".repeat(64),
+        review_token_sha256: sha,
+      };
+    }
+    if (request.type === "ha_voice_label_sync/attest_migration_review") {
+      return {
+        status: "reviewed_without_detected_issues",
+        attestation_revision: 0,
+        cutover_allowed: false,
+        observed_issues: false,
+        review_is_not_execution_authorization: true,
+      };
+    }
+    throw new Error("Unexpected operation: " + request.type);
+  });
+  const controls = {
+    migrationReadAttestation: {disabled: false},
+    migrationAttestReview: {disabled: false},
+    migrationAttestationStatus: {textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationDirty = false;
+  panel._migrationReport = {
+    protected_baseline_status: "verified",
+    preflight: {review_token_sha256: sha},
+  };
+  panel._draftExpectedRevision = 2;
+  await panel._attestMigrationReview();
+  assert.deepEqual(requests.map(r => r.type), [
+    "ha_voice_label_sync/get_migration_review_attestation",
+    "ha_voice_label_sync/get_migration_decision_draft",
+    "ha_voice_label_sync/attest_migration_review",
+  ]);
+  assert.equal(requests[2].confirmed, true);
+  assert.equal(requests[2].acknowledge_issues, false);
+  assert.equal(requests[2].attestation_revision, -1);
+  assert.equal(requests[2].draft_revision, 2);
+  assert.equal(requests[2].review_evidence_sha256, fingerprint);
+  assert.match(controls.migrationAttestationStatus.textContent, /PAS une autorisation/);
+});
+
+test("Attestation with unresolved issues carries explicit acknowledgment", async () => {
+  const sha = "a".repeat(64);
+  const calls = [];
+  let warningPrompt = "";
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    if (request.type === "ha_voice_label_sync/get_migration_review_attestation") {
+      return {
+        attestation_revision: -1,
+        cutover_allowed: false,
+        fresh_review_evidence: {
+          status: "reviewed_with_open_issues",
+          review_token_sha256: sha,
+          review_evidence_sha256: "c".repeat(64),
+          observed_issues: true,
+        },
+      };
+    }
+    if (request.type === "ha_voice_label_sync/get_migration_decision_draft") {
+      return {
+        status: "saved_unapproved_draft",
+        draft_revision: 0, journal_revision: 0,
+        review_token_sha256: sha,
+        baseline_manifest_sha256: "b".repeat(64),
+      };
+    }
+    return {
+      status: "reviewed_with_open_issues",
+      attestation_revision: 0,
+      observed_issues: true, cutover_allowed: false,
+      review_is_not_execution_authorization: true,
+    };
+  }, msg => {warningPrompt = msg; return true;});
+  const controls = {
+    migrationReadAttestation: {disabled: false},
+    migrationAttestReview: {disabled: false},
+    migrationAttestationStatus: {textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {
+    protected_baseline_status: "verified",
+    preflight: {review_token_sha256: sha},
+  };
+  panel._draftExpectedRevision = 0;
+  panel._migrationDirty = false;
+  await panel._attestMigrationReview();
+  assert.match(warningPrompt, /anomalies ou décisions non résolues/);
+  assert.equal(calls[2].acknowledge_issues, true);
+  assert.equal(calls[2].confirmed, true);
+  assert.match(controls.migrationAttestationStatus.textContent, /AVEC anomalies/);
+});
+
+test("Cancelling human review attestation never writes a record", async () => {
+  const sha = "a".repeat(64);
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request.type);
+    if (request.type === "ha_voice_label_sync/get_migration_review_attestation") {
+      return {
+        attestation_revision: -1, cutover_allowed: false,
+        fresh_review_evidence: {
+          status: "reviewed_without_detected_issues",
+          review_token_sha256: sha,
+          review_evidence_sha256: "c".repeat(64),
+          observed_issues: false,
+        },
+      };
+    }
+    return {
+      status: "saved_unapproved_draft", draft_revision: 0,
+      journal_revision: 0, review_token_sha256: sha,
+      baseline_manifest_sha256: "b".repeat(64),
+    };
+  }, () => false);
+  const controls = {
+    migrationReadAttestation: {disabled: false},
+    migrationAttestReview: {disabled: false},
+    migrationAttestationStatus: {textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._draftExpectedRevision = 0;
+  panel._migrationDirty = false;
+  panel._migrationReport = {
+    protected_baseline_status: "verified",
+    preflight: {review_token_sha256: sha},
+  };
+  await panel._attestMigrationReview();
+  assert.deepEqual(calls, [
+    "ha_voice_label_sync/get_migration_review_attestation",
+    "ha_voice_label_sync/get_migration_decision_draft",
+  ]);
+});
+
+test("Unsaved choice change prevents review attestation requests", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {};
+  });
+  const controls = {
+    migrationReadAttestation: {disabled: false},
+    migrationAttestReview: {disabled: false},
+    migrationAttestationStatus: {textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationDirty = true;
+  panel._draftExpectedRevision = 1;
+  panel._migrationReport = {
+    protected_baseline_status: "verified",
+    preflight: {review_token_sha256: "a".repeat(64)},
+  };
+  await panel._attestMigrationReview();
+  assert.equal(calls.length, 0);
+  assert.match(controls.migrationAttestationStatus.textContent, /Enregistrez d’abord/);
+});
+
+test("Review evidence conflict cannot be silently acknowledged", async () => {
+  const sha = "a".repeat(64);
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request.type);
+    return {
+      attestation_revision: 0, cutover_allowed: false,
+      fresh_review_evidence: {
+        status: "reviewed_without_detected_issues",
+        review_token_sha256: "b".repeat(64),
+        review_evidence_sha256: "c".repeat(64),
+      },
+    };
+  });
+  const controls = {
+    migrationReadAttestation: {disabled: false},
+    migrationAttestReview: {disabled: false},
+    migrationAttestationStatus: {textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._draftExpectedRevision = 1;
+  panel._migrationDirty = false;
+  panel._migrationReport = {
+    protected_baseline_status: "verified",
+    preflight: {review_token_sha256: sha},
+  };
+  await panel._attestMigrationReview();
+  assert.equal(calls.length, 1);
+  assert.match(controls.migrationAttestationStatus.textContent, /périmée/);
+});
