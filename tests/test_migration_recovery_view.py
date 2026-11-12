@@ -929,7 +929,10 @@ def test_durable_investigation_writes_only_private_audit_not_source_or_journal(
     assert b"PRIVATE ENTITY NAME" not in saved
     assert b"PRIVATE_PROJECT_ID_NEVER_EXPOSE" not in saved
     assert b"record_is_not_execution_authorization" not in saved
-    assert setup.modules["migration_journal"].read_journal(setup.tmp) == migration_before
+    assert (
+        setup.modules["migration_journal"].read_journal(setup.tmp)
+        == migration_before
+    )
     assert (setup.tmp / "configuration.yaml").read_bytes() == yaml_before
     assert (setup.tmp / "google_entities.yaml").read_bytes() == included_before
     assert setup.entries["light.first"].labels == (
@@ -1126,7 +1129,6 @@ def test_existing_durable_record_is_not_execution_permission(setup):
     _make_pending(setup)
     saved = _confirm_history(setup, _prepare_history(setup))
     assert saved["record"]["record_is_not_execution_authorization"] is True
-    from pathlib import Path
     code = (ROOT / "migration_stage_executor.py").read_text()
     assert "migration_recovery_records" not in code
     assert "migration_recovery_records_api" not in code
