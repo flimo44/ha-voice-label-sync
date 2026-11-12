@@ -1,6 +1,6 @@
 """Sandbox-only real HA 2026.11 event, automation and crash-boundary contract.
 
-Uses ONLY temporary HA and original YAML. No staging executor invocation,
+Uses ONLY temporary HA and original YAML. No staging workflow invocation,
 Google Home connection, existing user config or production integration reload.
 """
 
@@ -217,6 +217,128 @@ async def test_real_registry_write_boundary(hass, label_id, other_label):
         "target_membership_race_rejected": True,
         "recovery_not_authorized": True,
     }
+
+
+async def test_real_dormant_staging_native_cas(hass, label_id, other_label):
+    """Actual dormant native writer, isolated HA, durable intent left pending.
+
+    This deliberately invokes ONLY the private low-level writer on synthetic
+    test entities, never the stage executor workflow or a production API.
+    """
+    stage = module("migration_stage_executor")
+    guard = module("migration_write_boundary")
+    baseline = module("migration_baseline")
+    discovery = module("migration_discovery")
+    journal = module("migration_journal")
+    registry = er.async_get(hass)
+    root = Path(hass.config.config_dir)
+
+    inventory = discovery.discover_google_assistant(root)
+    assert inventory["source"]["status"] == "resolved"
+    assert baseline.capture_baseline(root, inventory)["verified"] is True
+    assert journal.initialize_journal(root)["revision"] == 0
+    assert journal.advance_phase(
+        root, "labels_staging", expected_revision=0
+    )["revision"] == 1
+
+    async def one_entity(unique_id: str):
+        entry = registry.async_get_or_create(
+            "light", "hvls_fault_sandbox", unique_id,
+            suggested_object_id=unique_id,
+        )
+        registry.async_update_entity(
+            entry.entity_id, labels={other_label}
+        )
+        await hass.async_block_till_done()
+        capture = guard.capture_native_boundary(
+            hass, entity_id=entry.entity_id,
+            configured_label="Google Assistant",
+            desired_present=True,
+        )
+        assert capture["status"] == "captured", capture
+        assert capture["snapshot"]["before_labels"] == [other_label]
+        return entry, capture
+
+    original_catalog = stage._current_catalog
+
+    def sandbox_catalog(_hass, configured_label, ids):
+        assert configured_label == "Google Assistant"
+        return label_id, {
+            eid: {
+                "registry_id": entry.id,
+                "eligible": True,  # deterministic synthetic test eligibility
+                "label_present": label_id in entry.labels,
+            }
+            for eid in ids
+            if (entry := registry.async_get(eid)) is not None
+        }
+
+    stage._current_catalog = sandbox_catalog
+    try:
+        good, capture = await one_entity("stage_cas_good")
+        intent = journal.record_label_intent(
+            root, operation_id="stage_cas_good_intent",
+            entity_id=good.entity_id, registry_id=good.id,
+            label_id=label_id, expected_before=False,
+            expected_after=True, expected_revision=1,
+        )
+        assert intent["revision"] == 2
+        stage._write_one_ha_label(
+            hass, entity_id=good.entity_id,
+            expected_registry_id=good.id,
+            label_id=label_id,
+            configured_label="Google Assistant",
+            expected_boundary_capture=capture,
+        )
+        await hass.async_block_till_done()
+        assert registry.async_get(good.entity_id).labels == {
+            other_label, label_id
+        }
+        # Low-level native mutation is not journal confirmation.
+        assert journal.read_journal(root)["operations"][0]["status"] == "intent"
+
+        raced, stale_capture = await one_entity("stage_cas_race")
+        next_intent = journal.record_label_intent(
+            root, operation_id="stage_cas_race_intent",
+            entity_id=raced.entity_id, registry_id=raced.id,
+            label_id=label_id, expected_before=False,
+            expected_after=True, expected_revision=2,
+        )
+        assert next_intent["revision"] == 3
+        third = lr.async_get(hass).async_create("Concurrent stage test label")
+        registry.async_update_entity(
+            raced.entity_id, labels={other_label, third.label_id}
+        )
+        await hass.async_block_till_done()
+        try:
+            stage._write_one_ha_label(
+                hass, entity_id=raced.entity_id,
+                expected_registry_id=raced.id,
+                label_id=label_id,
+                configured_label="Google Assistant",
+                expected_boundary_capture=stale_capture,
+            )
+        except stage.MigrationStageError as exc:
+            assert str(exc) == "native_full_label_set_changed"
+        else:
+            raise AssertionError("native CAS allowed a stale third-party label")
+
+        assert registry.async_get(raced.entity_id).labels == {
+            other_label, third.label_id
+        }
+        assert [op["status"] for op in journal.read_journal(root)["operations"]] == [
+            "intent", "intent"
+        ]
+        assert (root / "configuration.yaml").read_bytes() == SOURCE
+        return {
+            "native_private_writer_checked": True,
+            "third_party_label_race_refused": True,
+            "both_intents_unconfirmed": True,
+            "yaml_unchanged": True,
+            "staging_endpoint_added": False,
+        }
+    finally:
+        stage._current_catalog = original_catalog
 
 
 async def prepare_crash_boundary(
@@ -440,6 +562,9 @@ async def main():
         boundary_result = await test_real_registry_write_boundary(
             hass, label_id, other_label
         )
+        stage_result = await test_real_dormant_staging_native_cas(
+            hass, label_id, other_label
+        )
         assert (automation_root / "configuration.yaml").read_bytes() == SOURCE
 
         outcomes = []
@@ -463,6 +588,7 @@ async def main():
             "core": "2026.11.0",
             "real_automation": automation_result,
             "native_write_boundary": boundary_result,
+            "dormant_writer_native_cas": stage_result,
             "restarted_process_scenarios": outcomes,
             "native_registry_and_journal_persisted": True,
             "source_yaml_unchanged": True,

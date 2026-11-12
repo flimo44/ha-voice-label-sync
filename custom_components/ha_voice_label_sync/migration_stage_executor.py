@@ -24,6 +24,10 @@ from .migration_journal import (
     record_label_intent,
 )
 from .migration_stage_plan import build_reviewed_stage_plan
+from .migration_write_boundary import (
+    assess_native_boundary,
+    capture_native_boundary,
+)
 
 _SHA = re.compile(r"^[0-9a-f]{64}$")
 
@@ -130,8 +134,9 @@ def _write_one_ha_label(
     expected_registry_id: str,
     label_id: str,
     configured_label: str,
+    expected_boundary_capture: Mapping[str, Any],
 ) -> None:
-    """Native registry CAS, check and write in one event-loop call, no await."""
+    """Recheck the complete captured native label set and write, no await."""
     from homeassistant.helpers import entity_registry as er
 
     from .label_update import prepare_label_update
@@ -148,10 +153,36 @@ def _write_one_ha_label(
     ):
         raise MigrationStageError("registry_prewrite_conflict")
 
+    # The read-only #128 guard is not an authorization. It is a synchronous
+    # stale-state veto immediately before this dormant writer's mutation.
+    # Crucially, NO await separates this full-set CAS and the registry update.
+    boundary = assess_native_boundary(
+        hass, capture=expected_boundary_capture
+    )
+    snapshot = expected_boundary_capture.get("snapshot")
+    if (
+        boundary.get("status") != "matched"
+        or boundary.get("execution_authorized") is not False
+        or boundary.get("stage_allowed") is not False
+        or boundary.get("proposed_delta") != "add_one_label"
+        or not isinstance(snapshot, dict)
+        or snapshot.get("entity_id") != entity_id
+        or snapshot.get("registry_id") != expected_registry_id
+        or snapshot.get("label_id") != label_id
+        or snapshot.get("configured_label") != configured_label
+        or snapshot.get("before_label_present") is not False
+        or snapshot.get("desired_label_present") is not True
+    ):
+        raise MigrationStageError("native_full_label_set_changed")
+
     registry = er.async_get(hass)
     entry = registry.async_get(entity_id)
-    if entry is None or entry.id != expected_registry_id:
-        raise MigrationStageError("registry_prewrite_conflict")
+    if (
+        entry is None
+        or entry.id != expected_registry_id
+        or set(entry.labels) != set(snapshot["before_labels"])
+    ):
+        raise MigrationStageError("native_full_label_set_changed")
     before = set(entry.labels)
     after = prepare_label_update(
         before, label_id, enabled=True, expected_enabled=False
@@ -249,6 +280,29 @@ async def stage_one_approved_label(
             entity_id=entity_id,
         )
 
+        # Capture exactly ALL native labels after a validated plan, before
+        # recording a durable intent. A failed capture creates no intent.
+        # No previously saved investigation choice authorizes this write.
+        boundary_capture = capture_native_boundary(
+            hass,
+            entity_id=entity_id,
+            configured_label=configured_label,
+            desired_present=True,
+        )
+        boundary_state = boundary_capture.get("snapshot")
+        if (
+            boundary_capture.get("status") != "captured"
+            or boundary_capture.get("execution_authorized") is not False
+            or boundary_capture.get("stage_allowed") is not False
+            or not isinstance(boundary_state, dict)
+            or boundary_state.get("entity_id") != entity_id
+            or boundary_state.get("registry_id") != selected["registry_id"]
+            or boundary_state.get("label_id") != selected["label_id"]
+            or boundary_state.get("before_label_present") is not False
+            or boundary_state.get("desired_label_present") is not True
+        ):
+            raise MigrationStageError("native_boundary_preflight_refused")
+
         # An intent is durable before there can be any registry mutation.
         committed = await hass.async_add_executor_job(
             lambda: record_label_intent(
@@ -279,6 +333,7 @@ async def stage_one_approved_label(
             expected_registry_id=selected["registry_id"],
             label_id=selected["label_id"],
             configured_label=configured_label,
+            expected_boundary_capture=boundary_capture,
         )
 
         # Failure here leaves a recoverable, *unconfirmed* intent.
