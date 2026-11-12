@@ -18,6 +18,7 @@ from .migration_baseline import (
     verify_baseline,
 )
 from .migration_journal import JournalError, read_journal, recovery_report
+from .migration_resolution_scenarios import build_resolution_scenarios
 from .workflow_lock import get_workflow_lock
 
 
@@ -27,7 +28,7 @@ class RecoveryViewError(ValueError):
 
 def _answer(status: str, *, reason: str | None = None) -> dict[str, Any]:
     """Never grant a mutation authority from this diagnostic."""
-    return {
+    result = {
         "schema_version": 1,
         "status": status,
         "reason": reason,
@@ -45,6 +46,8 @@ def _answer(status: str, *, reason: str | None = None) -> dict[str, Any]:
         "cutover_allowed": False,
         "google_home_state_verified": False,
     }
+    result["resolution_scenarios"] = build_resolution_scenarios(result)
+    return result
 
 
 def _read_disk_snapshot(config_dir: str) -> dict[str, Any]:
@@ -152,6 +155,8 @@ def _finalize_disk_snapshot(
             ),
             "label_identity_exists": label_exists,
             "needs_review": issue,
+            "expected_before": operation["expected_before"],
+            "expected_after": operation["expected_after"],
         })
 
     # Non-baseline phases without an operation are also not an approval.
@@ -174,6 +179,7 @@ def _finalize_disk_snapshot(
         },
         "operations": rows,
     })
+    result["resolution_scenarios"] = build_resolution_scenarios(result)
     return result
 
 

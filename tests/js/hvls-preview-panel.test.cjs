@@ -1895,3 +1895,99 @@ test("Opening migration tab always rechecks recovery independently of review", (
   panel._activateTab("migration");
   assert.deepEqual(opened, ["recovery", "recovery"]);
 });
+
+
+test("Recovery intent matching desired label remains a non-authorizing simulation", async () => {
+  const calls = [];
+  const {panel} = makePanel(async message => {
+    calls.push(message.type);
+    return {
+      status: "review_required", read_only: true,
+      automatic_recovery_allowed: false,
+      stage_allowed: false, cutover_allowed: false,
+      needs_review: true, phase: "labels_staging",
+      journal_revision: 2, source_integrity: "verified_unchanged",
+      summary: {total: 1, unconfirmed: 1, other_issues: 0},
+      operations: [{
+        entity_id: "light.test", operation_status: "intent",
+        observed_status: "unconfirmed_intent",
+        membership: "present", needs_review: true,
+      }],
+      resolution_scenarios: {
+        status: "investigation_required", read_only: true,
+        automatic_recovery_allowed: false, journal_ack_allowed: false,
+        retry_allowed: false, rollback_allowed: false,
+        stage_allowed: false, apply_allowed: false, cutover_allowed: false,
+        evidence_is_not_execution_authorization: true,
+        summary: {
+          unconfirmed: 1, requires_investigation: 1, quarantined: 0,
+        },
+        operations: [{
+          entity_id: "light.test", category: "investigation",
+          scenario: "intent_desired_membership_observed",
+          reason_codes: ["journal_intent_still_unconfirmed"],
+          resolution_authorized: false,
+        }],
+      },
+    };
+  });
+  const controls = {
+    migrationRecoveryRefresh: {disabled: false},
+    migrationRecoveryStatus: {textContent: ""},
+    migrationRecoveryRows: {
+      children: [], replaceChildren() {this.children = [];},
+      append(node) {this.children.push(node);},
+    },
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  await panel._loadMigrationRecovery();
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_migration_recovery_status"]);
+  assert.match(controls.migrationRecoveryStatus.textContent, /simulation seulement/);
+  assert.match(controls.migrationRecoveryRows.children[0].textContent,
+    /intention NON acquittée/);
+  assert.match(controls.migrationRecoveryRows.children[0].textContent,
+    /journal_intent_still_unconfirmed/);
+  assert.equal(controls.migrationRecoveryRefresh.disabled, false);
+  assert.ok(!source.includes("ha_voice_label_sync/resolve_migration_intent"));
+});
+
+test("Untrusted recovery scenario claiming authorization is not rendered", async () => {
+  const {panel} = makePanel(async () => ({}));
+  const controls = {
+    migrationRecoveryStatus: {textContent: ""},
+    migrationRecoveryRows: {
+      children: [], replaceChildren() {this.children = [];},
+      append(node) {this.children.push(node);},
+    },
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationRecoveryReport = {
+    status: "review_required", needs_review: true,
+    phase: "labels_staging", journal_revision: 1,
+    source_integrity: "changed_or_unavailable",
+    summary: {total: 1, unconfirmed: 1, other_issues: 0},
+    operations: [{
+      entity_id: "light.test", operation_status: "intent",
+      observed_status: "unconfirmed_intent",
+      membership: "absent", needs_review: true,
+    }],
+    resolution_scenarios: {
+      status: "investigation_required", read_only: true,
+      automatic_recovery_allowed: false, journal_ack_allowed: true,
+      retry_allowed: true, rollback_allowed: true,
+      cutover_allowed: false, summary: {unconfirmed: 0},
+      operations: [{
+        entity_id: "light.test", category: "observation_only",
+        scenario: "applied_record_matches_observation",
+        resolution_authorized: true,
+      }],
+    },
+  };
+  panel._renderMigrationRecovery();
+  assert.doesNotMatch(controls.migrationRecoveryStatus.textContent,
+    /simulation seulement/);
+  assert.doesNotMatch(controls.migrationRecoveryRows.children[0].textContent,
+    /Hypothèse/);
+  assert.match(controls.migrationRecoveryStatus.textContent,
+    /Examen manuel requis/);
+});

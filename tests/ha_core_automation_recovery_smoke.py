@@ -250,6 +250,17 @@ async def verify_after_process_restart(root: Path, *, should_have_label: bool):
         "present" if should_have_label else "absent"
     )
     assert reviewed["source_integrity"] == "verified_unchanged"
+    hypotheses = reviewed["resolution_scenarios"]
+    assert hypotheses["status"] == "investigation_required"
+    assert hypotheses["summary"]["unconfirmed"] == 1
+    assert hypotheses["operations"][0]["scenario"] == (
+        "intent_desired_membership_observed" if should_have_label
+        else "intent_original_membership_observed"
+    )
+    assert hypotheses["operations"][0]["resolution_authorized"] is False
+    assert hypotheses["journal_ack_allowed"] is False
+    assert hypotheses["retry_allowed"] is False
+    assert hypotheses["rollback_allowed"] is False
     assert reviewed["automatic_recovery_allowed"] is False
     assert reviewed["stage_allowed"] is False
     assert reviewed["cutover_allowed"] is False
