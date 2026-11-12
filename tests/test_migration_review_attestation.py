@@ -111,6 +111,18 @@ def report(*, problems=False, token="f" * 64):
             "global_blockers": [],
             "summary": {"needs_review": 1 if problems else 0},
         },
+        "indirect_consumer_audit": {
+            "read_only": True,
+            "stage_allowed": False,
+            "cutover_allowed": False,
+            "external_consumers_verified": False,
+            "status": "indirect_effects_unverified",
+            "reason_codes": [],
+            "reference_counts": {
+                "explicit_hvls_generate_references": 0,
+                "label_template_references": 0,
+            },
+        },
         "pre_stage_impact": {
             "read_only": True,
             "stage_allowed": False,
@@ -505,5 +517,44 @@ def test_loaded_impact_anomalies_require_explicit_acknowledgment(
     with pytest.raises(reviewed.AttestationError):
         submit(tmp_path, components, changed, acknowledge=False)
     result = submit(tmp_path, components, changed, acknowledge=True)
+    assert result["status"] == "reviewed_with_open_issues"
+    assert result["cutover_allowed"] is False
+
+
+
+def test_indirect_label_consumer_audit_change_invalidates_review(
+    tmp_path, components
+):
+    prepare(tmp_path, components)
+    initial = report()
+    attest = components["migration_review_attestation"]
+    submit(tmp_path, components, initial)
+    assert attest.load_attestation(
+        tmp_path, current_evidence=attest.review_evidence(initial)
+    )["status"] == "reviewed_without_detected_issues"
+    changed = report()
+    changed["indirect_consumer_audit"]["reason_codes"] = [
+        "hvls_generate_referenced_in_standard_yaml"
+    ]
+    changed["indirect_consumer_audit"]["reference_counts"][
+        "explicit_hvls_generate_references"
+    ] = 1
+    assert attest.load_attestation(
+        tmp_path, current_evidence=attest.review_evidence(changed)
+    )["status"] == "stale_review_attestation"
+
+
+def test_review_of_unknown_external_consumers_requires_acknowledgement(
+    tmp_path, components
+):
+    prepare(tmp_path, components)
+    report_with_risk = report()
+    report_with_risk["indirect_consumer_audit"]["reason_codes"] = [
+        "external_automation_and_registry_listeners_unverified"
+    ]
+    attest = components["migration_review_attestation"]
+    with pytest.raises(attest.AttestationError):
+        submit(tmp_path, components, report_with_risk, acknowledge=False)
+    result = submit(tmp_path, components, report_with_risk, acknowledge=True)
     assert result["status"] == "reviewed_with_open_issues"
     assert result["cutover_allowed"] is False
