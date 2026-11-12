@@ -71,7 +71,7 @@ def _scope(config_dir: str | Path) -> tuple[list[Path], list[str]]:
     if packages.is_symlink():
         reasons.append("packages_symlink_unscanned")
     elif packages.is_dir():
-        for path in sorted(packages.rglob("*")):
+        for path in packages.rglob("*"):
             if path.is_symlink():
                 reasons.append("package_symlink_unscanned")
                 continue
@@ -82,7 +82,7 @@ def _scope(config_dir: str | Path) -> tuple[list[Path], list[str]]:
                     break
     if len(files) > _MAX_FILES:
         files = files[:_MAX_FILES]
-    return files, list(dict.fromkeys(reasons))
+    return sorted(files), list(dict.fromkeys(reasons))
 
 
 def _scan_nodes(raw: bytes) -> tuple[dict[str, int], list[str]]:
