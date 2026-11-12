@@ -8,6 +8,7 @@ that all side effects occurred or that Google Home is consistent.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -27,7 +28,7 @@ _ALLOWED_OBSERVED = frozenset({
     "applied_verified", "rollback_verified", "membership_changed",
     "label_identity_missing",
 })
-_ID = __import__("re").compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
+_ID = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
 
 
 class ResolutionScenarioError(ValueError):
