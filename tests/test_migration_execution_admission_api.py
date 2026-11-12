@@ -508,7 +508,7 @@ def _durable_api(app, monkeypatch):
     import json
 
     prefix = app.api.__name__.rsplit(".", 1)[0]
-    approval = _approval(app, monkeypatch)
+    _approval(app, monkeypatch)
     ledger = ModuleType(f"{prefix}.migration_execution_approval_records")
     ledger._hash = lambda obj: hashlib.sha256(
         json.dumps(obj, sort_keys=True).encode("utf-8")
