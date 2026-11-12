@@ -430,7 +430,7 @@ def test_no_registry_entity_is_local_unknown(impact, monkeypatch):
     assert result["manual_google_policy_checked"] is True
 
 
-@pytest.mark.parametrize("value", [True, "light", [], ["light", 2]])
+@pytest.mark.parametrize("value", [True, "light", [None], ["light", 2]])
 def test_invalid_exposed_domain_shape_refuses_capture(
     impact, monkeypatch, value
 ):
