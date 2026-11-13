@@ -3092,8 +3092,48 @@ entity_config: !include google_assistant_entities.yaml</pre>
       button.disabled = this._assistantFileChecking === true ||
         !(this._assistantFilePath || "").trim();
     }
-    if (!status) return;
     const report = this._assistantFileReport;
+    const counts = report?.counts || {};
+    const inspected = !this._assistantFileChecking && !this._assistantFileError &&
+      ["parsed", "review_required"].includes(report?.status);
+    const fields = [
+      ["Entries", "entries", "assistantFileMetricEntries"],
+      ["True", "explicitly_exposed", "assistantFileMetricTrue"],
+      ["False", "explicitly_excluded", "assistantFileMetricFalse"],
+      ["Unset", "expose_not_set", "assistantFileMetricUnset"],
+      ["Issues", "entries_with_anomalies", "assistantFileMetricIssues"],
+    ];
+    const metrics = this.querySelector("#assistantFileMetrics");
+    const complete = inspected && fields.every(
+      ([, key]) => Number.isSafeInteger(counts[key]) && counts[key] >= 0
+    );
+    if (metrics) {
+      metrics.hidden = !complete;
+      metrics.setAttribute("aria-label", this._t("assistantFileResultsTitle"));
+    }
+    for (const [name, key, labelKey] of fields) {
+      const number = this.querySelector("#assistantMetric" + name);
+      const label = this.querySelector("#assistantLabel" + name);
+      if (number) number.textContent = complete ? String(counts[key]) : "—";
+      if (label) label.textContent = this._t(labelKey);
+    }
+    const unset = this.querySelector("#assistantFileUnsetExplanation");
+    if (unset) {
+      unset.hidden = !complete || counts.expose_not_set === 0;
+      unset.textContent = this._t("assistantFileUnsetExplanation");
+    }
+    const conclusion = this.querySelector("#assistantFileConclusion");
+    if (conclusion) {
+      const diag = this._migrationReport?.diagnostic;
+      const note = this._assistantPackagesDetected()
+        ? "assistantFilePackagesConclusion"
+        : diag?.mode === "new_configuration"
+          ? "assistantFileUnreferencedConclusion"
+          : "assistantFileGeneralConclusion";
+      conclusion.hidden = !inspected;
+      conclusion.textContent = inspected ? this._t(note) : "";
+    }
+    if (!status) return;
     if (this._assistantFileChecking) {
       status.textContent = this._t("assistantFileChecking");
     } else if (this._assistantFileError) {
@@ -3105,11 +3145,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
         reason: this._assistantFileExplanation(report.reason),
       });
     } else if (["parsed", "review_required"].includes(report.status)) {
-      const counts = report.counts || {};
       const intro = this._tf("assistantFileChecked", {
         entries: counts.entries ?? 0,
-        exposed: counts.requested_exposure ?? 0,
-        excluded: counts.explicitly_excluded ?? 0,
         anomalies: counts.entries_with_anomalies ?? 0,
       });
       const issueList = (report.issue_examples || []).slice(0, 20).map(issue => {
