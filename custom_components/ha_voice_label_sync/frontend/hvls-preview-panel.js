@@ -14,8 +14,9 @@ const HVLS_TRANSLATIONS = {
     tabMigration: "Assistant",
     migrationIntro: "Les simulations ne modifient ni HA, ni labels, ni YAML. La sauvegarde et le journal sont créés uniquement après votre confirmation.",
     migrationGuideTitle: "Identifions votre situation",
-    migrationGuideStepIdentify: "Étape 1 sur 2 — Identifiez votre situation",
+    migrationGuideStepIdentify: "Étape 1 — Identifiez votre situation",
     migrationGuideStepVerify: "Étape 2 sur 2 — Vérifiez les points indiqués",
+    assistantProvenanceStepVerify: "Étape 2 sur 3 — Vérifiez le fichier YAML",
     migrationAdvancedTitle: "Outils de diagnostic et de migration (avancé)",
     migrationRecoveryAttention: "Une opération antérieure nécessite une vérification. Ouvrez les outils avancés avant de continuer.",
     migrationGuideDetected: "Aucune déclaration google_assistant: trouvée dans configuration.yaml. Cela ne prouve pas qu'aucune configuration n'a jamais existé.",
@@ -66,6 +67,23 @@ const HVLS_TRANSLATIONS = {
     assistantFileGeneralConclusion: "Cette vérification porte uniquement sur le contenu du fichier, sans établir les règles globales Google Assistant ni l'exposition effective dans Google Home.",
     assistantFileUnsetExplanation: "Une entrée sans champ expose n'est pas considérée comme expose: true. Son exposition éventuelle dépend d'autres réglages et n'est pas établie ici.",
     assistantFileResultsTitle: "Bilan de lecture du fichier",
+    assistantProvenanceStep: "Étape 3 sur 3 — Comprendre l'origine du fichier",
+    assistantProvenanceQuestion: "À votre connaissance, d'où vient ce fichier ?",
+    assistantProvenanceOld: "Il appartenait à une ancienne configuration Google Assistant",
+    assistantProvenanceUnknown: "Je ne connais pas son origine",
+    assistantProvenanceNew: "Il a été préparé pour une nouvelle configuration",
+    assistantProvenanceVerifiedTitle: "Constat vérifié par HVLS",
+    assistantProvenanceVerified: "Le fichier YAML a été lu et ses déclarations ont été comptées. Aucun changement n'a été réalisé.",
+    assistantProvenanceAnomalies: "{count} entité(s) présentent des anomalies locales : les autres restent analysables. Chaque anomalie doit être examinée avant toute décision concernant l'entité.",
+    assistantProvenanceMissingTitle: "Ce qui reste à établir",
+    assistantProvenanceMissing: "Aucune référence google_assistant: à ce fichier n'a été trouvée dans la configuration analysée. Les règles globales d'exposition, la configuration réellement chargée et l'état des appareils dans Google Home ne sont pas établis.",
+    assistantProvenanceNextTitle: "Prochaine vérification conseillée",
+    assistantProvenanceNextOld: "Recherchez une ancienne sauvegarde de configuration.yaml et, le cas échéant, le fichier inclus google_assistant.yaml. Vérifiez si entity_config référençait ce fichier et quels paramètres expose_by_default et exposed_domains étaient appliqués. Ne réactivez rien pour cette vérification.",
+    assistantProvenanceNextUnknown: "Consultez vos sauvegardes Home Assistant et les anciens fichiers Google Assistant pour retrouver une référence explicite à ce fichier et les règles globales. Tant que la provenance reste inconnue, conservez ce fichier comme indice et non comme source de migration.",
+    assistantProvenanceNextNew: "Ce fichier peut servir à préparer une nouvelle configuration, mais ce n'est pas une migration attestée. Revenez au parcours « nouvelle configuration » si c'est bien votre objectif ; n'activez pas automatiquement Google Assistant.",
+    assistantProvenanceNextChoose: "Choisissez une provenance ci-dessus pour afficher les recherches adaptées à votre situation.",
+    assistantProvenanceSafety: "Votre réponse est uniquement une indication locale, non enregistrée. Elle ne certifie ni une ancienne exposition ni l'état Google Home et ne débloque aucune étape de migration.",
+    assistantProvenanceCategory: "Provenance déclarée, non vérifiée",
     migrationAnalyze: "Actualiser la simulation (lecture seule)",
     migrationLoading: "Analyse de migration en lecture seule…",
     migrationEmpty: "Ouvrez cette section pour vérifier la configuration Google Assistant.",
@@ -316,8 +334,9 @@ const HVLS_TRANSLATIONS = {
     tabMigration: "Assistant",
     migrationIntro: "Simulation does not change HA, labels or YAML. The protected backup and journal are created only after explicit confirmation.",
     migrationGuideTitle: "Let's identify your situation",
-    migrationGuideStepIdentify: "Step 1 of 2 — Identify your situation",
+    migrationGuideStepIdentify: "Step 1 — Identify your situation",
     migrationGuideStepVerify: "Step 2 of 2 — Review the recommended checks",
+    assistantProvenanceStepVerify: "Step 2 of 3 — Inspect the YAML file",
     migrationAdvancedTitle: "Diagnostics and migration tools (advanced)",
     migrationRecoveryAttention: "A previous operation needs review. Open the advanced tools before continuing.",
     migrationGuideDetected: "No google_assistant: declaration was found in configuration.yaml. This does not prove that no configuration ever existed.",
@@ -368,6 +387,23 @@ const HVLS_TRANSLATIONS = {
     assistantFileGeneralConclusion: "This check only analyzes the file contents; it does not establish global Google Assistant rules or effective Google Home exposure.",
     assistantFileUnsetExplanation: "An entry without expose is not treated as expose: true. Any exposure depends on other settings and is not established here.",
     assistantFileResultsTitle: "File inspection summary",
+    assistantProvenanceStep: "Step 3 of 3 — Understand the file's origin",
+    assistantProvenanceQuestion: "As far as you know, where did this file come from?",
+    assistantProvenanceOld: "It belonged to a previous Google Assistant configuration",
+    assistantProvenanceUnknown: "I do not know its origin",
+    assistantProvenanceNew: "It was prepared for a new configuration",
+    assistantProvenanceVerifiedTitle: "What HVLS verified",
+    assistantProvenanceVerified: "The YAML file was read and its declarations were counted. Nothing was changed.",
+    assistantProvenanceAnomalies: "{count} entity/ies have local issues: other entries remain inspectable. Each issue needs review before deciding what to do with that entity.",
+    assistantProvenanceMissingTitle: "What remains unverified",
+    assistantProvenanceMissing: "No google_assistant: reference to this file was found in the analyzed configuration. Global exposure rules, the configuration actually loaded, and the device state in Google Home are not established.",
+    assistantProvenanceNextTitle: "Recommended next check",
+    assistantProvenanceNextOld: "Look for an older configuration.yaml backup and any included google_assistant.yaml. Check whether entity_config referenced this file and which expose_by_default and exposed_domains settings applied. Do not enable anything merely to check this.",
+    assistantProvenanceNextUnknown: "Review Home Assistant backups and old Google Assistant files for an explicit reference to this file and its global rules. Until its origin is established, treat it as a clue, not a migration source.",
+    assistantProvenanceNextNew: "This file might be used to prepare a new configuration, but it is not a verified migration. Return to the new-configuration path if that is your goal; do not automatically activate Google Assistant.",
+    assistantProvenanceNextChoose: "Choose the file's origin above to see checks relevant to your situation.",
+    assistantProvenanceSafety: "Your answer is local to this screen and is not saved. It does not certify previous exposure or Google Home state and does not unlock migration.",
+    assistantProvenanceCategory: "Stated origin, not verified",
     migrationAnalyze: "Refresh simulation (read-only)",
     migrationLoading: "Running read-only migration assessment…",
     migrationEmpty: "Open this section to review Google Assistant configuration.",
@@ -1684,6 +1720,14 @@ class HVLSPreviewPanel extends HTMLElement {
         }
         .assistant-file-metric strong { font-size: 1.4rem; font-weight: 600; }
         .assistant-file-metric span { font-size: 0.83rem; color: var(--secondary-text-color); }
+        #assistantProvenance { border-top: 1px solid var(--divider-color); margin-top: 16px; padding-top: 12px; }
+        #assistantProvenance[hidden] { display: none; }
+        .assistant-provenance-choice[aria-pressed="true"] {
+          outline: 2px solid var(--primary-color);
+          outline-offset: 2px;
+        }
+        .assistant-provenance-facts { padding-left: 20px; }
+        .assistant-provenance-facts li { margin: 8px 0; overflow-wrap: anywhere; }
         .migration-review-note { color: var(--secondary-text-color); }
         .hvls-brand {
           display: flex;
@@ -2282,6 +2326,34 @@ entity_config: !include google_assistant_entities.yaml</pre>
               <p id="assistantFileSafety" class="diagnostic-note">
                 ${this._t("assistantFileSafety")}
               </p>
+              <section id="assistantProvenance" hidden aria-labelledby="assistantProvenanceStep">
+                <h3 id="assistantProvenanceStep">${this._t("assistantProvenanceStep")}</h3>
+                <p id="assistantProvenanceQuestion">${this._t("assistantProvenanceQuestion")}</p>
+                <div class="migration-controls" role="group"
+                  aria-label="${this._t("assistantProvenanceCategory")}">
+                  <button id="assistantProvenanceOld" type="button" class="secondary assistant-provenance-choice"
+                    aria-pressed="false">${this._t("assistantProvenanceOld")}</button>
+                  <button id="assistantProvenanceUnknown" type="button" class="secondary assistant-provenance-choice"
+                    aria-pressed="false">${this._t("assistantProvenanceUnknown")}</button>
+                  <button id="assistantProvenanceNew" type="button" class="secondary assistant-provenance-choice"
+                    aria-pressed="false">${this._t("assistantProvenanceNew")}</button>
+                </div>
+                <ul class="assistant-provenance-facts">
+                  <li><strong id="assistantProvenanceVerifiedTitle">${this._t("assistantProvenanceVerifiedTitle")}</strong>
+                    <span id="assistantProvenanceVerified">${this._t("assistantProvenanceVerified")}</span>
+                    <span id="assistantProvenanceAnomalies" hidden></span>
+                  </li>
+                  <li><strong id="assistantProvenanceMissingTitle">${this._t("assistantProvenanceMissingTitle")}</strong>
+                    <span id="assistantProvenanceMissing">${this._t("assistantProvenanceMissing")}</span>
+                  </li>
+                  <li><strong id="assistantProvenanceNextTitle">${this._t("assistantProvenanceNextTitle")}</strong>
+                    <span id="assistantProvenanceNext" role="status">${this._t("assistantProvenanceNextChoose")}</span>
+                  </li>
+                </ul>
+                <p id="assistantProvenanceSafety" class="diagnostic-note">
+                  ${this._t("assistantProvenanceSafety")}
+                </p>
+              </section>
             </div>
             <p id="migrationGuideSafety" class="diagnostic-note">${this._t("migrationGuideNoAuthorization")}</p>
           </div>
@@ -2390,11 +2462,21 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._assistantFileReport = null;
       this._assistantFileError = null;
       this._assistantFileChecking = false;
+      this._assistantProvenanceChoice = null;
       this._renderAssistantFileStatus();
     });
     this.querySelector("#assistantFileCheck").addEventListener(
       "click", () => this._checkAssistantEntityFile()
     );
+    for (const [id, origin] of [
+      ["assistantProvenanceOld", "old"],
+      ["assistantProvenanceUnknown", "unknown"],
+      ["assistantProvenanceNew", "new"],
+    ]) {
+      this.querySelector("#" + id).addEventListener(
+        "click", () => this._chooseAssistantProvenance(origin)
+      );
+    }
     this.querySelector("#migrationPrepareBaseline").addEventListener("click", () => this._prepareMigrationBaseline());
     this.querySelector("#migrationConfirmBaseline").addEventListener("click", () => this._confirmMigrationBaseline());
     this.querySelector("#migrationRestoreDraft").addEventListener("click", () => this._restoreMigrationDecisionDraft());
@@ -3010,6 +3092,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantFileReport = null;
     this._assistantFileError = null;
     this._assistantFileChecking = false;
+    this._assistantProvenanceChoice = null;
     this._renderMigrationGuide();
     this._renderAssistantFileStatus();
   }
@@ -3067,6 +3150,78 @@ entity_config: !include google_assistant_entities.yaml</pre>
     return translated
       ? translated[this._language === "fr" ? 0 : 1]
       : (this._language === "fr" ? "problème non identifié" : "unknown issue");
+  }
+
+  _assistantProvenanceAvailable() {
+    const diag = this._migrationReport?.diagnostic;
+    const report = this._assistantFileReport;
+    return diag?.mode === "new_configuration" &&
+      diag?.source?.status === "resolved" &&
+      ["existing", "unsure"].includes(this._migrationIntent) &&
+      !this._assistantFileChecking && !this._assistantFileError &&
+      ["parsed", "review_required"].includes(report?.status) &&
+      report?.read_only === true &&
+      report?.source_active_verified === false &&
+      report?.migration_authorized === false &&
+      report?.stage_allowed === false &&
+      report?.apply_allowed === false &&
+      report?.cutover_allowed === false;
+  }
+
+  _chooseAssistantProvenance(choice) {
+    if (!["old", "unknown", "new"].includes(choice) ||
+        !this._assistantProvenanceAvailable()) return;
+    // User recollection is local UI context only. Not provenance evidence.
+    // Never pass it to migration APIs or persist it in HA.
+    this._assistantProvenanceChoice = choice;
+    this._renderAssistantProvenance();
+  }
+
+  _renderAssistantProvenance() {
+    const section = this.querySelector("#assistantProvenance");
+    if (!section) return;
+    const visible = this._assistantProvenanceAvailable();
+    section.hidden = !visible;
+    if (!visible) return;
+    const textIds = {
+      assistantProvenanceStep: "assistantProvenanceStep",
+      assistantProvenanceQuestion: "assistantProvenanceQuestion",
+      assistantProvenanceVerifiedTitle: "assistantProvenanceVerifiedTitle",
+      assistantProvenanceVerified: "assistantProvenanceVerified",
+      assistantProvenanceMissingTitle: "assistantProvenanceMissingTitle",
+      assistantProvenanceMissing: "assistantProvenanceMissing",
+      assistantProvenanceNextTitle: "assistantProvenanceNextTitle",
+      assistantProvenanceSafety: "assistantProvenanceSafety",
+    };
+    for (const [id, key] of Object.entries(textIds)) {
+      const node = this.querySelector("#" + id);
+      if (node) node.textContent = this._t(key);
+    }
+    const choices = {
+      old: ["assistantProvenanceOld", "assistantProvenanceNextOld"],
+      unknown: ["assistantProvenanceUnknown", "assistantProvenanceNextUnknown"],
+      new: ["assistantProvenanceNew", "assistantProvenanceNextNew"],
+    };
+    for (const [value, [id]] of Object.entries(choices)) {
+      const button = this.querySelector("#" + id);
+      if (!button) continue;
+      button.textContent = this._t(id);
+      button.setAttribute(
+        "aria-pressed", String(this._assistantProvenanceChoice === value)
+      );
+    }
+    const next = this.querySelector("#assistantProvenanceNext");
+    if (next) next.textContent = this._t(
+      choices[this._assistantProvenanceChoice]?.[1] ||
+      "assistantProvenanceNextChoose"
+    );
+    const anomalies = this._assistantFileReport?.counts?.entries_with_anomalies;
+    const issues = this.querySelector("#assistantProvenanceAnomalies");
+    if (issues) {
+      issues.hidden = !Number.isSafeInteger(anomalies) || anomalies <= 0;
+      issues.textContent = issues.hidden ? "" :
+        this._tf("assistantProvenanceAnomalies", {count: anomalies});
+    }
   }
 
   _renderAssistantFileStatus() {
@@ -3162,6 +3317,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     } else {
       status.textContent = this._t("assistantFileUnavailable");
     }
+    this._renderAssistantProvenance();
   }
 
   async _checkAssistantEntityFile() {
@@ -3175,6 +3331,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantFileChecking = true;
     this._assistantFileReport = null;
     this._assistantFileError = null;
+    this._assistantProvenanceChoice = null;
     this._renderAssistantFileStatus();
     try {
       const report = await this._hass.callWS({
@@ -3230,6 +3387,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
     if (!relevant) {
       this._migrationIntent = null;
       this._assistantFileReport = null;
+      this._assistantProvenanceChoice = null;
+      this._renderAssistantProvenance();
       return;
     }
     guide.setAttribute("aria-label", this._t("migrationGuideTitle"));
@@ -3278,8 +3437,11 @@ entity_config: !include google_assistant_entities.yaml</pre>
       );
     }
     const step = this.querySelector("#migrationGuideStep");
-    if (step) step.textContent = this._t(this._migrationIntent
-      ? "migrationGuideStepVerify" : "migrationGuideStepIdentify");
+    const stepKey = packages || this._migrationIntent === "new"
+      ? "migrationGuideStepVerify"
+      : ["existing", "unsure"].includes(this._migrationIntent)
+        ? "assistantProvenanceStepVerify" : "migrationGuideStepIdentify";
+    if (step) step.textContent = this._t(stepKey);
     const next = this.querySelector("#migrationGuideNext");
     if (next) next.textContent = packages ? this._t("assistantPackagesQuestion") :
       this._t(options[this._migrationIntent]?.[1] || "migrationGuideAwaitChoice");
@@ -3957,6 +4119,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantFileReport = null;
     this._assistantFileError = null;
     this._assistantFileChecking = false;
+    this._assistantProvenanceChoice = null;
     const button = this.querySelector("#migrationAnalyze");
     const status = this.querySelector("#migrationStatus");
     if (button) button.disabled = true;
