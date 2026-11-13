@@ -2641,7 +2641,7 @@ test("Guided setup reports unreferenced YAML without assuming an active setup", 
   }};
   panel._renderMigrationGuide();
   assert.equal(controls.migrationGuide.hidden, false);
-  assert.match(controls.migrationGuideDetected.textContent, /configuration.yaml/);
+  assert.match(controls.migrationGuideDetected.textContent, /gérer et générer/);
   assert.match(controls.migrationGuideCandidate.textContent, /fichier google_assistant_entities.yaml existe/);
   assert.match(controls.migrationGuideNext.textContent, /Choisissez : reprendre/);
   panel._chooseMigrationIntent("existing");
@@ -2845,7 +2845,7 @@ test("Assistant proposes detected file and inspects it without migration writes"
   assert.equal(controls.assistantFileSection.hidden, false);
   assert.equal(controls.assistantFilePath.value, "google_assistant_entities.yaml");
   assert.equal(controls.assistantFileCheck.disabled, false);
-  assert.match(controls.migrationGuideQuestion.textContent, /Parcours choisi/);
+  assert.match(controls.migrationGuideQuestion.textContent, /Reprise d.un fichier/);
   assert.doesNotMatch(controls.migrationGuideQuestion.textContent, /Comment souhaitez-vous/);
   assert.equal(calls.length, 0);
   await panel._checkAssistantEntityFile();
