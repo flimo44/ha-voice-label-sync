@@ -12,24 +12,24 @@ const HVLS_TRANSLATIONS = {
     tabPreview: "Preview",
     tabBackups: "Sauvegardes",
     tabMigration: "Assistant",
-    migrationIntro: "Les simulations ne modifient ni HA, ni labels, ni YAML. La sauvegarde et le journal sont créés uniquement après votre confirmation.",
+    migrationIntro: "HVLS génère votre fichier d'entités à partir des labels Home Assistant. La gestion des labels n'exige pas que Google Assistant soit connecté. Les analyses sont en lecture seule ; tout ajout de label ou Apply demande une confirmation explicite.",
     migrationGuideTitle: "Identifions votre situation",
     migrationGuideStepIdentify: "Étape 1 — Identifiez votre situation",
     migrationGuideStepVerify: "Étape 2 sur 2 — Vérifiez les points indiqués",
     assistantProvenanceStepVerify: "Étape 2 sur 3 — Vérifiez le fichier YAML",
     migrationAdvancedTitle: "Outils de diagnostic et de migration (avancé)",
     migrationRecoveryAttention: "Une opération antérieure nécessite une vérification. Ouvrez les outils avancés avant de continuer.",
-    migrationGuideDetected: "Aucune déclaration google_assistant: trouvée dans configuration.yaml. Cela ne prouve pas qu'aucune configuration n'a jamais existé.",
-    migrationGuideCandidate: "Un fichier google_assistant_entities.yaml existe, mais il n'est pas référencé par cette configuration. Son origine et son utilisation restent inconnues.",
+    migrationGuideDetected: "Aucune déclaration google_assistant: détectée. Cela n'empêche pas HVLS de gérer et générer le fichier d'entités.",
+    migrationGuideCandidate: "Un fichier google_assistant_entities.yaml existe. Vous pouvez le reprendre pour initialiser vos labels HVLS, même sans connexion Google Assistant.",
     migrationGuideNoCandidate: "Aucun fichier google_assistant_entities.yaml habituel n'a été détecté. D'autres sources peuvent néanmoins exister.",
-    migrationGuideQuestion: "Souhaitez-vous créer une nouvelle configuration Google Assistant ?",
-    migrationGuideNew: "Oui, nouvelle configuration",
-    migrationGuideExisting: "Non, je souhaite migrer une configuration existante",
-    migrationGuideUnsure: "Je ne sais pas",
+    migrationGuideQuestion: "Comment souhaitez-vous démarrer HVLS ?",
+    migrationGuideNew: "Partir d'une sélection vide",
+    migrationGuideExisting: "Reprendre un fichier d'entités",
+    migrationGuideUnsure: "Choisir un autre fichier",
     migrationGuideNextNew: "Parcours nouvelle configuration choisi pour cet écran. Avant toute génération, vérifiez les fichiers déjà présents. Rien n'a été créé ni écrasé.",
-    migrationGuideNextExisting: "Parcours migration choisi pour cet écran. Vérifiez la déclaration google_assistant: et sa source entity_config: dans configuration.yaml, puis actualisez l'analyse. N'activez pas une ancienne configuration uniquement pour débloquer HVLS sans vérifier les effets Google Home.",
-    migrationGuideNextUnsure: "Aucun problème : vérifiez configuration.yaml et les fichiers Google Assistant conservés, puis actualisez l'analyse. Rien n'est modifié.",
-    migrationGuideAwaitChoice: "Choisissez votre situation pour obtenir les prochaines vérifications.",
+    migrationGuideNextExisting: "Vérifiez le fichier d'entités, puis examinez les labels à reprendre. Aucune connexion Google Assistant n'est requise.",
+    migrationGuideNextUnsure: "Indiquez le chemin relatif du fichier YAML à reprendre, puis vérifiez son contenu.",
+    migrationGuideAwaitChoice: "Choisissez : reprendre le fichier, choisir un autre fichier ou repartir de zéro.",
     migrationGuideNoAuthorization: "Ce choix est local à cet écran ; il ne valide aucune migration et n'autorise aucune écriture.",
     assistantSourceFound: "Configuration Google Assistant détectée",
     assistantSourceSummary: "{entries} entité(s) déclarée(s). Fichiers analysés : {paths}. Aucune exposition Google Home certifiée.",
@@ -53,20 +53,41 @@ const HVLS_TRANSLATIONS = {
     assistantFileNoIssues: "Aucune anomalie structurelle détectée. Cela ne garantit pas une configuration active ou une exposition Google Home.",
     assistantFileCannotRead: "Impossible de lire le fichier : {reason}.",
     assistantFileUnavailable: "Contrôle indisponible. Aucune modification effectuée.",
-    assistantFileSafety: "Ce résultat ne prouve pas que le fichier est actif. Aucune migration ni exposition Google n'est autorisée.",
-    migrationGuideSelectedExisting: "Parcours choisi : retrouver une configuration existante. Vous pouvez modifier votre choix ci-dessous.",
+    assistantFileSafety: "La lecture ne prouve pas une exposition dans Google Home. Aucun label ni YAML n'est modifié sans une action distincte et confirmée.",
+    migrationGuideSelectedExisting: "Reprise d'un fichier existant sélectionnée. Vous pouvez changer de choix.",
     migrationGuideSelectedNew: "Parcours choisi : nouvelle configuration. Vous pouvez modifier votre choix ci-dessous.",
-    migrationGuideSelectedUnsure: "Parcours choisi : situation à clarifier. Vous pouvez modifier votre choix ci-dessous.",
+    migrationGuideSelectedUnsure: "Choix d'un autre fichier sélectionné. Indiquez son chemin ci-dessous.",
     assistantFileMetricEntries: "Entités déclarées",
     assistantFileMetricTrue: "expose: true",
     assistantFileMetricFalse: "expose: false",
     assistantFileMetricUnset: "expose absent",
     assistantFileMetricIssues: "Entités à examiner",
-    assistantFileUnreferencedConclusion: "Le fichier est lisible, mais aucune déclaration Google Assistant qui le référence n'a été trouvée dans la configuration analysée. Vérifiez sa provenance et son utilisation avant toute migration. Ne l'activez pas simplement pour débloquer HVLS.",
+    assistantFileUnreferencedConclusion: "Ce fichier est lisible et peut servir à initialiser les labels HVLS. L'absence de raccordement Google Assistant est un avertissement, pas un blocage de gestion. Le fichier original sera conservé.",
     assistantFilePackagesConclusion: "Un fichier lisible ne suffit pas à identifier la configuration utilisée par les packages. Ceux-ci restent classés « Autre configuration » et ne peuvent pas être migrés automatiquement.",
     assistantFileGeneralConclusion: "Cette vérification porte uniquement sur le contenu du fichier, sans établir les règles globales Google Assistant ni l'exposition effective dans Google Home.",
     assistantFileUnsetExplanation: "Une entrée sans champ expose n'est pas considérée comme expose: true. Son exposition éventuelle dépend d'autres réglages et n'est pas établie ici.",
     assistantFileResultsTitle: "Bilan de lecture du fichier",
+    assistantAdoptTitle: "Reprendre les entités dans HVLS",
+    assistantAdoptIntro: "Vous pouvez reprendre les entités de ce fichier pour gérer vos labels et générer un Preview YAML, sans configurer Google Assistant. Le fichier d'origine reste intact.",
+    assistantAdoptNoCatalog: "Le catalogue des entités Home Assistant n'est pas chargé. Actualisez la comparaison avant de poursuivre.",
+    assistantAdoptRefresh: "Actualiser la comparaison des labels",
+    assistantAdoptCounts: "{ready} à ajouter · {already} déjà dans HVLS · {excluded} exclusions conservées · {review} à examiner.",
+    assistantAdoptReview: "Détail des entités et décisions proposées",
+    assistantAdoptReasonAdd: "Ajouter le label HVLS",
+    assistantAdoptReasonAlready: "Déjà dans HVLS",
+    assistantAdoptReasonExclude: "Exclue (expose: false) — aucun ajout",
+    assistantAdoptReasonReview: "À examiner manuellement",
+    assistantAdoptLimits: "Ajout proposé uniquement pour expose: true, sans personnalisation et avec entité éligible. Les autres restent visibles sans bloquer l'ensemble.",
+    assistantAdoptAction: "Ajouter {count} label(s) HVLS",
+    assistantAdoptNone: "Aucun ajout automatique proposé. Vous pouvez toujours gérer les entités individuellement dans l'onglet Gestion des entités HVLS.",
+    assistantAdoptConfirm: "Ajouter les labels HVLS aux {count} entités compatibles ? Le fichier YAML source et Google Assistant ne seront pas modifiés. Chaque ajout est contrôlé séparément : en cas d'échec, les ajouts déjà effectués sont conservés et signalés.",
+    assistantAdoptBusy: "Ajout des labels HVLS : {done} / {total}",
+    assistantAdoptDone: "{count} label(s) ajouté(s). Le YAML d'origine est conservé ; un nouveau Preview a été demandé. Vérifiez-le avant toute application.",
+    assistantAdoptStopped: "{count} label(s) confirmé(s) avant interruption. Vérifiez le catalogue actualisé : une opération sans réponse peut avoir été appliquée. Aucun réessai automatique.",
+    assistantAdoptStale: "Fichier ou catalogue modifié depuis la vérification. Aucune nouvelle action : vérifiez à nouveau.",
+    assistantAdoptNeedsReview: "Les entités exclues, absentes, non éligibles, à expose implicite ou avec nom/pièce/alias personnalisés restent à examiner ; ces réglages ne sont pas déduits des labels.",
+    assistantAdoptTruncated: "Le fichier comporte trop d'entrées pour une reprise complète ; aucun ajout groupé n'est proposé.",
+    assistantProvenanceAdvanced: "ⓘ Origine du fichier et recherches dans les sauvegardes (facultatif)",
     assistantProvenanceStep: "Étape 3 sur 3 — Comprendre l'origine du fichier",
     assistantProvenanceQuestion: "À votre connaissance, d'où vient ce fichier ?",
     assistantProvenanceOld: "Il appartenait à une ancienne configuration Google Assistant",
@@ -389,24 +410,24 @@ const HVLS_TRANSLATIONS = {
     tabPreview: "Preview",
     tabBackups: "Backups",
     tabMigration: "Assistant",
-    migrationIntro: "Simulation does not change HA, labels or YAML. The protected backup and journal are created only after explicit confirmation.",
+    migrationIntro: "HVLS generates your entity YAML from Home Assistant labels. Managing labels does not require a Google Assistant connection. Inspection is read-only; label updates and Apply require explicit confirmation.",
     migrationGuideTitle: "Let's identify your situation",
     migrationGuideStepIdentify: "Step 1 — Identify your situation",
     migrationGuideStepVerify: "Step 2 of 2 — Review the recommended checks",
     assistantProvenanceStepVerify: "Step 2 of 3 — Inspect the YAML file",
     migrationAdvancedTitle: "Diagnostics and migration tools (advanced)",
     migrationRecoveryAttention: "A previous operation needs review. Open the advanced tools before continuing.",
-    migrationGuideDetected: "No google_assistant: declaration was found in configuration.yaml. This does not prove that no configuration ever existed.",
-    migrationGuideCandidate: "A google_assistant_entities.yaml file exists but is not referenced by the analyzed configuration. Its origin and use are unknown.",
+    migrationGuideDetected: "No google_assistant: declaration detected. This does not prevent HVLS from managing and generating an entity YAML file.",
+    migrationGuideCandidate: "A google_assistant_entities.yaml file exists. You can reuse it to initialize HVLS labels, even without a Google Assistant connection.",
     migrationGuideNoCandidate: "No usual google_assistant_entities.yaml file was detected. Other sources may still exist.",
-    migrationGuideQuestion: "Do you want to create a new Google Assistant configuration?",
-    migrationGuideNew: "Yes, new configuration",
-    migrationGuideExisting: "No, migrate an existing configuration",
-    migrationGuideUnsure: "I'm not sure",
+    migrationGuideQuestion: "How would you like to start using HVLS?",
+    migrationGuideNew: "Start with an empty selection",
+    migrationGuideExisting: "Reuse an existing entity file",
+    migrationGuideUnsure: "Choose another file",
     migrationGuideNextNew: "New setup selected for this screen. Check any existing files before generating configuration. Nothing has been created or overwritten.",
-    migrationGuideNextExisting: "Migration selected for this screen. Check the google_assistant: declaration and its entity_config: source in configuration.yaml, then refresh the assessment. Do not enable an old configuration just to unblock HVLS without checking Google Home effects.",
-    migrationGuideNextUnsure: "No problem: inspect configuration.yaml and any preserved Google Assistant files, then refresh the assessment. Nothing changes.",
-    migrationGuideAwaitChoice: "Select your situation to see the next checks.",
+    migrationGuideNextExisting: "Inspect the entity file, then review the labels to import. No Google Assistant connection is needed.",
+    migrationGuideNextUnsure: "Enter the relative path of the YAML file to reuse, then inspect it.",
+    migrationGuideAwaitChoice: "Choose whether to reuse this file, select another file or start fresh.",
     migrationGuideNoAuthorization: "This choice stays on this screen; it neither approves migration nor permits writes.",
     assistantSourceFound: "Google Assistant configuration detected",
     assistantSourceSummary: "{entries} explicit entity declarations. Inspected files: {paths}. No Google Home exposure certified.",
@@ -430,20 +451,41 @@ const HVLS_TRANSLATIONS = {
     assistantFileNoIssues: "No structural issues found. This does not guarantee active configuration or Google Home exposure.",
     assistantFileCannotRead: "Unable to inspect the file: {reason}.",
     assistantFileUnavailable: "Inspection unavailable. No changes made.",
-    assistantFileSafety: "This does not prove that the file is active. No migration or Google exposure is authorized.",
-    migrationGuideSelectedExisting: "Selected path: locate an existing configuration. You may change your choice below.",
+    assistantFileSafety: "Inspecting a file does not prove Google Home exposure. No labels or YAML are changed without a separate confirmed action.",
+    migrationGuideSelectedExisting: "Reuse an existing file selected. You can change your choice.",
     migrationGuideSelectedNew: "Selected path: new configuration. You may change your choice below.",
-    migrationGuideSelectedUnsure: "Selected path: situation to clarify. You may change your choice below.",
+    migrationGuideSelectedUnsure: "Choose another file selected. Enter its path below.",
     assistantFileMetricEntries: "Declared entities",
     assistantFileMetricTrue: "expose: true",
     assistantFileMetricFalse: "expose: false",
     assistantFileMetricUnset: "expose missing",
     assistantFileMetricIssues: "Entities to review",
-    assistantFileUnreferencedConclusion: "The file is readable, but the analyzed configuration did not show a Google Assistant declaration referencing it. Verify its origin and usage before migrating. Do not activate it merely to unblock HVLS.",
+    assistantFileUnreferencedConclusion: "This readable file can initialize HVLS labels. Missing Google Assistant linkage is a warning, not a blocker for entity management. The original file will be preserved.",
     assistantFilePackagesConclusion: "A readable file does not identify which configuration is used by packages. Packages remain classified as « Other configuration » and are not eligible for automatic migration.",
     assistantFileGeneralConclusion: "This check only analyzes the file contents; it does not establish global Google Assistant rules or effective Google Home exposure.",
     assistantFileUnsetExplanation: "An entry without expose is not treated as expose: true. Any exposure depends on other settings and is not established here.",
     assistantFileResultsTitle: "File inspection summary",
+    assistantAdoptTitle: "Reuse entities in HVLS",
+    assistantAdoptIntro: "Use entities from this file to manage labels and generate a YAML Preview without configuring Google Assistant. The original file stays unchanged.",
+    assistantAdoptNoCatalog: "Home Assistant entity catalog is not loaded. Refresh the comparison to continue.",
+    assistantAdoptRefresh: "Refresh label comparison",
+    assistantAdoptCounts: "{ready} to add · {already} already in HVLS · {excluded} exclusions kept · {review} need review.",
+    assistantAdoptReview: "Entity details and suggested decisions",
+    assistantAdoptReasonAdd: "Add HVLS label",
+    assistantAdoptReasonAlready: "Already in HVLS",
+    assistantAdoptReasonExclude: "Excluded (expose: false) — no addition",
+    assistantAdoptReasonReview: "Requires manual review",
+    assistantAdoptLimits: "Only explicit expose: true entries with no customizations and eligible HA entities are suggested for label addition. Other entries remain visible.",
+    assistantAdoptAction: "Add {count} HVLS label(s)",
+    assistantAdoptNone: "No automatic additions suggested. You can still manage each entity in the HVLS Entity management tab.",
+    assistantAdoptConfirm: "Add HVLS labels to {count} eligible entities? Neither the source YAML nor Google Assistant will be changed. Each addition is checked independently: if one fails, earlier successful additions remain and are reported.",
+    assistantAdoptBusy: "Adding HVLS labels: {done} / {total}",
+    assistantAdoptDone: "{count} label(s) added. Original YAML preserved; a new Preview was requested. Review it before applying.",
+    assistantAdoptStopped: "{count} label addition(s) confirmed before interruption. Check the refreshed catalog: an unanswered operation might still have succeeded. No automatic retry.",
+    assistantAdoptStale: "File or catalog changed since inspection. No new action taken: inspect it again.",
+    assistantAdoptNeedsReview: "Excluded, missing, ineligible, implicitly exposed or customized name/room/alias entities need review; labels cannot reconstruct those settings.",
+    assistantAdoptTruncated: "File contains too many entries for a complete reuse plan; no bulk label additions are suggested.",
+    assistantProvenanceAdvanced: "ⓘ File origin and historical backup checks (optional)",
     assistantProvenanceStep: "Step 3 of 3 — Understand the file's origin",
     assistantProvenanceQuestion: "As far as you know, where did this file come from?",
     assistantProvenanceOld: "It belonged to a previous Google Assistant configuration",
@@ -1809,6 +1851,10 @@ class HVLSPreviewPanel extends HTMLElement {
         .migration-controls { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
         .migration-controls select { max-width: 220px; font: inherit; }
         .migration-controls label { display: flex; gap: 4px; align-items: center; }
+        #assistantAdoption { border-top: 1px solid var(--divider-color); padding-top: 12px; margin-top: 16px; }
+        #assistantAdoption[hidden] { display: none; }
+        #assistantAdoptRows { max-height: 20rem; overflow-y: auto; overflow-wrap: anywhere; }
+        #assistantAdoptRows p { margin: 5px 0; }
         #assistantFilePath {
           flex: 1 1 30rem;
           min-width: min(100%, 18rem);
@@ -2457,6 +2503,22 @@ entity_config: !include google_assistant_entities.yaml</pre>
               <p id="assistantFileSafety" class="diagnostic-note">
                 ${this._t("assistantFileSafety")}
               </p>
+              <section id="assistantAdoption" hidden aria-labelledby="assistantAdoptTitle">
+                <h4 id="assistantAdoptTitle"></h4>
+                <p id="assistantAdoptIntro"></p>
+                <p id="assistantAdoptSummary" role="status"></p>
+                <p id="assistantAdoptLimits" class="diagnostic-note"></p>
+                <button id="assistantAdoptRefresh" type="button" class="secondary"></button>
+                <details id="assistantAdoptDetails">
+                  <summary id="assistantAdoptReview"></summary>
+                  <div id="assistantAdoptRows"></div>
+                </details>
+                <p id="assistantAdoptNeedsReview" class="diagnostic-note"></p>
+                <button id="assistantAdoptApply" type="button" disabled></button>
+                <p id="assistantAdoptResult" role="status"></p>
+              </section>
+              <details id="assistantProvenanceAdvanced">
+                <summary id="assistantProvenanceAdvancedTitle">${this._t("assistantProvenanceAdvanced")}</summary>
               <section id="assistantProvenance" hidden aria-labelledby="assistantProvenanceStep">
                 <h3 id="assistantProvenanceStep">${this._t("assistantProvenanceStep")}</h3>
                 <p id="assistantProvenanceQuestion">${this._t("assistantProvenanceQuestion")}</p>
@@ -2519,6 +2581,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
                   ${this._t("assistantProvenanceSafety")}
                 </p>
               </section>
+              </details>
             </div>
             <p id="migrationGuideSafety" class="diagnostic-note">${this._t("migrationGuideNoAuthorization")}</p>
           </div>
@@ -2628,11 +2691,18 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._assistantFileError = null;
       this._assistantFileChecking = false;
       this._assistantProvenanceChoice = null;
+      this._assistantAdoptMessage = null;
       this._invalidateHistoricalReview();
       this._renderAssistantFileStatus();
     });
     this.querySelector("#assistantFileCheck").addEventListener(
       "click", () => this._checkAssistantEntityFile()
+    );
+    this.querySelector("#assistantAdoptRefresh").addEventListener(
+      "click", () => this._loadEntities()
+    );
+    this.querySelector("#assistantAdoptApply").addEventListener(
+      "click", () => this._adoptAssistantFile()
     );
     this.querySelector("#assistantHistoryInspect").addEventListener(
       "click", () => this._inspectHistoricalYaml()
@@ -2685,12 +2755,14 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._entityLoadError = null;
       this._entityLimit = 100;
       this._renderEntities();
+      this._renderAssistantAdoption();
       // Statistics may have loaded before the registry catalog.
       // Render removal controls only from the current HA label state.
       if (this._lastAnalysis) this._renderAnalysis(this._lastAnalysis);
       return true;
     } catch (error) {
       this._entityCatalog = null;
+      this._renderAssistantAdoption();
       this._entityLoadError = error.message || String(error);
       this.querySelector("#entityList")?.replaceChildren();
       const more = this.querySelector("#entityMore");
@@ -3269,6 +3341,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantFileError = null;
     this._assistantFileChecking = false;
     this._assistantProvenanceChoice = null;
+    this._assistantAdoptMessage = null;
     this._invalidateHistoricalReview();
     this._renderMigrationGuide();
     this._renderAssistantFileStatus();
@@ -3516,6 +3589,221 @@ entity_config: !include google_assistant_entities.yaml</pre>
     }
   }
 
+  _assistantAdoptionAvailable() {
+    const diag = this._migrationReport?.diagnostic;
+    const report = this._assistantFileReport;
+    return diag?.mode === "new_configuration" &&
+      diag?.source?.status === "resolved" &&
+      !this._assistantPackagesDetected() &&
+      ["existing", "unsure"].includes(this._migrationIntent) &&
+      !this._assistantFileChecking && !this._assistantFileError &&
+      ["parsed", "review_required"].includes(report?.status) &&
+      report?.read_only === true &&
+      report?.source_active_verified === false &&
+      report?.migration_authorized === false &&
+      report?.stage_allowed === false &&
+      report?.apply_allowed === false &&
+      report?.cutover_allowed === false &&
+      /^[a-f0-9]{64}$/.test(report?.file_sha256 || "") &&
+      Array.isArray(report?.adoption_entries);
+  }
+
+  _assistantAdoptionPlan() {
+    if (!this._assistantAdoptionAvailable() ||
+        !Array.isArray(this._entityCatalog?.entities)) return null;
+    const report = this._assistantFileReport;
+    const catalog = new Map(this._entityCatalog.entities.map(
+      entity => [entity.entity_id, entity]
+    ));
+    const seen = new Set();
+    const rows = [];
+    const candidates = [];
+    const totals = {ready: 0, already: 0, excluded: 0, review: 0};
+    for (const entry of report.adoption_entries) {
+      if (!entry || typeof entry.entity_id !== "string" ||
+          !/^[a-z0-9_]+\.[a-z0-9_]+$/.test(entry.entity_id) ||
+          seen.has(entry.entity_id) ||
+          !["expose", "exclude", "unset", "invalid"].includes(entry.exposure) ||
+          typeof entry.has_customizations !== "boolean" ||
+          !Array.isArray(entry.reasons)) return null;
+      seen.add(entry.entity_id);
+      const entity = catalog.get(entry.entity_id);
+      let category = "review";
+      if (entry.reasons.length === 0 && !entry.has_customizations) {
+        if (entry.exposure === "exclude" && entity?.has_label !== true) {
+          category = "excluded";
+        } else if (entry.exposure === "expose" && entity?.has_label === true) {
+          category = "already";
+        } else if (entry.exposure === "expose" && entity?.eligible === true &&
+                   entity?.has_label === false) {
+          category = "ready";
+          candidates.push(entry.entity_id);
+        }
+      }
+      totals[category] += 1;
+      rows.push({entity_id: entry.entity_id, category});
+    }
+    // Invalid YAML keys have no safe entity ID to display, but remain
+    // local issues. Do not silently classify them as importable entries.
+    const unlisted = Math.max(0, (report.counts?.entries || 0) - rows.length);
+    totals.review += unlisted;
+    return {
+      candidates, rows, totals,
+      complete: report.adoption_entries_complete === true &&
+        unlisted <= (report.counts?.entries_with_anomalies || 0),
+      canWrite: Array.isArray(this._entityCatalog.label_ids) &&
+        this._entityCatalog.label_ids.length === 1,
+    };
+  }
+
+  _renderAssistantAdoption() {
+    const section = this.querySelector("#assistantAdoption");
+    if (!section) return;
+    section.hidden = !this._assistantAdoptionAvailable();
+    if (section.hidden) return;
+    for (const id of ["assistantAdoptTitle", "assistantAdoptIntro",
+                      "assistantAdoptLimits", "assistantAdoptRefresh",
+                      "assistantAdoptReview"]) {
+      const node = this.querySelector("#" + id);
+      if (node) node.textContent = this._t(id);
+    }
+    const plan = this._assistantAdoptionPlan();
+    const summary = this.querySelector("#assistantAdoptSummary");
+    if (summary) summary.textContent = !plan
+      ? this._t("assistantAdoptNoCatalog")
+      : this._tf("assistantAdoptCounts", plan.totals);
+    const caution = this.querySelector("#assistantAdoptNeedsReview");
+    if (caution) {
+      caution.hidden = !plan || plan.totals.review === 0;
+      caution.textContent = this._t("assistantAdoptNeedsReview");
+    }
+    const refresh = this.querySelector("#assistantAdoptRefresh");
+    if (refresh) refresh.disabled = this._assistantAdoptBusy === true ||
+      this._entityLoading === true;
+    const action = this.querySelector("#assistantAdoptApply");
+    if (action) {
+      action.textContent = plan?.candidates.length
+        ? this._tf("assistantAdoptAction", {count: plan.candidates.length})
+        : this._t("assistantAdoptNone");
+      action.disabled = this._assistantAdoptBusy === true ||
+        this._entityWritePending === true ||
+        this._entityLoading === true ||
+        !plan?.complete || !plan?.canWrite || !plan.candidates.length;
+    }
+    const result = this.querySelector("#assistantAdoptResult");
+    if (result) result.textContent = this._assistantAdoptMessage ||
+      (plan && !plan.complete ? this._t("assistantAdoptTruncated") : "");
+    const container = this.querySelector("#assistantAdoptRows");
+    if (container) {
+      container.replaceChildren();
+      for (const entry of (plan?.rows || []).slice(0, 200)) {
+        const line = document.createElement("p");
+        const key = {
+          ready: "assistantAdoptReasonAdd",
+          already: "assistantAdoptReasonAlready",
+          excluded: "assistantAdoptReasonExclude",
+          review: "assistantAdoptReasonReview",
+        }[entry.category];
+        line.textContent = entry.entity_id + " — " + this._t(key);
+        container.appendChild(line);
+      }
+    }
+  }
+
+  async _adoptAssistantFile() {
+    const plan = this._assistantAdoptionPlan();
+    if (!this._hass || !plan?.complete || !plan.canWrite ||
+        !plan.candidates.length || this._assistantAdoptBusy ||
+        this._entityWritePending || this._entityLoading ||
+        this._applying || this._restoring || this._generating) return;
+    const ids = [...plan.candidates];
+    const path = this._assistantFilePath.trim();
+    const original = this._assistantFileReport;
+    const requestId = this._assistantFileRequestId || 0;
+    if (!window.confirm(this._tf("assistantAdoptConfirm", {
+      count: ids.length,
+    }))) return;
+
+    this._assistantAdoptBusy = true;
+    this._entityWritePending = true;
+    this._review = null;  // Label changes invalidate previous Preview approval.
+    this._loadId = (this._loadId || 0) + 1;
+    this._updateApplyButton();
+    let completed = 0;
+    let finished = false;
+    let writeAttempted = false;
+    this._assistantAdoptMessage = this._tf("assistantAdoptBusy", {
+      done: completed, total: ids.length,
+    });
+    this._renderAssistantAdoption();
+    try {
+      const fresh = await this._hass.callWS({
+        type: "ha_voice_label_sync/inspect_assistant_entity_file", path,
+      });
+      if (!this._assistantAdoptionAvailable() ||
+          requestId !== (this._assistantFileRequestId || 0) ||
+          this._assistantFilePath.trim() !== path ||
+          fresh?.read_only !== true ||
+          fresh?.source_active_verified !== false ||
+          fresh?.migration_authorized !== false ||
+          fresh?.stage_allowed !== false ||
+          fresh?.apply_allowed !== false ||
+          fresh?.cutover_allowed !== false ||
+          !["parsed", "review_required"].includes(fresh.status) ||
+          fresh.file_sha256 !== original.file_sha256 ||
+          JSON.stringify(fresh.adoption_entries) !==
+            JSON.stringify(original.adoption_entries)) {
+        throw new Error("stale_source");
+      }
+      // Revalidate current labels and eligibility before starting any write.
+      if (!await this._loadEntities()) throw new Error("catalog_unavailable");
+      const verified = this._assistantAdoptionPlan();
+      if (!verified?.complete || !verified.canWrite ||
+          JSON.stringify(verified.candidates) !== JSON.stringify(ids)) {
+        throw new Error("stale_catalog");
+      }
+      for (const entity_id of ids) {
+        if (requestId !== (this._assistantFileRequestId || 0) ||
+            this._assistantFilePath.trim() !== path) {
+          throw new Error("context_changed");
+        }
+        // Existing admin-only, per-entity, eligibility-checked HA label API.
+        // No migration staging API, source YAML write or Google cutover.
+        writeAttempted = true;
+        const response = await this._hass.callWS({
+          type: "ha_voice_label_sync/set_entity_label",
+          entity_id, enabled: true, expected_enabled: false,
+        });
+        if (response?.entity_id !== entity_id ||
+            response?.has_label !== true || response?.changed !== true) {
+          throw new Error("label_not_confirmed");
+        }
+        completed += 1;
+        this._assistantAdoptMessage = this._tf("assistantAdoptBusy", {
+          done: completed, total: ids.length,
+        });
+        this._renderAssistantAdoption();
+      }
+      finished = true;
+    } catch (_error) {
+      // Fail at the first uncertain result. Never guess a rollback.
+    } finally {
+      if (writeAttempted) {
+        await this._loadEntities();
+        await this._generatePreview(); // Preview only; never Apply YAML.
+      }
+      this._entityWritePending = false;
+      this._assistantAdoptBusy = false;
+      this._assistantAdoptMessage = this._tf(
+        finished ? "assistantAdoptDone" :
+          writeAttempted ? "assistantAdoptStopped" : "assistantAdoptStale",
+        {count: completed}
+      );
+      this._updateApplyButton();
+      this._renderAssistantAdoption();
+    }
+  }
+
   _assistantProvenanceAvailable() {
     const diag = this._migrationReport?.diagnostic;
     const report = this._assistantFileReport;
@@ -3609,6 +3897,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
       const node = this.querySelector("#" + id);
       if (node) node.textContent = this._t(id);
     }
+    const advancedTitle = this.querySelector("#assistantProvenanceAdvancedTitle");
+    if (advancedTitle) advancedTitle.textContent = this._t("assistantProvenanceAdvanced");
     this._renderAssistantHistoryStatus();
     const anomalies = this._assistantFileReport?.counts?.entries_with_anomalies;
     const issues = this.querySelector("#assistantProvenanceAnomalies");
@@ -3712,6 +4002,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     } else {
       status.textContent = this._t("assistantFileUnavailable");
     }
+    this._renderAssistantAdoption();
     this._renderAssistantProvenance();
   }
 
@@ -3784,6 +4075,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._migrationIntent = null;
       this._assistantFileReport = null;
       this._assistantProvenanceChoice = null;
+      this._renderAssistantAdoption();
       this._renderAssistantProvenance();
       return;
     }
