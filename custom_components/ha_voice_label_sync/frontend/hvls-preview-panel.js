@@ -89,6 +89,13 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptLimits: "Ajout proposé uniquement pour expose: true, sans personnalisation et avec entité éligible. Les autres restent visibles sans bloquer l'ensemble.",
     assistantAdoptAction: "Ajouter {count} label(s) HVLS",
     assistantAdoptNone: "Aucun ajout automatique proposé. Vous pouvez toujours gérer les entités individuellement dans l'onglet Gestion des entités HVLS.",
+    assistantTakeoverTitle: "Confier le fichier existant à HVLS",
+    assistantTakeoverIntro: "Si ce fichier est le fichier de production configuré, HVLS peut le sauvegarder puis enregistrer sa prise en charge, sans réécrire son contenu. Les différences avec le Preview restent soumises à un Apply distinct.",
+    assistantTakeoverAction: "Vérifier et reprendre ce fichier",
+    assistantTakeoverConfirm: "Confier le fichier {path} à HVLS ?\\n\\nEntités actuelles : {entities} ({issues} à examiner).\\nDifférences proposées par le Preview : {added} ajout(s), {removed} suppression(s), {modified} modification(s).\\n\\nUne sauvegarde obligatoire sera créée. Le fichier de production ne sera PAS modifié et aucun Apply ne sera lancé. Seule sa gestion future par HVLS sera autorisée.",
+    assistantTakeoverSuccess: "Fichier repris par HVLS. Sauvegarde vérifiée : {backup}. Aucun Apply effectué. Examinez les différences dans Preview avant toute application.",
+    assistantTakeoverFailure: "Reprise refusée ou incomplète : vérifiez le fichier, les sauvegardes et le statut de propriété, puis actualisez. Aucun Apply automatique.",
+    assistantTakeoverBusy: "Vérification et sauvegarde du fichier en cours…",
     assistantAdoptConfirm: "Ajouter les labels HVLS aux {count} entités compatibles ? Le fichier YAML source et Google Assistant ne seront pas modifiés. Chaque ajout est contrôlé séparément : en cas d'échec, les ajouts déjà effectués sont conservés et signalés.",
     assistantAdoptBusy: "Ajout des labels HVLS : {done} / {total}",
     assistantAdoptDone: "{count} label(s) ajouté(s). Le YAML d'origine est conservé ; un nouveau Preview a été demandé. Vérifiez-le avant toute application.",
@@ -498,6 +505,13 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptLimits: "Only explicit expose: true entries with no customizations and eligible HA entities are suggested for label addition. Other entries remain visible.",
     assistantAdoptAction: "Add {count} HVLS label(s)",
     assistantAdoptNone: "No automatic additions suggested. You can still manage each entity in the HVLS Entity management tab.",
+    assistantTakeoverTitle: "Let HVLS manage the existing YAML",
+    assistantTakeoverIntro: "If this is the configured production YAML, HVLS can back it up and register its ownership without rewriting its contents. Preview differences still require a separate Apply.",
+    assistantTakeoverAction: "Review and take over this file",
+    assistantTakeoverConfirm: "Let HVLS manage {path}?\\n\\nCurrent entities: {entities} ({issues} to review).\\nPreview differences: {added} added, {removed} removed, {modified} modified.\\n\\nA mandatory backup will be created. Production will NOT be edited and no Apply will run. This only authorizes future HVLS management.",
+    assistantTakeoverSuccess: "HVLS now manages this YAML. Verified backup: {backup}. No Apply performed. Review Preview differences before applying.",
+    assistantTakeoverFailure: "Takeover refused or incomplete: check the YAML, backups and ownership status, then refresh. No automatic Apply.",
+    assistantTakeoverBusy: "Verifying and backing up existing YAML…",
     assistantAdoptConfirm: "Add HVLS labels to {count} eligible entities? Neither the source YAML nor Google Assistant will be changed. Each addition is checked independently: if one fails, earlier successful additions remain and are reported.",
     assistantAdoptBusy: "Adding HVLS labels: {done} / {total}",
     assistantAdoptDone: "{count} label(s) added. Original YAML preserved; a new Preview was requested. Review it before applying.",
@@ -2565,6 +2579,14 @@ entity_config: !include google_assistant_entities.yaml</pre>
                 <p id="assistantAdoptNeedsReview" class="diagnostic-note"></p>
                 <button id="assistantAdoptApply" type="button" disabled></button>
                 <p id="assistantAdoptResult" role="status"></p>
+                <section id="assistantTakeoverSection" hidden
+                  aria-labelledby="assistantTakeoverTitle">
+                  <h4 id="assistantTakeoverTitle"></h4>
+                  <p id="assistantTakeoverIntro" class="diagnostic-note"></p>
+                  <button id="assistantTakeoverButton" type="button"
+                    class="secondary"></button>
+                  <p id="assistantTakeoverResult" role="status"></p>
+                </section>
               </section>
               <details id="assistantProvenanceAdvanced">
                 <summary id="assistantProvenanceAdvancedTitle">${this._t("assistantProvenanceAdvanced")}</summary>
@@ -2755,6 +2777,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
     );
     this.querySelector("#assistantAdoptApply").addEventListener(
       "click", () => this._adoptAssistantFile()
+    );
+    this.querySelector("#assistantTakeoverButton").addEventListener(
+      "click", () => this._takeOverAssistantFile()
     );
     this.querySelector("#assistantHistoryInspect").addEventListener(
       "click", () => this._inspectHistoricalYaml()
@@ -3772,6 +3797,26 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const result = this.querySelector("#assistantAdoptResult");
     if (result) result.textContent = this._assistantAdoptMessage ||
       (plan && !plan.complete ? this._t("assistantAdoptTruncated") : "");
+    const takeoverSection = this.querySelector("#assistantTakeoverSection");
+    const takeoverVisible = this._assistantAdoptionAvailable() &&
+      this._applyBlockReasonCode === "unmanaged_output";
+    if (takeoverSection) takeoverSection.hidden = !takeoverVisible;
+    for (const id of ["assistantTakeoverTitle", "assistantTakeoverIntro",
+                      "assistantTakeoverButton"]) {
+      const node = this.querySelector("#" + id);
+      if (!node) continue;
+      node.textContent = this._t(id === "assistantTakeoverButton"
+        ? "assistantTakeoverAction" : id);
+    }
+    const takeoverAction = this.querySelector("#assistantTakeoverButton");
+    if (takeoverAction) takeoverAction.disabled = !takeoverVisible ||
+      this._assistantTakeoverBusy === true ||
+      this._assistantAdoptBusy === true ||
+      this._entityWritePending === true || this._generating === true ||
+      this._applying === true || this._restoring === true ||
+      this._refreshing === true;
+    const takeoverResult = this.querySelector("#assistantTakeoverResult");
+    if (takeoverResult) takeoverResult.textContent = this._assistantTakeoverMessage || "";
     const container = this.querySelector("#assistantAdoptRows");
     if (container) {
       container.replaceChildren();
@@ -3789,6 +3834,67 @@ entity_config: !include google_assistant_entities.yaml</pre>
           (details.length ? " (" + details.join("; ") + ")" : "");
         container.appendChild(line);
       }
+    }
+  }
+
+  async _takeOverAssistantFile() {
+    if (!this._hass || !this._assistantAdoptionAvailable() ||
+        this._applyBlockReasonCode !== "unmanaged_output" ||
+        this._assistantTakeoverBusy || this._assistantAdoptBusy ||
+        this._entityWritePending || this._generating ||
+        this._applying || this._restoring || this._refreshing) return;
+    const path = this._assistantFilePath.trim();
+    const requestId = this._assistantFileRequestId || 0;
+    const originalDigest = this._assistantFileReport?.file_sha256;
+    this._assistantTakeoverBusy = true;
+    this._assistantTakeoverMessage = this._t("assistantTakeoverBusy");
+    this._renderAssistantAdoption();
+    try {
+      const prepared = await this._hass.callWS({
+        type: "ha_voice_label_sync/prepare_existing_output_takeover", path,
+      });
+      if (requestId !== (this._assistantFileRequestId || 0) ||
+          this._assistantFilePath.trim() !== path ||
+          this._assistantFileReport?.file_sha256 !== originalDigest ||
+          prepared?.eligible !== true ||
+          prepared.selected_path !== path ||
+          prepared.production_sha256 !== originalDigest ||
+          !/^[0-9a-f]{64}$/.test(prepared.preview_sha256 || "")) {
+        throw new Error("stale_source");
+      }
+      const diff = prepared.changes || {};
+      const confirmed = window.confirm(this._tf("assistantTakeoverConfirm", {
+        path, entities: prepared.entities, issues: prepared.issues,
+        added: diff.added, removed: diff.removed, modified: diff.modified,
+      }));
+      if (!confirmed) {
+        this._assistantTakeoverMessage = "";
+        return;
+      }
+      // Confirm rechecks both hashes server-side under the common writer lock.
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/confirm_existing_output_takeover",
+        path, production_sha256: prepared.production_sha256,
+        preview_sha256: prepared.preview_sha256, confirmed: true,
+      });
+      if (result?.taken_over !== true ||
+          result?.production_unchanged !== true ||
+          result?.apply_performed !== false ||
+          typeof result.backup_name !== "string") {
+        throw new Error("unverified_result");
+      }
+      this._assistantTakeoverMessage = this._tf("assistantTakeoverSuccess", {
+        backup: result.backup_name,
+      });
+      // Refresh the server's ownership evaluation, never apply the Preview.
+      await this._loadPreview();
+    } catch (_error) {
+      this._assistantTakeoverMessage = this._t("assistantTakeoverFailure");
+      // A backup or ownership record may already exist; always reread.
+      await this._loadPreview();
+    } finally {
+      this._assistantTakeoverBusy = false;
+      this._renderAssistantAdoption();
     }
   }
 
