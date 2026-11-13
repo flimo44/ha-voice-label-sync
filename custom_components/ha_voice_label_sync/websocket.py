@@ -10,7 +10,10 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 
-from hvls import FileWriterError, GenerationRequest, RegistryError, WorkflowError
+from hvls import (
+    FileWriterError, GenerationRequest, RegistryError, WorkflowError,
+    run_google_assistant_workflow,
+)
 from hvls.owned_writer import evaluate_registered_output
 
 from .backup_restore import (
@@ -1565,6 +1568,21 @@ async def websocket_resolve_restored_output(
             if len(entries) != 1:
                 raise BackupRestoreError("HVLS entry unavailable or ambiguous")
             path = _configured_output(hass)
+            settings = {**entries[0].data, **entries[0].options}
+            registries = get_live_registries(hass)
+            request = GenerationRequest(
+                label=settings.get(CONF_LABEL, DEFAULT_LABEL),
+                domains=DEFAULT_DOMAINS,
+                output_path=path,
+                dry_run=True,
+            )
+            generated = await hass.async_add_executor_job(
+                partial(
+                    run_google_assistant_workflow,
+                    request=request,
+                    registries=registries,
+                )
+            )
             result = await hass.async_add_executor_job(
                 partial(
                     resolve_restored_output,
@@ -1578,11 +1596,13 @@ async def websocket_resolve_restored_output(
                     preview_sha256=msg["preview_sha256"],
                     resolution=msg["resolution"],
                     confirmed=msg["confirmed"],
+                    generated_content=generated.generation.content,
                 )
             )
         except (
             BackupRestoreError, PreviewChangedError, FileWriterError,
-            OSError, ValueError,
+            RegistryError, WorkflowError, OSError, ValueError,
+            TypeError, KeyError, AttributeError,
         ):
             connection.send_error(
                 msg["id"], "restore_reconciliation_refused",
