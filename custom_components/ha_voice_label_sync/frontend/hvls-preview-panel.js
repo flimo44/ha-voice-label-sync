@@ -2175,7 +2175,43 @@ class HVLSPreviewPanel extends HTMLElement {
                 aria-pressed="false">${this._t("migrationGuideUnsure")}</button>
             </div>
             <p id="migrationGuideNext" role="status"></p>
+            <div id="assistantFileSection" hidden>
+              <details id="assistantFileExamples">
+                <summary>${this._t("assistantFileHelp")}</summary>
+                <p>${this._t("assistantExampleDirect")}</p>
+                <pre>google_assistant:
+  expose_by_default: false
+  entity_config: !include google_assistant_entities.yaml</pre>
+                <p>${this._t("assistantExampleInclude")}</p>
+                <pre>google_assistant: !include google_assistant.yaml</pre>
+                <p>${this._t("assistantExampleIncludedContent")}</p>
+                <pre>expose_by_default: false
+entity_config: !include google_assistant_entities.yaml</pre>
+                <p class="diagnostic-note">${this._t("assistantExampleNote")}</p>
+              </details>
+              <h4 id="assistantFileTitle">${this._t("assistantFileTitle")}</h4>
+              <p id="assistantFileHint"></p>
+              <label id="assistantFilePathLabel" for="assistantFilePath">
+                ${this._t("assistantFilePathLabel")}
+              </label>
+              <div class="migration-controls">
+                <input id="assistantFilePath" type="text" maxlength="240"
+                  autocomplete="off" spellcheck="false"
+                  placeholder="${this._t("assistantFilePlaceholder")}">
+                <button id="assistantFileCheck" type="button" class="secondary" disabled>
+                  ${this._t("assistantFileCheck")}
+                </button>
+              </div>
+              <p id="assistantFileResult" role="status" class="diagnostic-note"></p>
+              <p id="assistantFileSafety" class="diagnostic-note">
+                ${this._t("assistantFileSafety")}
+              </p>
+            </div>
             <p id="migrationGuideSafety" class="diagnostic-note">${this._t("migrationGuideNoAuthorization")}</p>
+          </div>
+          <div id="assistantSourceDetected" class="migration-review-note" hidden>
+            <h3 id="assistantSourceTitle">${this._t("assistantSourceFound")}</h3>
+            <p id="assistantSourceSummary"></p>
           </div>
           <button id="migrationAnalyze" type="button" class="secondary">
             ${this._t("migrationAnalyze")}
@@ -2272,6 +2308,15 @@ class HVLSPreviewPanel extends HTMLElement {
     this.querySelector("#migrationIntentNew").addEventListener("click", () => this._chooseMigrationIntent("new"));
     this.querySelector("#migrationIntentExisting").addEventListener("click", () => this._chooseMigrationIntent("existing"));
     this.querySelector("#migrationIntentUnsure").addEventListener("click", () => this._chooseMigrationIntent("unsure"));
+    this.querySelector("#assistantFilePath").addEventListener("input", event => {
+      this._assistantFilePath = event.target.value;
+      this._assistantFileRequestId = (this._assistantFileRequestId || 0) + 1;
+      this._assistantFileReport = null;
+      this._renderAssistantFileStatus();
+    });
+    this.querySelector("#assistantFileCheck").addEventListener(
+      "click", () => this._checkAssistantEntityFile()
+    );
     this.querySelector("#migrationPrepareBaseline").addEventListener("click", () => this._prepareMigrationBaseline());
     this.querySelector("#migrationConfirmBaseline").addEventListener("click", () => this._confirmMigrationBaseline());
     this.querySelector("#migrationRestoreDraft").addEventListener("click", () => this._restoreMigrationDecisionDraft());
