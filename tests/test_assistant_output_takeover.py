@@ -143,7 +143,9 @@ def test_wrong_path_and_other_owner_cannot_take_over(takeover, files):
     assert files["output_path"].read_bytes() == original
 
 
-def test_backup_failure_preserves_original_and_cannot_claim(takeover, files, monkeypatch):
+def test_backup_failure_preserves_original_and_cannot_claim(
+    takeover, files, monkeypatch
+):
     review = takeover.prepare_existing_output_takeover(**files)
     original = files["output_path"].read_bytes()
 
