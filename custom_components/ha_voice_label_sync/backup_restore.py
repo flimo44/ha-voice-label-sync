@@ -17,7 +17,7 @@ from hvls.owned_writer import (
     evaluate_registered_output,
     write_owned_output,
 )
-from hvls.restore_guard import clear_guard, create_guard, read_guard
+from .restore_guard import clear_guard, create_guard, read_guard
 
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_guard import (
@@ -200,6 +200,10 @@ def restore_reviewed_backup(
         backup_id=backup_id, original_sha256=production_sha256,
         restored_sha256=backup_sha256,
     )
+    # The supported HA endpoints serialize restoration and generation via
+    # the shared HA workflow lock. Recheck once more after installing the hold
+    # before invoking the existing atomic writer.
+    validate_production_unchanged(output_path, production_sha256)
     try:
         result = write_owned_output(
             output_path=output_path,
@@ -208,7 +212,6 @@ def restore_reviewed_backup(
             ownership_registry_path=ownership_registry_path,
             backup_directory=_backup_directory(output_path),
             restore_mode=True,
-            expected_production_sha256=production_sha256,
         )
     except (FileWriterError, ValueError) as exc:
         raise BackupRestoreError(
