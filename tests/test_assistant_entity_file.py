@@ -275,7 +275,7 @@ def test_adoption_entries_are_safe_and_keep_exclusions(inspector, tmp_path):
 
 def test_adoption_preview_is_bounded_and_never_grants_write(inspector, tmp_path):
     raw = "".join(
-        f"light.entity_{index}:\\n  expose: true\\n".replace("\\\\n", "\\n")
+        f"light.entity_{index}:\n  expose: true\n"
         for index in range(510)
     )
     (tmp_path / "entities.yaml").write_text(raw, encoding="utf-8")
@@ -292,7 +292,7 @@ def test_no_adoption_entries_for_blocked_or_missing_yaml(inspector, tmp_path):
     assert missing["adoption_entries"] == []
     assert missing["file_sha256"] is None
     (tmp_path / "invalid.yaml").write_text(
-        "light.ok: [ broken\\n", encoding="utf-8"
+        "light.ok: [ broken\n", encoding="utf-8"
     )
     invalid = inspector.inspect_google_entity_file(tmp_path, "invalid.yaml")
     assert invalid["adoption_entries"] == []
