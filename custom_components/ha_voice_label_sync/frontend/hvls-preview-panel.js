@@ -94,6 +94,53 @@ const HVLS_TRANSLATIONS = {
     assistantProvenanceChecklist4: "Relevez uniquement les réglages utiles (expose_by_default, exposed_domains). Ne communiquez ni secrets, ni clés, ni compte de service.",
     assistantProvenanceChecklistEnd: "Une référence retrouvée dans une sauvegarde indique une configuration historique possible ; elle ne démontre pas à elle seule que Google Home exposait réellement ces entités.",
     assistantProvenanceSourceLabelUnknown: "Aucune copie de sauvegarde n'est analysée automatiquement ici.",
+    assistantHistoryTitle: "Examiner une copie d'ancienne configuration",
+    assistantHistoryHow: "Dans votre éditeur de fichiers HA, créez le dossier hvls-history-review dans le répertoire de configuration. Placez-y uniquement une copie de l'ancien configuration.yaml et des YAML qu'il inclut pour Google Assistant, en conservant leurs sous-dossiers. Ne restaurez pas d'archive et ne copiez pas de secrets.",
+    assistantHistoryFolder: "Dossier de copies : hvls-history-review (à côté de configuration.yaml, jamais à sa place).",
+    assistantHistoryAction: "Analyser la copie historique (lecture seule)",
+    assistantHistoryBusy: "Analyse de la copie isolée en cours…",
+    assistantHistoryIdle: "Aucune ancienne copie examinée dans ce parcours.",
+    assistantHistoryNoFolder: "Le dossier hvls-history-review est absent. Créez-le manuellement et placez les fichiers YAML de la copie à analyser.",
+    assistantHistoryNoConfig: "Le fichier configuration.yaml est introuvable dans hvls-history-review.",
+    assistantHistoryBlocked: "Analyse refusée : {reason}. Vérifiez uniquement la copie, sans modifier votre configuration active.",
+    assistantHistoryUnavailable: "Analyse historique indisponible. Aucun fichier n'a été modifié.",
+    assistantHistoryFound: "Déclaration historique : {declaration}.",
+    assistantHistoryDeclDirect: "directement dans configuration.yaml",
+    assistantHistoryDeclIncluded: "dans un fichier !include",
+    assistantHistoryDeclAbsent: "non trouvée dans la copie",
+    assistantHistoryDeclUnknown: "non déterminée",
+    assistantHistoryRules: "Règle globale trouvée : expose_by_default = {defaultValue} ({origin}). exposed_domains : {domains}.",
+    assistantHistoryRuleExplicit: "déclaration explicite",
+    assistantHistoryRuleImplicit: "valeur par défaut supposée par le parseur",
+    assistantHistoryRuleUnknown: "non vérifiée",
+    assistantHistoryDomainsNone: "aucun champ déclaré",
+    assistantHistoryDomainsEmpty: "liste vide déclarée",
+    assistantHistorySource: "Source entity_config : {source}.",
+    assistantHistorySourceInline: "entités déclarées directement dans le YAML",
+    assistantHistorySourceAbsent: "champ entity_config non déclaré",
+    assistantHistorySourceUnknown: "source non résolue",
+    assistantHistoryCompare: "Référence au fichier sélectionné : {pathStatus}. Comparaison des contenus : {contentStatus}.",
+    assistantHistoryPathSame: "chemin identique",
+    assistantHistoryPathDifferent: "chemin différent",
+    assistantHistoryPathUnknown: "non déterminé",
+    assistantHistoryContentIdentical: "empreintes identiques au moment du contrôle",
+    assistantHistoryContentDifferent: "empreintes différentes",
+    assistantHistoryContentUnknown: "non réalisée",
+    assistantHistoryCounts: "{entries} entité(s) déclarée(s) dans la copie ; {anomalies} présentant une anomalie de structure.",
+    assistantHistoryIssues: "Points à examiner : {issues}. Les autres entités restent analysables.",
+    assistantHistoryIssueHistoricalMissing: "fichier d'entités inclus absent de la copie",
+    assistantHistoryIssueNoConfig: "aucune déclaration Google Assistant dans la copie",
+    assistantHistoryIssueNoEntity: "aucun champ entity_config dans la copie",
+    assistantHistoryIssueInline: "entités définies directement, pas dans le fichier recherché",
+    assistantHistoryIssueCurrentUnavailable: "impossible de comparer le fichier actuel sélectionné",
+    assistantHistoryReasonUnsafe: "référence YAML non autorisée ou hors du dossier isolé",
+    assistantHistoryReasonPackages: "structure par packages non prise en charge",
+    assistantHistoryReasonSyntax: "syntaxe YAML, structure ou clé en double non valide",
+    assistantHistoryReasonSymlink: "lien symbolique non autorisé",
+    assistantHistoryReasonTooLarge: "fichier trop volumineux",
+    assistantHistoryReasonMissing: "fichier inclus manquant",
+    assistantHistoryReasonOther: "structure ou fichier non pris en charge",
+    assistantHistorySafety: "Un chemin ou une empreinte identique indique seulement une correspondance entre fichiers examinés. Cela ne démontre ni l'utilisation historique réelle, ni l'état Google Home. Aucune migration ni écriture n'est autorisée.",
     migrationAnalyze: "Actualiser la simulation (lecture seule)",
     migrationLoading: "Analyse de migration en lecture seule…",
     migrationEmpty: "Ouvrez cette section pour vérifier la configuration Google Assistant.",
@@ -424,6 +471,53 @@ const HVLS_TRANSLATIONS = {
     assistantProvenanceChecklist4: "Record only relevant settings (expose_by_default, exposed_domains). Do not share secrets, keys or service accounts.",
     assistantProvenanceChecklistEnd: "A reference found in a backup is a possible historical configuration clue; it alone does not prove that Google Home actually exposed these entities.",
     assistantProvenanceSourceLabelUnknown: "No backup copy is automatically analyzed here.",
+    assistantHistoryTitle: "Inspect a copy of an older configuration",
+    assistantHistoryHow: "In your HA file editor, create hvls-history-review in the configuration folder. Put only copies of the older configuration.yaml and the YAML files it includes for Google Assistant there, preserving relative folders. Do not restore any archive or copy secrets.",
+    assistantHistoryFolder: "Copy folder: hvls-history-review (beside configuration.yaml, never replacing it).",
+    assistantHistoryAction: "Inspect historical copy (read-only)",
+    assistantHistoryBusy: "Inspecting isolated copy…",
+    assistantHistoryIdle: "No historical copy reviewed in this path yet.",
+    assistantHistoryNoFolder: "hvls-history-review is missing. Create it manually and place only the YAML files to review inside.",
+    assistantHistoryNoConfig: "configuration.yaml was not found inside hvls-history-review.",
+    assistantHistoryBlocked: "Inspection refused: {reason}. Check the copy only; do not change active configuration.",
+    assistantHistoryUnavailable: "Historical inspection unavailable. No files were modified.",
+    assistantHistoryFound: "Historical declaration: {declaration}.",
+    assistantHistoryDeclDirect: "directly in configuration.yaml",
+    assistantHistoryDeclIncluded: "through a !include file",
+    assistantHistoryDeclAbsent: "not found in the copy",
+    assistantHistoryDeclUnknown: "not determined",
+    assistantHistoryRules: "Historical global rule: expose_by_default = {defaultValue} ({origin}). exposed_domains: {domains}.",
+    assistantHistoryRuleExplicit: "explicitly declared",
+    assistantHistoryRuleImplicit: "parser-assumed default",
+    assistantHistoryRuleUnknown: "not established",
+    assistantHistoryDomainsNone: "field not declared",
+    assistantHistoryDomainsEmpty: "explicitly empty list",
+    assistantHistorySource: "entity_config source: {source}.",
+    assistantHistorySourceInline: "entities declared inline",
+    assistantHistorySourceAbsent: "no entity_config field",
+    assistantHistorySourceUnknown: "unresolved",
+    assistantHistoryCompare: "Reference to selected entity file: {pathStatus}. File contents: {contentStatus}.",
+    assistantHistoryPathSame: "same relative path",
+    assistantHistoryPathDifferent: "different relative path",
+    assistantHistoryPathUnknown: "not determined",
+    assistantHistoryContentIdentical: "matching checksums at inspection time",
+    assistantHistoryContentDifferent: "different checksums",
+    assistantHistoryContentUnknown: "not compared",
+    assistantHistoryCounts: "{entries} declared entities in the copy; {anomalies} with structural issues.",
+    assistantHistoryIssues: "Review needed: {issues}. Other entities remain inspectable.",
+    assistantHistoryIssueHistoricalMissing: "included entity file missing from the copy",
+    assistantHistoryIssueNoConfig: "no Google Assistant declaration in the copy",
+    assistantHistoryIssueNoEntity: "no entity_config field in the copy",
+    assistantHistoryIssueInline: "entities defined inline rather than in the selected file",
+    assistantHistoryIssueCurrentUnavailable: "could not compare the currently selected entity file",
+    assistantHistoryReasonUnsafe: "YAML reference outside or prohibited in isolated folder",
+    assistantHistoryReasonPackages: "packages configuration unsupported",
+    assistantHistoryReasonSyntax: "invalid YAML syntax, structure or duplicate key",
+    assistantHistoryReasonSymlink: "symbolic link not allowed",
+    assistantHistoryReasonTooLarge: "file too large",
+    assistantHistoryReasonMissing: "included file missing",
+    assistantHistoryReasonOther: "unsupported file or structure",
+    assistantHistorySafety: "A matching path or checksum only matches inspected files. It does not prove historical use or actual Google Home exposure. No migration or write is authorized.",
     migrationAnalyze: "Refresh simulation (read-only)",
     migrationLoading: "Running read-only migration assessment…",
     migrationEmpty: "Open this section to review Google Assistant configuration.",
@@ -1760,6 +1854,10 @@ class HVLSPreviewPanel extends HTMLElement {
         #assistantProvenanceHelp[hidden] { display: none; }
         #assistantProvenanceHelp ol { padding-left: 22px; line-height: 1.55; }
         #assistantProvenanceHelp li { margin-bottom: 10px; }
+        #assistantHistorical { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--divider-color); }
+        #assistantHistorical[hidden] { display: none; }
+        .assistant-history-result { overflow-wrap: anywhere; line-height: 1.5; }
+        .assistant-history-result p { margin: 8px 0; }
         #assistantProvenanceHelp code { overflow-wrap: anywhere; }
         .migration-review-note { color: var(--secondary-text-color); }
         .hvls-brand {
@@ -2401,6 +2499,22 @@ entity_config: !include google_assistant_entities.yaml</pre>
                     </details>
                   </section>
                 </div>
+                <section id="assistantHistorical" hidden
+                  aria-labelledby="assistantHistoryTitle">
+                  <h4 id="assistantHistoryTitle">${this._t("assistantHistoryTitle")}</h4>
+                  <p id="assistantHistoryHow">${this._t("assistantHistoryHow")}</p>
+                  <p id="assistantHistoryFolder" class="diagnostic-note">
+                    ${this._t("assistantHistoryFolder")}
+                  </p>
+                  <button id="assistantHistoryInspect" type="button" class="secondary">
+                    ${this._t("assistantHistoryAction")}
+                  </button>
+                  <div id="assistantHistoryResult" class="assistant-history-result"
+                    role="status"></div>
+                  <p id="assistantHistorySafety" class="diagnostic-note">
+                    ${this._t("assistantHistorySafety")}
+                  </p>
+                </section>
                 <p id="assistantProvenanceSafety" class="diagnostic-note">
                   ${this._t("assistantProvenanceSafety")}
                 </p>
@@ -2514,10 +2628,14 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._assistantFileError = null;
       this._assistantFileChecking = false;
       this._assistantProvenanceChoice = null;
+      this._invalidateHistoricalReview();
       this._renderAssistantFileStatus();
     });
     this.querySelector("#assistantFileCheck").addEventListener(
       "click", () => this._checkAssistantEntityFile()
+    );
+    this.querySelector("#assistantHistoryInspect").addEventListener(
+      "click", () => this._inspectHistoricalYaml()
     );
     for (const [id, origin] of [
       ["assistantProvenanceOld", "old"],
@@ -3135,6 +3253,13 @@ entity_config: !include google_assistant_entities.yaml</pre>
     }
   }
 
+  _invalidateHistoricalReview() {
+    this._assistantHistoryRequestId = (this._assistantHistoryRequestId || 0) + 1;
+    this._assistantHistoryBusy = false;
+    this._assistantHistoryReport = null;
+    this._assistantHistoryError = false;
+  }
+
   _chooseMigrationIntent(intent) {
     if (!["new", "existing", "unsure"].includes(intent)) return;
     // Only a local preference; this is never sent as migration authorization.
@@ -3144,6 +3269,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantFileError = null;
     this._assistantFileChecking = false;
     this._assistantProvenanceChoice = null;
+    this._invalidateHistoricalReview();
     this._renderMigrationGuide();
     this._renderAssistantFileStatus();
   }
@@ -3203,6 +3329,193 @@ entity_config: !include google_assistant_entities.yaml</pre>
       : (this._language === "fr" ? "problème non identifié" : "unknown issue");
   }
 
+  _assistantHistoryEligible() {
+    return this._assistantProvenanceAvailable() &&
+      ["old", "unknown"].includes(this._assistantProvenanceChoice) &&
+      !!(this._assistantFilePath || "").trim();
+  }
+
+  _assistantHistoryReason(code) {
+    const mapping = {
+      historical_review_folder_missing: "assistantHistoryNoFolder",
+      historical_configuration_missing: "assistantHistoryNoConfig",
+      packages_not_yet_supported: "assistantHistoryReasonPackages",
+      symlink_historical_folder_not_allowed: "assistantHistoryReasonSymlink",
+      symlink_historical_file_not_allowed: "assistantHistoryReasonSymlink",
+      yaml_file_too_large: "assistantHistoryReasonTooLarge",
+      include_missing: "assistantHistoryReasonMissing",
+      invalid_entity_file_path: "assistantHistoryReasonUnsafe",
+      sensitive_file_reference: "assistantHistoryReasonUnsafe",
+      include_outside_review_directory: "assistantHistoryReasonUnsafe",
+      invalid_historical_path: "assistantHistoryReasonUnsafe",
+      yaml_syntax_error: "assistantHistoryReasonSyntax",
+      duplicate_mapping_key: "assistantHistoryReasonSyntax",
+      expected_mapping: "assistantHistoryReasonSyntax",
+      invalid_exposed_domains: "assistantHistoryReasonSyntax",
+      invalid_expose_by_default: "assistantHistoryReasonSyntax",
+    };
+    return this._t(mapping[code] || "assistantHistoryReasonOther");
+  }
+
+  _renderAssistantHistoryStatus() {
+    const panel = this.querySelector("#assistantHistorical");
+    if (!panel) return;
+    const eligible = this._assistantHistoryEligible();
+    panel.hidden = !eligible;
+    if (!eligible) return;
+    const heading = this.querySelector("#assistantHistoryTitle");
+    const desc = this.querySelector("#assistantHistoryHow");
+    const folder = this.querySelector("#assistantHistoryFolder");
+    const safe = this.querySelector("#assistantHistorySafety");
+    const action = this.querySelector("#assistantHistoryInspect");
+    if (heading) heading.textContent = this._t("assistantHistoryTitle");
+    if (desc) desc.textContent = this._t("assistantHistoryHow");
+    if (folder) folder.textContent = this._t("assistantHistoryFolder");
+    if (safe) safe.textContent = this._t("assistantHistorySafety");
+    if (action) {
+      action.textContent = this._t("assistantHistoryAction");
+      action.disabled = this._assistantHistoryBusy === true;
+    }
+    const target = this.querySelector("#assistantHistoryResult");
+    if (!target) return;
+    target.replaceChildren();
+    const add = (message) => {
+      const p = document.createElement("p");
+      p.textContent = message;
+      target.appendChild(p);
+    };
+    if (this._assistantHistoryBusy) {
+      add(this._t("assistantHistoryBusy"));
+      return;
+    }
+    if (this._assistantHistoryError) {
+      add(this._t("assistantHistoryUnavailable"));
+      return;
+    }
+    const report = this._assistantHistoryReport;
+    if (!report) {
+      add(this._t("assistantHistoryIdle"));
+      return;
+    }
+    if (report.status === "not_found") {
+      add(this._assistantHistoryReason(report.reason));
+      return;
+    }
+    if (report.status === "blocked") {
+      add(this._tf("assistantHistoryBlocked", {
+        reason: this._assistantHistoryReason(report.reason),
+      }));
+      return;
+    }
+    if (!["parsed", "review_required"].includes(report.status)) {
+      add(this._t("assistantHistoryUnavailable"));
+      return;
+    }
+    const declaration = {
+      direct: "assistantHistoryDeclDirect",
+      included: "assistantHistoryDeclIncluded",
+      absent: "assistantHistoryDeclAbsent",
+    };
+    add(this._tf("assistantHistoryFound", {
+      declaration: this._t(declaration[report.declaration] || "assistantHistoryDeclUnknown"),
+    }));
+    const rules = report.rules || {};
+    if (["true", "false"].includes(rules.expose_by_default)) {
+      const domainList = Array.isArray(rules.exposed_domains)
+        ? rules.exposed_domains : [];
+      const domains = !rules.exposed_domains_declared
+        ? this._t("assistantHistoryDomainsNone")
+        : domainList.length ? domainList.join(", ") :
+          this._t("assistantHistoryDomainsEmpty");
+      add(this._tf("assistantHistoryRules", {
+        defaultValue: rules.expose_by_default,
+        origin: this._t(rules.expose_by_default_explicit
+          ? "assistantHistoryRuleExplicit" : "assistantHistoryRuleImplicit"),
+        domains,
+      }));
+    }
+    const source = report.entity_source || {};
+    const sourceName = source.mode === "include"
+      ? source.path || this._t("assistantHistorySourceUnknown")
+      : source.mode === "inline" ? this._t("assistantHistorySourceInline")
+      : source.mode === "not_declared" ? this._t("assistantHistorySourceAbsent")
+      : this._t("assistantHistorySourceUnknown");
+    add(this._tf("assistantHistorySource", {source: sourceName}));
+    const matching = {
+      same: "assistantHistoryPathSame",
+      different: "assistantHistoryPathDifferent",
+    };
+    const matchingContent = {
+      identical: "assistantHistoryContentIdentical",
+      different: "assistantHistoryContentDifferent",
+    };
+    add(this._tf("assistantHistoryCompare", {
+      pathStatus: this._t(matching[source.path_relation] || "assistantHistoryPathUnknown"),
+      contentStatus: this._t(matchingContent[source.content_relation] ||
+        "assistantHistoryContentUnknown"),
+    }));
+    if (source.counts && Number.isSafeInteger(source.counts.entries) &&
+        Number.isSafeInteger(source.counts.entries_with_anomalies)) {
+      add(this._tf("assistantHistoryCounts", {
+        entries: source.counts.entries,
+        anomalies: source.counts.entries_with_anomalies,
+      }));
+    }
+    const issueTranslations = {
+      historical_entity_file_missing: "assistantHistoryIssueHistoricalMissing",
+      historical_google_assistant_absent: "assistantHistoryIssueNoConfig",
+      historical_entity_config_absent: "assistantHistoryIssueNoEntity",
+      historical_inline_entity_config: "assistantHistoryIssueInline",
+      selected_current_entity_unavailable: "assistantHistoryIssueCurrentUnavailable",
+    };
+    const issues = (report.issues || []).slice(0, 12);
+    if (issues.length) add(this._tf("assistantHistoryIssues", {
+      issues: issues.map(code => this._t(
+        issueTranslations[code] || "assistantHistoryReasonOther"
+      )).join(" ; "),
+    }));
+  }
+
+  async _inspectHistoricalYaml() {
+    if (!this._hass || !this._assistantHistoryEligible() ||
+        this._assistantHistoryBusy) return;
+    const requestId = (this._assistantHistoryRequestId || 0) + 1;
+    this._assistantHistoryRequestId = requestId;
+    this._assistantHistoryBusy = true;
+    this._assistantHistoryError = false;
+    this._assistantHistoryReport = null;
+    this._renderAssistantHistoryStatus();
+    try {
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/inspect_historical_google_yaml",
+        entity_path: this._assistantFilePath.trim(),
+      });
+      if (requestId !== this._assistantHistoryRequestId) return;
+      if (result?.read_only === true &&
+          result?.source_active_verified === false &&
+          result?.historical_runtime_verified === false &&
+          result?.google_home_state_verified === false &&
+          result?.migration_authorized === false &&
+          result?.stage_allowed === false &&
+          result?.apply_allowed === false &&
+          result?.cutover_allowed === false &&
+          ["parsed", "review_required", "blocked", "not_found"].includes(result.status)) {
+        this._assistantHistoryReport = result;
+      } else {
+        this._assistantHistoryError = true;
+      }
+    } catch (_error) {
+      if (requestId === this._assistantHistoryRequestId) {
+        this._assistantHistoryError = true;
+      }
+    } finally {
+      if (requestId === this._assistantHistoryRequestId) {
+        this._assistantHistoryBusy = false;
+        this._renderAssistantHistoryStatus();
+      }
+    }
+  }
+
   _assistantProvenanceAvailable() {
     const diag = this._migrationReport?.diagnostic;
     const report = this._assistantFileReport;
@@ -3225,6 +3538,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     // User recollection is local UI context only. Not provenance evidence.
     // Never pass it to migration APIs or persist it in HA.
     this._assistantProvenanceChoice = choice;
+    this._invalidateHistoricalReview();
     // The next-step guide is tied to this local selection, not evidence.
     const help = this.querySelector("#assistantProvenanceHelp");
     if (help) help.open = false;
@@ -3236,7 +3550,10 @@ entity_config: !include google_assistant_entities.yaml</pre>
     if (!section) return;
     const visible = this._assistantProvenanceAvailable();
     section.hidden = !visible;
-    if (!visible) return;
+    if (!visible) {
+      this._renderAssistantHistoryStatus();
+      return;
+    }
     const textIds = {
       assistantProvenanceStep: "assistantProvenanceStep",
       assistantProvenanceQuestion: "assistantProvenanceQuestion",
@@ -3292,6 +3609,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       const node = this.querySelector("#" + id);
       if (node) node.textContent = this._t(id);
     }
+    this._renderAssistantHistoryStatus();
     const anomalies = this._assistantFileReport?.counts?.entries_with_anomalies;
     const issues = this.querySelector("#assistantProvenanceAnomalies");
     if (issues) {
@@ -3409,6 +3727,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantFileReport = null;
     this._assistantFileError = null;
     this._assistantProvenanceChoice = null;
+    this._invalidateHistoricalReview();
     this._renderAssistantFileStatus();
     try {
       const report = await this._hass.callWS({
@@ -4197,6 +4516,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantFileError = null;
     this._assistantFileChecking = false;
     this._assistantProvenanceChoice = null;
+    this._invalidateHistoricalReview();
     const button = this.querySelector("#migrationAnalyze");
     const status = this.querySelector("#migrationStatus");
     if (button) button.disabled = true;

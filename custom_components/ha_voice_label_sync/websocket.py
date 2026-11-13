@@ -642,6 +642,44 @@ async def websocket_get_migration_diagnostic(
     connection.send_result(msg["id"], report)
 
 
+WS_TYPE_ASSISTANT_HISTORY = f"{DOMAIN}/inspect_historical_google_yaml"
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_ASSISTANT_HISTORY,
+    vol.Required("entity_path"): str,
+})
+async def websocket_inspect_historical_google_yaml(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Read manually staged, isolated historical YAML. Never stage migration."""
+    if not hass.config_entries.async_entries(DOMAIN):
+        connection.send_error(
+            msg["id"], "not_configured", "HVLS is not configured."
+        )
+        return
+    try:
+        from .historical_ga_inspector import inspect_historical_google_yaml
+
+        report = await hass.async_add_executor_job(
+            inspect_historical_google_yaml,
+            hass.config.config_dir,
+            msg["entity_path"],
+        )
+    except Exception:
+        # No exceptions or YAML source contents are returned to the client.
+        connection.send_error(
+            msg["id"], "historical_review_unavailable",
+            "Historical YAML review unavailable. No changes made.",
+        )
+        return
+    connection.send_result(msg["id"], report)
+
+
 WS_TYPE_ASSISTANT_ENTITY_FILE = f"{DOMAIN}/inspect_assistant_entity_file"
 
 
@@ -1419,6 +1457,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_get_preview)
     websocket_api.async_register_command(hass, websocket_get_migration_diagnostic)
     websocket_api.async_register_command(hass, websocket_inspect_assistant_entity_file)
+    websocket_api.async_register_command(hass, websocket_inspect_historical_google_yaml)
     websocket_api.async_register_command(
         hass, websocket_get_migration_recovery_status
     )

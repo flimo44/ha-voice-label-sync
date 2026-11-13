@@ -3335,3 +3335,210 @@ test("Assistant manual backup instructions work in English without private file 
     /does not prove/);
   assert.deepEqual(requests, []);
 });
+
+test("Historical config review requires a prior non-authorizing entity inspection", async () => {
+  const requests = [];
+  const {panel} = makePanel(async req => {
+    requests.push(req);
+    return {};
+  });
+  const controls = {
+    assistantHistorical: {hidden: true},
+    assistantHistoryInspect: {disabled: false, textContent: ""},
+    assistantHistoryResult: {
+      children: [], replaceChildren() {this.children = [];},
+      appendChild(child) {this.children.push(child);},
+    },
+  };
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {status: "resolved"},
+  }};
+  panel._migrationIntent = "existing";
+  panel._assistantFilePath = "google_assistant_entities.yaml";
+  panel._assistantProvenanceChoice = "old";
+  await panel._inspectHistoricalYaml();
+  assert.equal(requests.length, 0);
+  panel._renderAssistantHistoryStatus();
+  assert.equal(controls.assistantHistorical.hidden, true);
+
+  panel._assistantFileReport = {
+    status: "parsed", read_only: true, source_active_verified: false,
+    migration_authorized: false, stage_allowed: false,
+    apply_allowed: false, cutover_allowed: false,
+  };
+  panel._renderAssistantHistoryStatus();
+  assert.equal(controls.assistantHistorical.hidden, false);
+  assert.match(controls.assistantHistoryResult.children[0].textContent,
+    /Aucune ancienne copie/);
+
+  panel._assistantProvenanceChoice = "new";
+  panel._renderAssistantHistoryStatus();
+  assert.equal(controls.assistantHistorical.hidden, true);
+  panel._assistantProvenanceChoice = "unknown";
+  panel._renderAssistantHistoryStatus();
+  assert.equal(controls.assistantHistorical.hidden, false);
+  panel._migrationReport = {diagnostic: {
+    mode: "unsupported", global_blockers: ["packages_not_yet_supported"],
+  }};
+  panel._renderAssistantHistoryStatus();
+  assert.equal(controls.assistantHistorical.hidden, true);
+});
+
+test("Historical review makes one admin read-only request and shows bounded evidence", async () => {
+  const requests = [];
+  const {panel} = makePanel(async req => {
+    requests.push(req);
+    return {
+      schema_version: 1, read_only: true, status: "parsed",
+      source_active_verified: false, historical_runtime_verified: false,
+      google_home_state_verified: false, migration_authorized: false,
+      stage_allowed: false, apply_allowed: false, cutover_allowed: false,
+      declaration: "included",
+      rules: {
+        expose_by_default: "false", expose_by_default_explicit: true,
+        exposed_domains_declared: true, exposed_domains: ["light", "switch"],
+      },
+      entity_source: {
+        mode: "include", path: "google_assistant_entities.yaml",
+        path_relation: "same", content_relation: "identical",
+        file_present: true,
+        counts: {entries: 52, entries_with_anomalies: 0},
+      },
+      issues: [],
+    };
+  });
+  const controls = {
+    assistantHistorical: {hidden: true},
+    assistantHistoryInspect: {disabled: false, textContent: ""},
+    assistantHistoryResult: {
+      children: [],
+      replaceChildren() {this.children = [];},
+      appendChild(child) {this.children.push(child);},
+    },
+    assistantHistorySafety: {textContent: ""},
+  };
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {status: "resolved"},
+  }};
+  panel._migrationIntent = "existing";
+  panel._assistantProvenanceChoice = "old";
+  panel._assistantFilePath = "google_assistant_entities.yaml";
+  panel._assistantFileReport = {
+    status: "parsed", read_only: true, source_active_verified: false,
+    migration_authorized: false, stage_allowed: false,
+    apply_allowed: false, cutover_allowed: false,
+  };
+  await panel._inspectHistoricalYaml();
+  assert.equal(requests.length, 1);
+  assert.deepEqual(Object.keys(requests[0]).sort(), ["entity_path", "type"]);
+  assert.equal(requests[0].type,
+    "ha_voice_label_sync/inspect_historical_google_yaml");
+  assert.equal(requests[0].entity_path, "google_assistant_entities.yaml");
+  const message = controls.assistantHistoryResult.children
+    .map(child => child.textContent).join(" ");
+  assert.match(message, /fichier !include/);
+  assert.match(message, /expose_by_default = false/);
+  assert.match(message, /light, switch/);
+  assert.match(message, /chemin identique/);
+  assert.match(message, /empreintes identiques/);
+  assert.match(message, /52 entité/);
+  assert.match(controls.assistantHistorySafety.textContent, /Aucune migration/);
+  assert.equal(panel._migrationBaselineEligible(), false);
+});
+
+test("Historical review displays missing staging folder without exposing backend errors", async () => {
+  const {panel} = makePanel(async () => ({
+    read_only: true, status: "not_found",
+    reason: "historical_review_folder_missing",
+    source_active_verified: false, historical_runtime_verified: false,
+    google_home_state_verified: false, migration_authorized: false,
+    stage_allowed: false, apply_allowed: false, cutover_allowed: false,
+  }));
+  const summary = {
+    children: [], replaceChildren() {this.children = [];},
+    appendChild(child) {this.children.push(child);},
+  };
+  panel.querySelector = sel => sel === "#assistantHistoryResult"
+    ? summary : sel === "#assistantHistorical" ? {hidden: false} : null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {status: "resolved"},
+  }};
+  panel._migrationIntent = "unsure";
+  panel._assistantProvenanceChoice = "unknown";
+  panel._assistantFilePath = "google_assistant_entities.yaml";
+  panel._assistantFileReport = {
+    status: "review_required", read_only: true, source_active_verified: false,
+    migration_authorized: false, stage_allowed: false,
+    apply_allowed: false, cutover_allowed: false,
+  };
+  await panel._inspectHistoricalYaml();
+  assert.match(summary.children.map(x => x.textContent).join(" "),
+    /dossier hvls-history-review est absent/);
+  assert.equal(panel._migrationBaselineEligible(), false);
+});
+
+test("Historical review rejects false authority and stale asynchronous responses", async () => {
+  const wait = deferred();
+  const calls = [];
+  const {panel} = makePanel(async req => {
+    calls.push(req);
+    return wait.promise;
+  });
+  const result = {
+    children: [], replaceChildren() {this.children = [];},
+    appendChild(child) {this.children.push(child);},
+  };
+  panel.querySelector = sel => sel === "#assistantHistoryResult"
+    ? result : sel === "#assistantHistorical" ? {hidden: false} : null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {status: "resolved"},
+  }};
+  panel._migrationIntent = "existing";
+  panel._assistantFilePath = "old.yaml";
+  panel._assistantProvenanceChoice = "old";
+  panel._assistantFileReport = {
+    status: "parsed", read_only: true, source_active_verified: false,
+    migration_authorized: false, stage_allowed: false,
+    apply_allowed: false, cutover_allowed: false,
+  };
+  const task = panel._inspectHistoricalYaml();
+  panel._assistantFilePath = "new.yaml";
+  panel._invalidateHistoricalReview();
+  wait.resolve({
+    status: "parsed", read_only: true,
+    source_active_verified: false, historical_runtime_verified: false,
+    google_home_state_verified: false, migration_authorized: false,
+    stage_allowed: false, apply_allowed: false, cutover_allowed: false,
+  });
+  await task;
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].entity_path, "old.yaml");
+  assert.equal(panel._assistantHistoryReport, null);
+
+  panel._assistantFilePath = "new.yaml";
+  panel._hass.callWS = async () => ({
+    status: "parsed", read_only: true,
+    source_active_verified: true, historical_runtime_verified: false,
+    google_home_state_verified: false, migration_authorized: true,
+    stage_allowed: true, apply_allowed: true, cutover_allowed: true,
+  });
+  await panel._inspectHistoricalYaml();
+  assert.equal(panel._assistantHistoryReport, null);
+  assert.equal(panel._assistantHistoryError, true);
+  assert.match(result.children.map(x => x.textContent).join(" "),
+    /indisponible/);
+});
+
+test("Historical review is separate from migration approvals and has localized copy", () => {
+  assert.match(source, /id="assistantHistorical" hidden/);
+  assert.match(source, /id="assistantHistoryInspect"/);
+  assert.match(source, /_assistantHistoryEligible\(\)/);
+  assert.match(source, /historical_runtime_verified === false/);
+  assert.match(source, /cutover_allowed === false/);
+  assert.match(source, /this\._invalidateHistoricalReview\(\)/);
+  assert.match(source, /hvls-history-review/);
+  assert.match(source, /Historical declaration/);
+  assert.match(source, /Déclaration historique/);
+});
