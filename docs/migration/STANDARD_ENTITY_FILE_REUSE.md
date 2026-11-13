@@ -74,3 +74,42 @@ Sur la VM de test contenant le fichier non référencé de **52 entités** :
 les options personnalisées et les cas ambigus seront traités ensuite à
 partir d'essais utilisateur. Elle ne prétend pas terminer la prise en charge
 d'un fichier manuel pour son Apply final.
+
+## Prise en charge explicite du YAML de production (après PR #149)
+
+Si le Preview indique `unmanaged_output`, HVLS ne peut pas appliquer
+de changements tant que le fichier de production existant est protégé.
+
+L'Assistant distingue désormais **reprise des labels** et **prise en
+charge du fichier de production**. Une fois le fichier lu et comparé :
+
+1. **Vérifier et reprendre ce fichier** déclenche une préparation en
+   lecture seule. Le serveur refuse les chemins différents du chemin de
+   production configuré, les symlinks, les fichiers non gérés par une
+   autre installation, les YAML illisibles ou les comparaisons invalides.
+2. Le bilan montre le nombre d'entités, les anomalies locales, ainsi
+   que les ajouts, suppressions et modifications du Preview par rapport
+   au YAML existant. Ces différences sont **informatives**.
+3. Une confirmation explicite déclenche une relecture serveur et un
+   contrôle SHA-256 des deux fichiers sous le verrou d'écriture HVLS.
+4. HVLS crée **obligatoirement une copie de sécurité distincte**, valide
+   son contenu et revérifie le fichier original. La copie est conservée
+   même si l'enregistrement de propriété échoue ensuite.
+5. HVLS enregistre la propriété pour cette installation, **sans écrire
+   ni remplacer le YAML de production**, sans label ajouté, sans
+   nouvelle connexion Google Assistant et sans Apply.
+6. Toute application ultérieure des différences reste soumise au
+   mécanisme standard de Preview, aux empreintes et à une confirmation
+   distincte de l'administrateur.
+
+Une erreur ou une modification concurrente entraîne un refus. L'Assistant
+doit alors recharger le statut de propriété ; il ne relance pas
+automatiquement la transaction. La création d'une sauvegarde ne prouve
+pas à elle seule que l'enregistrement de propriété a abouti.
+
+Les éventuels réglages personnalisés dans le YAML sont conservés
+tant qu'aucun Apply séparé n'a été accepté. Vérifier les différences
+surtout lorsqu'il y a des suppressions ou des changements de nom/pièce.
+
+Le mécanisme est indépendant du moteur de migration Google Home et
+ne certifie pas que les appareils sont réellement exposés à Google.
