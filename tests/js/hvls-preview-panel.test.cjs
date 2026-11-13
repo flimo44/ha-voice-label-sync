@@ -3747,8 +3747,31 @@ test("Confirmed existing file takeover shows diff, calls only prepare/confirm an
   assert.match(confirmations[0], /1 suppression/);
   assert.match(confirmations[0], /2 modification/);
   assert.match(confirmations[0], /aucun Apply/i);
+  assert.match(confirmations[0], /\?\n\nEntités actuelles/);
+  assert.match(confirmations[0], /\nDifférences proposées par le Preview/);
+  assert.doesNotMatch(confirmations[0], /\\n/);
   assert.match(nodes.assistantTakeoverResult.textContent, /Sauvegarde vérifiée/);
   assert.equal(nodes.assistantTakeoverButton.hidden, true);
+});
+
+test("English takeover confirmation has real line breaks", async () => {
+  const confirmations = [];
+  const {panel} = standardAdoptionFixture(async request => {
+    assert.equal(request.type, "ha_voice_label_sync/prepare_existing_output_takeover");
+    return {
+      eligible: true, selected_path: "google_assistant_entities.yaml",
+      production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
+      entities: 4, issues: 0,
+      changes: {added: 0, removed: 0, modified: 0},
+    };
+  }, message => { confirmations.push(message); return false; });
+  panel._language = "en";
+  panel._applyBlockReasonCode = "unmanaged_output";
+  await panel._takeOverAssistantFile();
+  assert.equal(confirmations.length, 1);
+  assert.match(confirmations[0], /\?\n\nCurrent entities/);
+  assert.match(confirmations[0], /\nPreview differences:/);
+  assert.doesNotMatch(confirmations[0], /\\n/);
 });
 
 test("Existing file takeover rejects stale source, cancellation and unsupported status", async () => {
