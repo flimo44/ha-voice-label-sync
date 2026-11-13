@@ -342,3 +342,48 @@ def test_cloud_include_is_not_mistaken_for_new_configuration(
     report = discovery.discover_google_assistant(tmp_path)
     assert report["mode"] == "unsupported"
     assert "unresolved_cloud_configuration" in report["global_blockers"]
+
+
+
+def test_new_configuration_reports_unreferenced_google_file_without_reading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "configuration.yaml").write_text(
+        "homeassistant:\n  name: Test\n", encoding="utf-8"
+    )
+    candidate = tmp_path / "google_assistant_entities.yaml"
+    candidate.write_text("light.private: !secret unknown\n", encoding="utf-8")
+    original = Path.read_bytes
+
+    def guard(path: Path):
+        if path == candidate:
+            raise AssertionError("Unreferenced candidate must not be read")
+        return original(path)
+
+    monkeypatch.setattr(Path, "read_bytes", guard)
+    report = discovery.discover_google_assistant(tmp_path)
+    assert report["mode"] == "new_configuration"
+    assert report["source"]["unreferenced_google_entity_file_present"] is True
+    assert report["source"]["locations"][0]["path"] == "configuration.yaml"
+    assert len(report["source"]["locations"]) == 1
+    assert "light.private" not in json.dumps(report)
+    assert report["cutover_status"] == "not_applicable"
+
+
+def test_new_configuration_without_candidate_or_with_symlink_has_no_evidence(
+    tmp_path: Path
+) -> None:
+    (tmp_path / "configuration.yaml").write_text(
+        "homeassistant:\n  name: Test\n", encoding="utf-8"
+    )
+    candidate = tmp_path / "google_assistant_entities.yaml"
+    assert discovery.discover_google_assistant(tmp_path)["source"][
+        "unreferenced_google_entity_file_present"
+    ] is False
+
+    outside = tmp_path.parent / "hvls-unreferenced-external.yaml"
+    # An outside target is never read, even when the link is present.
+    candidate.symlink_to(outside)
+    assert discovery.discover_google_assistant(tmp_path)["source"][
+        "unreferenced_google_entity_file_present"
+    ] is False
