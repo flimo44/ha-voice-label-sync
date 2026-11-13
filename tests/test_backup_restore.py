@@ -1,5 +1,6 @@
 """Safety and regression tests for beta.4 backup review and restore."""
 
+import hashlib
 import importlib.util
 import sys
 from pathlib import Path
@@ -261,7 +262,6 @@ def test_restore_refuses_externally_modified_owned_file(
 
 def test_restore_updates_ownership_digest(backup_module, sample):
     """Restore records SHA and holds future HVLS writes until reconciled."""
-    import hashlib
     from hvls import FileWriterError
     from hvls.output_ownership_registry import OwnershipRegistry
     from hvls.owned_writer import write_owned_output
