@@ -3387,9 +3387,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
     if (restore) {
       restore.textContent = this._t(textOnly
         ? "backupRestoreTextOnly" : "backupRestore");
-      restore.disabled = comparison.identical_text === true ||
+      restore.disabled = Boolean(comparison.identical_text === true ||
         this._restoring || this._applying || this._refreshing ||
-        this._generating || this._entityWritePending;
+        this._generating || this._entityWritePending);
     }
     if (comparison.identical_text === true || textOnly) {
       const text = document.createElement("p");
