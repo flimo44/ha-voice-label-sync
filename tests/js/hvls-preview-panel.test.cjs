@@ -2843,6 +2843,8 @@ test("Assistant proposes detected file and inspects it without migration writes"
   assert.equal(controls.assistantFileSection.hidden, false);
   assert.equal(controls.assistantFilePath.value, "google_assistant_entities.yaml");
   assert.equal(controls.assistantFileCheck.disabled, false);
+  assert.match(controls.migrationGuideQuestion.textContent, /Parcours choisi/);
+  assert.doesNotMatch(controls.migrationGuideQuestion.textContent, /Souhaitez-vous/);
   assert.equal(calls.length, 0);
   await panel._checkAssistantEntityFile();
   assert.deepEqual(calls.map(x => x.type), [
@@ -2931,4 +2933,114 @@ test("Assistant examples show both Google Assistant include shapes", () => {
   assert.match(source, /entity_config: !include google_assistant_entities.yaml/);
   assert.match(source, /id="assistantFilePath"/);
   assert.match(source, /id="assistantFileCheck"/);
+});
+
+test("Assistant presents explicit exposure indicators and cautions independently", () => {
+  const {panel} = makePanel(async () => ({}));
+  const ids = [
+    "assistantFileResult", "assistantFileMetrics", "assistantFileUnsetExplanation",
+    "assistantFileConclusion", "assistantMetricEntries", "assistantMetricTrue",
+    "assistantMetricFalse", "assistantMetricUnset", "assistantMetricIssues",
+    "assistantLabelEntries", "assistantLabelTrue", "assistantLabelFalse",
+    "assistantLabelUnset", "assistantLabelIssues",
+  ];
+  const controls = Object.fromEntries(ids.map(id => [id, {
+    textContent: "", hidden: true, setAttribute(key, value) {this[key] = value;},
+  }]));
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {mode: "new_configuration"}};
+  panel._assistantFileReport = {
+    read_only: true, status: "parsed", source_active_verified: false,
+    counts: {
+      entries: 52, requested_exposure: 52,
+      explicitly_exposed: 28, explicitly_excluded: 0,
+      expose_not_set: 24, invalid_expose: 0,
+      entries_with_anomalies: 0,
+    },
+    issue_examples: [],
+  };
+  panel._renderAssistantFileStatus();
+  assert.equal(controls.assistantFileMetrics.hidden, false);
+  assert.equal(controls.assistantMetricEntries.textContent, "52");
+  assert.equal(controls.assistantMetricTrue.textContent, "28");
+  assert.equal(controls.assistantMetricFalse.textContent, "0");
+  assert.equal(controls.assistantMetricUnset.textContent, "24");
+  assert.equal(controls.assistantMetricIssues.textContent, "0");
+  assert.equal(controls.assistantFileUnsetExplanation.hidden, false);
+  assert.match(controls.assistantFileUnsetExplanation.textContent,
+    /n'est pas considérée comme expose: true/);
+  assert.equal(controls.assistantFileConclusion.hidden, false);
+  assert.match(controls.assistantFileConclusion.textContent,
+    /aucune déclaration Google Assistant/i);
+  assert.match(controls.assistantFileResult.textContent, /52 entité/);
+  assert.match(controls.assistantFileResult.textContent, /0 anomalie/);
+
+  panel._assistantFileReport = null;
+  panel._renderAssistantFileStatus();
+  assert.equal(controls.assistantFileMetrics.hidden, true);
+  assert.equal(controls.assistantFileConclusion.hidden, true);
+});
+
+test("Assistant keeps packages as Other after standalone YAML parses", () => {
+  const {panel} = makePanel(async () => ({}));
+  const status = {textContent: ""};
+  const conclusion = {textContent: "", hidden: true};
+  panel.querySelector = sel => ({
+    "#assistantFileResult": status,
+    "#assistantFileConclusion": conclusion,
+  })[sel] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "unsupported", global_blockers: ["packages_not_yet_supported"],
+  }};
+  panel._assistantFileReport = {
+    status: "parsed", counts: {
+      entries: 1, requested_exposure: 1, explicitly_exposed: 1,
+      explicitly_excluded: 0, expose_not_set: 0,
+      entries_with_anomalies: 0,
+    },
+  };
+  panel._renderAssistantFileStatus();
+  assert.equal(conclusion.hidden, false);
+  assert.match(conclusion.textContent, /Autre configuration/);
+  assert.match(conclusion.textContent, /ne peuvent pas être migrés automatiquement/);
+  assert.equal(panel._migrationBaselineEligible(), false);
+});
+
+test("Assistant selected path labels follow the choice without changing eligibility", () => {
+  const {panel} = makePanel(async () => ({}));
+  const ids = [
+    "migrationGuide", "migrationGuideCandidate", "migrationGuideDetected",
+    "migrationGuideQuestion", "assistantFileSection", "assistantFilePath",
+    "assistantFileCheck", "migrationGuideNext",
+  ];
+  const controls = Object.fromEntries(ids.map(id => [id, {
+    textContent: "", hidden: false, value: "", disabled: false,
+    setAttribute() {},
+  }]));
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {
+      status: "resolved", unreferenced_google_entity_file_present: true,
+    },
+  }};
+  panel._renderMigrationGuide();
+  assert.match(controls.migrationGuideQuestion.textContent, /Souhaitez-vous/);
+  panel._chooseMigrationIntent("existing");
+  assert.match(controls.migrationGuideQuestion.textContent, /retrouver/);
+  panel._chooseMigrationIntent("unsure");
+  assert.match(controls.migrationGuideQuestion.textContent, /situation à clarifier/);
+  panel._chooseMigrationIntent("new");
+  assert.match(controls.migrationGuideQuestion.textContent, /nouvelle configuration/);
+  assert.equal(controls.assistantFileSection.hidden, true);
+  assert.equal(panel._migrationBaselineEligible(), false);
+});
+
+test("Assistant metrics CSS and accessible labels remain responsive", () => {
+  assert.match(source, /#assistantFilePath\s*\{[\s\S]*?flex:\s*1 1 30rem/);
+  assert.match(source, /\.assistant-file-metrics\s*\{[\s\S]*?grid-template-columns/);
+  assert.match(source, /\.assistant-file-metrics\[hidden\]\s*\{\s*display:\s*none/);
+  for (const id of ["Entries", "True", "False", "Unset", "Issues"]) {
+    assert.ok(source.includes('id="assistantMetric' + id + '"'));
+    assert.ok(source.includes('id="assistantLabel' + id + '"'));
+  }
 });

@@ -15,9 +15,19 @@ HA config directory. This is a hint, never proof of use.
 
 An administrator can supply a relative YAML path in the Assistant.
 The `inspect_assistant_entity_file` WebSocket command runs a bounded
-PyYAML BaseLoader inspection in the executor. It returns the number of
-explicit entries, requested exposures, explicit exclusions, and local
-anomalies, with a limited sample of entity IDs and source lines.
+PyYAML BaseLoader inspection in the executor. It returns counts for:
+- all declared entries;
+- `expose: true` explicitly set on individual entities;
+- `expose: false` explicitly set on individual entities;
+- entries with no `expose` field (unknown without global policy);
+- invalid `expose` values (also reported as structural anomalies);
+- entries with local anomalies, with limited entity ID/line examples.
+
+For compatibility, `requested_exposure` is retained as a **legacy aggregate**
+of explicit-true plus omitted-expose entries. The Assistant must never
+display it as the number of explicitly requested or actually exposed
+Google Home entities. Malformed entries may not belong to any of these
+exposure-intent subsets, and the anomaly count is not a disjoint category.
 
 - Reject absolute paths, parent traversals, hidden paths, reserved or
   secret-bearing names, and symlinks including intermediate directories.

@@ -47,12 +47,25 @@ const HVLS_TRANSLATIONS = {
     assistantFileCheck: "Vérifier le fichier (lecture seule)",
     assistantFileChecking: "Contrôle en lecture seule…",
     assistantFileNotChecked: "Aucun fichier vérifié pour le moment.",
-    assistantFileChecked: "{entries} entité(s), {exposed} exposition(s) demandée(s), {excluded} exclusion(s), {anomalies} anomalie(s) locale(s).",
+    assistantFileChecked: "{entries} entité(s) déclarée(s) · {anomalies} anomalie(s) structurelle(s) locale(s) détectée(s).",
     assistantFileIssues: "À examiner : {issues}. Corrigez si nécessaire, puis revérifiez.",
-    assistantFileNoIssues: "Aucune anomalie structurelle trouvée.",
+    assistantFileNoIssues: "Aucune anomalie structurelle détectée. Cela ne garantit pas une configuration active ou une exposition Google Home.",
     assistantFileCannotRead: "Impossible de lire le fichier : {reason}.",
     assistantFileUnavailable: "Contrôle indisponible. Aucune modification effectuée.",
     assistantFileSafety: "Ce résultat ne prouve pas que le fichier est actif. Aucune migration ni exposition Google n'est autorisée.",
+    migrationGuideSelectedExisting: "Parcours choisi : retrouver une configuration existante. Vous pouvez modifier votre choix ci-dessous.",
+    migrationGuideSelectedNew: "Parcours choisi : nouvelle configuration. Vous pouvez modifier votre choix ci-dessous.",
+    migrationGuideSelectedUnsure: "Parcours choisi : situation à clarifier. Vous pouvez modifier votre choix ci-dessous.",
+    assistantFileMetricEntries: "Entités déclarées",
+    assistantFileMetricTrue: "expose: true",
+    assistantFileMetricFalse: "expose: false",
+    assistantFileMetricUnset: "expose absent",
+    assistantFileMetricIssues: "Entités à examiner",
+    assistantFileUnreferencedConclusion: "Le fichier est lisible, mais aucune déclaration Google Assistant qui le référence n'a été trouvée dans la configuration analysée. Vérifiez sa provenance et son utilisation avant toute migration. Ne l'activez pas simplement pour débloquer HVLS.",
+    assistantFilePackagesConclusion: "Un fichier lisible ne suffit pas à identifier la configuration utilisée par les packages. Ceux-ci restent classés « Autre configuration » et ne peuvent pas être migrés automatiquement.",
+    assistantFileGeneralConclusion: "Cette vérification porte uniquement sur le contenu du fichier, sans établir les règles globales Google Assistant ni l'exposition effective dans Google Home.",
+    assistantFileUnsetExplanation: "Une entrée sans champ expose n'est pas considérée comme expose: true. Son exposition éventuelle dépend d'autres réglages et n'est pas établie ici.",
+    assistantFileResultsTitle: "Bilan de lecture du fichier",
     migrationAnalyze: "Actualiser la simulation (lecture seule)",
     migrationLoading: "Analyse de migration en lecture seule…",
     migrationEmpty: "Ouvrez cette section pour vérifier la configuration Google Assistant.",
@@ -336,12 +349,25 @@ const HVLS_TRANSLATIONS = {
     assistantFileCheck: "Inspect file (read-only)",
     assistantFileChecking: "Read-only inspection…",
     assistantFileNotChecked: "No file inspected yet.",
-    assistantFileChecked: "{entries} entities, {exposed} requested exposures, {excluded} exclusions, {anomalies} local issues.",
+    assistantFileChecked: "{entries} declared entity/ies · {anomalies} local structural issue(s) detected.",
     assistantFileIssues: "Review: {issues}. Correct if necessary, then recheck.",
-    assistantFileNoIssues: "No structural issues found.",
+    assistantFileNoIssues: "No structural issues found. This does not guarantee active configuration or Google Home exposure.",
     assistantFileCannotRead: "Unable to inspect the file: {reason}.",
     assistantFileUnavailable: "Inspection unavailable. No changes made.",
     assistantFileSafety: "This does not prove that the file is active. No migration or Google exposure is authorized.",
+    migrationGuideSelectedExisting: "Selected path: locate an existing configuration. You may change your choice below.",
+    migrationGuideSelectedNew: "Selected path: new configuration. You may change your choice below.",
+    migrationGuideSelectedUnsure: "Selected path: situation to clarify. You may change your choice below.",
+    assistantFileMetricEntries: "Declared entities",
+    assistantFileMetricTrue: "expose: true",
+    assistantFileMetricFalse: "expose: false",
+    assistantFileMetricUnset: "expose missing",
+    assistantFileMetricIssues: "Entities to review",
+    assistantFileUnreferencedConclusion: "The file is readable, but the analyzed configuration did not show a Google Assistant declaration referencing it. Verify its origin and usage before migrating. Do not activate it merely to unblock HVLS.",
+    assistantFilePackagesConclusion: "A readable file does not identify which configuration is used by packages. Packages remain classified as « Other configuration » and are not eligible for automatic migration.",
+    assistantFileGeneralConclusion: "This check only analyzes the file contents; it does not establish global Google Assistant rules or effective Google Home exposure.",
+    assistantFileUnsetExplanation: "An entry without expose is not treated as expose: true. Any exposure depends on other settings and is not established here.",
+    assistantFileResultsTitle: "File inspection summary",
     migrationAnalyze: "Refresh simulation (read-only)",
     migrationLoading: "Running read-only migration assessment…",
     migrationEmpty: "Open this section to review Google Assistant configuration.",
@@ -1633,6 +1659,31 @@ class HVLSPreviewPanel extends HTMLElement {
         .migration-controls { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
         .migration-controls select { max-width: 220px; font: inherit; }
         .migration-controls label { display: flex; gap: 4px; align-items: center; }
+        #assistantFilePath {
+          flex: 1 1 30rem;
+          min-width: min(100%, 18rem);
+          width: min(100%, 42rem);
+          max-width: 100%;
+          box-sizing: border-box;
+        }
+        .assistant-file-metrics {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+          gap: 10px;
+          margin: 12px 0;
+        }
+        .assistant-file-metrics[hidden] { display: none; }
+        .assistant-file-metric {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          min-width: 0;
+          border: 1px solid var(--divider-color);
+          border-radius: 8px;
+          padding: 12px;
+        }
+        .assistant-file-metric strong { font-size: 1.4rem; font-weight: 600; }
+        .assistant-file-metric span { font-size: 0.83rem; color: var(--secondary-text-color); }
         .migration-review-note { color: var(--secondary-text-color); }
         .hvls-brand {
           display: flex;
@@ -2203,6 +2254,31 @@ entity_config: !include google_assistant_entities.yaml</pre>
                 </button>
               </div>
               <p id="assistantFileResult" role="status" class="diagnostic-note"></p>
+              <div id="assistantFileMetrics" class="assistant-file-metrics"
+                aria-label="${this._t("assistantFileResultsTitle")}" hidden>
+                <div class="assistant-file-metric">
+                  <strong id="assistantMetricEntries">—</strong>
+                  <span id="assistantLabelEntries">${this._t("assistantFileMetricEntries")}</span>
+                </div>
+                <div class="assistant-file-metric">
+                  <strong id="assistantMetricTrue">—</strong>
+                  <span id="assistantLabelTrue">${this._t("assistantFileMetricTrue")}</span>
+                </div>
+                <div class="assistant-file-metric">
+                  <strong id="assistantMetricFalse">—</strong>
+                  <span id="assistantLabelFalse">${this._t("assistantFileMetricFalse")}</span>
+                </div>
+                <div class="assistant-file-metric">
+                  <strong id="assistantMetricUnset">—</strong>
+                  <span id="assistantLabelUnset">${this._t("assistantFileMetricUnset")}</span>
+                </div>
+                <div class="assistant-file-metric">
+                  <strong id="assistantMetricIssues">—</strong>
+                  <span id="assistantLabelIssues">${this._t("assistantFileMetricIssues")}</span>
+                </div>
+              </div>
+              <p id="assistantFileUnsetExplanation" class="diagnostic-note" hidden></p>
+              <p id="assistantFileConclusion" class="diagnostic-note" hidden></p>
               <p id="assistantFileSafety" class="diagnostic-note">
                 ${this._t("assistantFileSafety")}
               </p>
@@ -3016,8 +3092,48 @@ entity_config: !include google_assistant_entities.yaml</pre>
       button.disabled = this._assistantFileChecking === true ||
         !(this._assistantFilePath || "").trim();
     }
-    if (!status) return;
     const report = this._assistantFileReport;
+    const counts = report?.counts || {};
+    const inspected = !this._assistantFileChecking && !this._assistantFileError &&
+      ["parsed", "review_required"].includes(report?.status);
+    const fields = [
+      ["Entries", "entries", "assistantFileMetricEntries"],
+      ["True", "explicitly_exposed", "assistantFileMetricTrue"],
+      ["False", "explicitly_excluded", "assistantFileMetricFalse"],
+      ["Unset", "expose_not_set", "assistantFileMetricUnset"],
+      ["Issues", "entries_with_anomalies", "assistantFileMetricIssues"],
+    ];
+    const metrics = this.querySelector("#assistantFileMetrics");
+    const complete = inspected && fields.every(
+      ([, key]) => Number.isSafeInteger(counts[key]) && counts[key] >= 0
+    );
+    if (metrics) {
+      metrics.hidden = !complete;
+      metrics.setAttribute("aria-label", this._t("assistantFileResultsTitle"));
+    }
+    for (const [name, key, labelKey] of fields) {
+      const number = this.querySelector("#assistantMetric" + name);
+      const label = this.querySelector("#assistantLabel" + name);
+      if (number) number.textContent = complete ? String(counts[key]) : "—";
+      if (label) label.textContent = this._t(labelKey);
+    }
+    const unset = this.querySelector("#assistantFileUnsetExplanation");
+    if (unset) {
+      unset.hidden = !complete || counts.expose_not_set === 0;
+      unset.textContent = this._t("assistantFileUnsetExplanation");
+    }
+    const conclusion = this.querySelector("#assistantFileConclusion");
+    if (conclusion) {
+      const diag = this._migrationReport?.diagnostic;
+      const note = this._assistantPackagesDetected()
+        ? "assistantFilePackagesConclusion"
+        : diag?.mode === "new_configuration"
+          ? "assistantFileUnreferencedConclusion"
+          : "assistantFileGeneralConclusion";
+      conclusion.hidden = !inspected;
+      conclusion.textContent = inspected ? this._t(note) : "";
+    }
+    if (!status) return;
     if (this._assistantFileChecking) {
       status.textContent = this._t("assistantFileChecking");
     } else if (this._assistantFileError) {
@@ -3029,11 +3145,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
         reason: this._assistantFileExplanation(report.reason),
       });
     } else if (["parsed", "review_required"].includes(report.status)) {
-      const counts = report.counts || {};
       const intro = this._tf("assistantFileChecked", {
         entries: counts.entries ?? 0,
-        exposed: counts.requested_exposure ?? 0,
-        excluded: counts.explicitly_excluded ?? 0,
         anomalies: counts.entries_with_anomalies ?? 0,
       });
       const issueList = (report.issue_examples || []).slice(0, 20).map(issue => {
@@ -3143,8 +3256,12 @@ entity_config: !include google_assistant_entities.yaml</pre>
     if (detectedNote) detectedNote.textContent = packages
       ? "" : this._t("migrationGuideDetected");
     const question = this.querySelector("#migrationGuideQuestion");
-    if (question) question.textContent = this._t(packages
-      ? "assistantPackagesQuestion" : "migrationGuideQuestion");
+    const questionKey = packages ? "assistantPackagesQuestion" :
+      this._migrationIntent === "new" ? "migrationGuideSelectedNew" :
+      this._migrationIntent === "existing" ? "migrationGuideSelectedExisting" :
+      this._migrationIntent === "unsure" ? "migrationGuideSelectedUnsure" :
+      "migrationGuideQuestion";
+    if (question) question.textContent = this._t(questionKey);
     const intentControls = ["migrationIntentNew", "migrationIntentExisting", "migrationIntentUnsure"];
     for (const id of intentControls) {
       const element = this.querySelector("#" + id);
