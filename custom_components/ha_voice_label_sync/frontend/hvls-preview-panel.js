@@ -2628,6 +2628,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._assistantFileError = null;
       this._assistantFileChecking = false;
       this._assistantProvenanceChoice = null;
+      this._invalidateHistoricalReview();
       this._renderAssistantFileStatus();
     });
     this.querySelector("#assistantFileCheck").addEventListener(
@@ -3252,6 +3253,13 @@ entity_config: !include google_assistant_entities.yaml</pre>
     }
   }
 
+  _invalidateHistoricalReview() {
+    this._assistantHistoryRequestId = (this._assistantHistoryRequestId || 0) + 1;
+    this._assistantHistoryBusy = false;
+    this._assistantHistoryReport = null;
+    this._assistantHistoryError = false;
+  }
+
   _chooseMigrationIntent(intent) {
     if (!["new", "existing", "unsure"].includes(intent)) return;
     // Only a local preference; this is never sent as migration authorization.
@@ -3261,6 +3269,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantFileError = null;
     this._assistantFileChecking = false;
     this._assistantProvenanceChoice = null;
+    this._invalidateHistoricalReview();
     this._renderMigrationGuide();
     this._renderAssistantFileStatus();
   }
@@ -3342,6 +3351,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     // User recollection is local UI context only. Not provenance evidence.
     // Never pass it to migration APIs or persist it in HA.
     this._assistantProvenanceChoice = choice;
+    this._invalidateHistoricalReview();
     // The next-step guide is tied to this local selection, not evidence.
     const help = this.querySelector("#assistantProvenanceHelp");
     if (help) help.open = false;
@@ -3353,7 +3363,10 @@ entity_config: !include google_assistant_entities.yaml</pre>
     if (!section) return;
     const visible = this._assistantProvenanceAvailable();
     section.hidden = !visible;
-    if (!visible) return;
+    if (!visible) {
+      this._renderAssistantHistoryStatus();
+      return;
+    }
     const textIds = {
       assistantProvenanceStep: "assistantProvenanceStep",
       assistantProvenanceQuestion: "assistantProvenanceQuestion",
@@ -3409,6 +3422,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       const node = this.querySelector("#" + id);
       if (node) node.textContent = this._t(id);
     }
+    this._renderAssistantHistoryStatus();
     const anomalies = this._assistantFileReport?.counts?.entries_with_anomalies;
     const issues = this.querySelector("#assistantProvenanceAnomalies");
     if (issues) {
@@ -3526,6 +3540,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantFileReport = null;
     this._assistantFileError = null;
     this._assistantProvenanceChoice = null;
+    this._invalidateHistoricalReview();
     this._renderAssistantFileStatus();
     try {
       const report = await this._hass.callWS({
@@ -4314,6 +4329,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantFileError = null;
     this._assistantFileChecking = false;
     this._assistantProvenanceChoice = null;
+    this._invalidateHistoricalReview();
     const button = this.querySelector("#migrationAnalyze");
     const status = this.querySelector("#migrationStatus");
     if (button) button.disabled = true;
