@@ -3044,3 +3044,155 @@ test("Assistant metrics CSS and accessible labels remain responsive", () => {
     assert.ok(source.includes('id="assistantLabel' + id + '"'));
   }
 });
+
+test("Assistant origin guide appears only after safe independent inspection", () => {
+  const calls = [];
+  const {panel} = makePanel(async req => { calls.push(req); });
+  const ids = [
+    "assistantProvenance", "assistantProvenanceStep", "assistantProvenanceQuestion",
+    "assistantProvenanceVerifiedTitle", "assistantProvenanceVerified",
+    "assistantProvenanceMissingTitle", "assistantProvenanceMissing",
+    "assistantProvenanceNextTitle", "assistantProvenanceSafety",
+    "assistantProvenanceOld", "assistantProvenanceUnknown", "assistantProvenanceNew",
+    "assistantProvenanceNext", "assistantProvenanceAnomalies",
+  ];
+  const controls = Object.fromEntries(ids.map(id => [id, {
+    hidden: true, textContent: "", setAttribute(name, value) {this[name] = value;},
+  }]));
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {status: "resolved"},
+  }};
+  panel._migrationIntent = "existing";
+  panel._renderAssistantProvenance();
+  assert.equal(controls.assistantProvenance.hidden, true);
+
+  panel._assistantFileReport = {
+    read_only: true, status: "parsed", source_active_verified: false,
+    migration_authorized: false, stage_allowed: false,
+    apply_allowed: false, cutover_allowed: false,
+    counts: {entries_with_anomalies: 0},
+  };
+  panel._renderAssistantProvenance();
+  assert.equal(controls.assistantProvenance.hidden, false);
+  assert.match(controls.assistantProvenanceVerified.textContent,
+    /fichier YAML a été lu/);
+  assert.match(controls.assistantProvenanceMissing.textContent,
+    /L.es règles globales d.exposition|Les règles globales d.exposition/i);
+  assert.match(controls.assistantProvenanceNext.textContent,
+    /Choisissez une provenance/);
+  panel._chooseAssistantProvenance("old");
+  assert.equal(controls.assistantProvenanceOld["aria-pressed"], "true");
+  assert.equal(controls.assistantProvenanceUnknown["aria-pressed"], "false");
+  assert.match(controls.assistantProvenanceNext.textContent,
+    /ancienne sauvegarde de configuration.yaml/);
+  assert.match(controls.assistantProvenanceSafety.textContent,
+    /non enregistrée/);
+  assert.equal(calls.length, 0);
+  assert.equal(panel._migrationBaselineEligible(), false);
+});
+
+test("Assistant anomalous entries remain inspectable and origin is only a recollection", () => {
+  const {panel} = makePanel(async () => { throw Error("must not call WS"); });
+  const ids = [
+    "assistantProvenance", "assistantProvenanceOld",
+    "assistantProvenanceUnknown", "assistantProvenanceNew",
+    "assistantProvenanceNext", "assistantProvenanceAnomalies",
+  ];
+  const controls = Object.fromEntries(ids.map(id => [id, {
+    hidden: true, textContent: "", setAttribute(name, value) {this[name] = value;},
+  }]));
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {status: "resolved"},
+  }};
+  panel._migrationIntent = "unsure";
+  panel._assistantFileReport = {
+    read_only: true, status: "review_required", source_active_verified: false,
+    migration_authorized: false, stage_allowed: false,
+    apply_allowed: false, cutover_allowed: false,
+    counts: {entries_with_anomalies: 3},
+  };
+  panel._chooseAssistantProvenance("unknown");
+  assert.equal(controls.assistantProvenance.hidden, false);
+  assert.equal(controls.assistantProvenanceUnknown["aria-pressed"], "true");
+  assert.match(controls.assistantProvenanceAnomalies.textContent, /3 entité/);
+  assert.equal(controls.assistantProvenanceAnomalies.hidden, false);
+  assert.match(controls.assistantProvenanceNext.textContent,
+    /vos sauvegardes Home Assistant/);
+  panel._chooseAssistantProvenance("new");
+  assert.equal(controls.assistantProvenanceNew["aria-pressed"], "true");
+  assert.match(controls.assistantProvenanceNext.textContent,
+    /n'est pas une migration attestée/);
+  assert.equal(panel._migrationIntent, "unsure");
+  assert.equal(panel._migrationBaselineEligible(), false);
+});
+
+test("Assistant origin cannot be selected before file review or in packages", () => {
+  const {panel} = makePanel(async () => {});
+  const section = {hidden: false};
+  panel.querySelector = sel => sel === "#assistantProvenance" ? section : null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {status: "resolved"},
+  }};
+  panel._migrationIntent = "existing";
+  panel._assistantFileReport = {status: "blocked", read_only: true};
+  panel._chooseAssistantProvenance("old");
+  assert.equal(panel._assistantProvenanceChoice, undefined);
+  panel._renderAssistantProvenance();
+  assert.equal(section.hidden, true);
+
+  panel._assistantFileReport = {
+    status: "parsed", read_only: true, source_active_verified: false,
+    migration_authorized: false, stage_allowed: false,
+    apply_allowed: false, cutover_allowed: false,
+  };
+  panel._migrationReport = {diagnostic: {
+    mode: "unsupported", global_blockers: ["packages_not_yet_supported"],
+  }};
+  panel._chooseAssistantProvenance("old");
+  assert.equal(panel._assistantProvenanceChoice, undefined);
+  panel._renderAssistantProvenance();
+  assert.equal(section.hidden, true);
+
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {status: "resolved"},
+  }};
+  panel._assistantFileReport.migration_authorized = true;
+  panel._chooseAssistantProvenance("old");
+  assert.equal(panel._assistantProvenanceChoice, undefined);
+  panel._renderAssistantProvenance();
+  assert.equal(section.hidden, true);
+});
+
+test("Assistant resets local recollection when file path, intent or snapshot changes", async () => {
+  const {panel} = makePanel(async () => ({diagnostic: {mode: "new_configuration"}}));
+  const controls = {
+    assistantFilePath: {value: "entities.yaml"},
+    assistantFileCheck: {disabled: false},
+    migrationAnalyze: {disabled: false},
+    migrationStatus: {textContent: ""},
+  };
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  panel._assistantProvenanceChoice = "old";
+  panel._assistantFilePath = "entities.yaml";
+  panel._assistantFileReport = {status: "parsed"};
+  panel._chooseMigrationIntent("unsure");
+  assert.equal(panel._assistantProvenanceChoice, null);
+  panel._assistantProvenanceChoice = "old";
+  panel._migrationIntent = "existing";
+  await panel._loadMigrationReview();
+  assert.equal(panel._assistantProvenanceChoice, null);
+  assert.equal(panel._assistantFileReport, null);
+});
+
+test("Assistant origin guide is a local non-authorizing step with bilingual copy", () => {
+  assert.match(source, /id="assistantProvenance" hidden/);
+  assert.match(source, /_assistantProvenanceAvailable\(\)/);
+  assert.match(source, /report\?\.source_active_verified === false/);
+  assert.match(source, /report\?\.cutover_allowed === false/);
+  assert.match(source, /_assistantProvenanceChoice = null/);
+  assert.match(source, /aria-pressed="false"/);
+  assert.match(source, /Étape 3 sur 3/);
+  assert.match(source, /Step 3 of 3/);
+});
