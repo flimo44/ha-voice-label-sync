@@ -718,6 +718,94 @@ async def websocket_inspect_assistant_entity_file(
     connection.send_result(msg["id"], report)
 
 
+WS_TYPE_ASSISTANT_TAKEOVER_PREPARE = f"{DOMAIN}/prepare_existing_output_takeover"
+WS_TYPE_ASSISTANT_TAKEOVER_CONFIRM = f"{DOMAIN}/confirm_existing_output_takeover"
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_ASSISTANT_TAKEOVER_PREPARE,
+    vol.Required("path"): str,
+})
+async def websocket_prepare_existing_output_takeover(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Read-only comparison of the chosen YAML with Preview and ownership."""
+    try:
+        from .assistant_output_takeover import prepare_existing_output_takeover
+
+        entries = hass.config_entries.async_entries(DOMAIN)
+        if not entries:
+            raise ValueError("HVLS is not configured")
+        result = await hass.async_add_executor_job(
+            partial(
+                prepare_existing_output_takeover,
+                config_dir=hass.config.config_dir,
+                output_path=_configured_output(hass),
+                preview_path=Path(hass.config.path(".hvls", "preview.yaml")),
+                registry_path=Path(hass.config.path(".hvls", "ownership.json")),
+                entry_id=entries[0].entry_id,
+                selected_relative_path=msg["path"],
+            )
+        )
+    except Exception:
+        connection.send_error(
+            msg["id"], "assistant_takeover_prepare_refused",
+            "The selected YAML cannot be safely prepared. No changes made.",
+        )
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_ASSISTANT_TAKEOVER_CONFIRM,
+    vol.Required("path"): str,
+    vol.Required("production_sha256"): str,
+    vol.Required("preview_sha256"): str,
+    vol.Required("confirmed"): bool,
+})
+async def websocket_confirm_existing_output_takeover(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Explicitly back up and record ownership; never Apply or edit YAML."""
+    async with get_workflow_lock(hass):
+        try:
+            from .assistant_output_takeover import confirm_existing_output_takeover
+
+            entries = hass.config_entries.async_entries(DOMAIN)
+            if not entries:
+                raise ValueError("HVLS is not configured")
+            result = await hass.async_add_executor_job(
+                partial(
+                    confirm_existing_output_takeover,
+                    config_dir=hass.config.config_dir,
+                    output_path=_configured_output(hass),
+                    preview_path=Path(hass.config.path(".hvls", "preview.yaml")),
+                    registry_path=Path(hass.config.path(".hvls", "ownership.json")),
+                    entry_id=entries[0].entry_id,
+                    selected_relative_path=msg["path"],
+                    production_sha256=msg["production_sha256"],
+                    preview_sha256=msg["preview_sha256"],
+                    confirmed=msg["confirmed"],
+                )
+            )
+        except Exception:
+            connection.send_error(
+                msg["id"], "assistant_takeover_confirm_refused",
+                "Takeover incomplete or refused. Inspect ownership and backups; "
+                "refresh Preview before retrying.",
+            )
+            return
+    connection.send_result(msg["id"], result)
+
+
 WS_TYPE_MIGRATION_REVIEW = f"{DOMAIN}/get_migration_review"
 
 
@@ -1457,6 +1545,12 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_get_preview)
     websocket_api.async_register_command(hass, websocket_get_migration_diagnostic)
     websocket_api.async_register_command(hass, websocket_inspect_assistant_entity_file)
+    websocket_api.async_register_command(
+        hass, websocket_prepare_existing_output_takeover
+    )
+    websocket_api.async_register_command(
+        hass, websocket_confirm_existing_output_takeover
+    )
     websocket_api.async_register_command(hass, websocket_inspect_historical_google_yaml)
     websocket_api.async_register_command(
         hass, websocket_get_migration_recovery_status
