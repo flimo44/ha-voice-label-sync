@@ -2523,7 +2523,7 @@ class HVLSPreviewPanel extends HTMLElement {
         </section>
         <section id="tab-preview" class="hvls-tab-panel"
           role="tabpanel" hidden>
-        <section id="restoreReconcilePanel" class="migration-review-note"
+        <div id="restoreReconcilePanel" class="migration-review-note"
           role="status" hidden>
           <h3 id="restoreReconcileTitle"></h3>
           <p id="restoreReconcileSummary" class="diagnostic-note"></p>
@@ -2537,7 +2537,7 @@ class HVLSPreviewPanel extends HTMLElement {
               type="button" hidden></button>
           </div>
           <p id="restoreReconcileStatus" role="status"></p>
-        </section>
+        </div>
         <div id="previewChanges"></div>
         <details id="rawDiffDetails" hidden>
           <summary>${this._t("rawDiffSummary")}</summary>
