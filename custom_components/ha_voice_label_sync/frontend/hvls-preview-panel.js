@@ -13,6 +13,19 @@ const HVLS_TRANSLATIONS = {
     tabBackups: "Sauvegardes",
     tabMigration: "Migration",
     migrationIntro: "Les simulations ne modifient ni HA, ni labels, ni YAML. La sauvegarde et le journal sont créés uniquement après votre confirmation.",
+    migrationGuideTitle: "Identifions votre situation",
+    migrationGuideDetected: "Aucune déclaration google_assistant: trouvée dans configuration.yaml. Cela ne prouve pas qu'aucune configuration n'a jamais existé.",
+    migrationGuideCandidate: "Un fichier google_assistant_entities.yaml existe, mais il n'est pas référencé par cette configuration. Son origine et son utilisation restent inconnues.",
+    migrationGuideNoCandidate: "Aucun fichier google_assistant_entities.yaml habituel n'a été détecté. D'autres sources peuvent néanmoins exister.",
+    migrationGuideQuestion: "Souhaitez-vous créer une nouvelle configuration Google Assistant ?",
+    migrationGuideNew: "Oui, nouvelle configuration",
+    migrationGuideExisting: "Non, je souhaite migrer une configuration existante",
+    migrationGuideUnsure: "Je ne sais pas",
+    migrationGuideNextNew: "Parcours nouvelle configuration choisi pour cet écran. Avant toute génération, vérifiez les fichiers déjà présents. Rien n'a été créé ni écrasé.",
+    migrationGuideNextExisting: "Parcours migration choisi pour cet écran. Vérifiez la déclaration google_assistant: et sa source entity_config: dans configuration.yaml, puis actualisez l'analyse. N'activez pas une ancienne configuration uniquement pour débloquer HVLS sans vérifier les effets Google Home.",
+    migrationGuideNextUnsure: "Aucun problème : vérifiez configuration.yaml et les fichiers Google Assistant conservés, puis actualisez l'analyse. Rien n'est modifié.",
+    migrationGuideAwaitChoice: "Choisissez votre situation pour obtenir les prochaines vérifications.",
+    migrationGuideNoAuthorization: "Ce choix est local à cet écran ; il ne valide aucune migration et n'autorise aucune écriture.",
     migrationAnalyze: "Actualiser la simulation (lecture seule)",
     migrationLoading: "Analyse de migration en lecture seule…",
     migrationEmpty: "Ouvrez cette section pour vérifier la configuration Google Assistant.",
@@ -262,6 +275,19 @@ const HVLS_TRANSLATIONS = {
     tabBackups: "Backups",
     tabMigration: "Migration",
     migrationIntro: "Simulation does not change HA, labels or YAML. The protected backup and journal are created only after explicit confirmation.",
+    migrationGuideTitle: "Let's identify your situation",
+    migrationGuideDetected: "No google_assistant: declaration was found in configuration.yaml. This does not prove that no configuration ever existed.",
+    migrationGuideCandidate: "A google_assistant_entities.yaml file exists but is not referenced by the analyzed configuration. Its origin and use are unknown.",
+    migrationGuideNoCandidate: "No usual google_assistant_entities.yaml file was detected. Other sources may still exist.",
+    migrationGuideQuestion: "Do you want to create a new Google Assistant configuration?",
+    migrationGuideNew: "Yes, new configuration",
+    migrationGuideExisting: "No, migrate an existing configuration",
+    migrationGuideUnsure: "I'm not sure",
+    migrationGuideNextNew: "New setup selected for this screen. Check any existing files before generating configuration. Nothing has been created or overwritten.",
+    migrationGuideNextExisting: "Migration selected for this screen. Check the google_assistant: declaration and its entity_config: source in configuration.yaml, then refresh the assessment. Do not enable an old configuration just to unblock HVLS without checking Google Home effects.",
+    migrationGuideNextUnsure: "No problem: inspect configuration.yaml and any preserved Google Assistant files, then refresh the assessment. Nothing changes.",
+    migrationGuideAwaitChoice: "Select your situation to see the next checks.",
+    migrationGuideNoAuthorization: "This choice stays on this screen; it neither approves migration nor permits writes.",
     migrationAnalyze: "Refresh simulation (read-only)",
     migrationLoading: "Running read-only migration assessment…",
     migrationEmpty: "Open this section to review Google Assistant configuration.",
@@ -624,6 +650,7 @@ class HVLSPreviewPanel extends HTMLElement {
     if (migrationIntro) migrationIntro.textContent = this._t("migrationIntro");
     const migrationAnalyze = this.querySelector("#migrationAnalyze");
     if (migrationAnalyze) migrationAnalyze.textContent = this._t("migrationAnalyze");
+    this._renderMigrationGuide();
     const migrationPrepare = this.querySelector("#migrationPrepareBaseline");
     if (migrationPrepare) migrationPrepare.textContent = this._t("migrationBaselinePrepare");
     const migrationConfirm = this.querySelector("#migrationConfirmBaseline");
@@ -2073,11 +2100,28 @@ class HVLSPreviewPanel extends HTMLElement {
         <section id="tab-migration" class="hvls-tab-panel" role="tabpanel" hidden>
           <h2>${this._t("tabMigration")}</h2>
           <p id="migrationIntro" class="diagnostic-note">${this._t("migrationIntro")}</p>
+          <div id="migrationGuide" class="migration-review-note" role="group"
+            aria-label="${this._t("migrationGuideTitle")}" hidden>
+            <h3 id="migrationGuideTitle">${this._t("migrationGuideTitle")}</h3>
+            <p id="migrationGuideDetected"></p>
+            <p id="migrationGuideCandidate"></p>
+            <p id="migrationGuideQuestion">${this._t("migrationGuideQuestion")}</p>
+            <div class="migration-controls">
+              <button id="migrationIntentNew" type="button" class="secondary"
+                aria-pressed="false">${this._t("migrationGuideNew")}</button>
+              <button id="migrationIntentExisting" type="button" class="secondary"
+                aria-pressed="false">${this._t("migrationGuideExisting")}</button>
+              <button id="migrationIntentUnsure" type="button" class="secondary"
+                aria-pressed="false">${this._t("migrationGuideUnsure")}</button>
+            </div>
+            <p id="migrationGuideNext" role="status"></p>
+            <p id="migrationGuideSafety" class="diagnostic-note">${this._t("migrationGuideNoAuthorization")}</p>
+          </div>
           <button id="migrationAnalyze" type="button" class="secondary">
             ${this._t("migrationAnalyze")}
           </button>
           <div class="migration-controls">
-            <button id="migrationPrepareBaseline" type="button" class="secondary">
+            <button id="migrationPrepareBaseline" type="button" class="secondary" disabled>
               ${this._t("migrationBaselinePrepare")}
             </button>
             <button id="migrationConfirmBaseline" type="button" disabled hidden>
@@ -2161,6 +2205,9 @@ class HVLSPreviewPanel extends HTMLElement {
     this.querySelector("#apply").addEventListener("click", () => this._applyPreview());
     this.querySelector("#restoreBackup").addEventListener("click", () => this._restoreBackup());
     this.querySelector("#migrationAnalyze").addEventListener("click", () => this._loadMigrationReview());
+    this.querySelector("#migrationIntentNew").addEventListener("click", () => this._chooseMigrationIntent("new"));
+    this.querySelector("#migrationIntentExisting").addEventListener("click", () => this._chooseMigrationIntent("existing"));
+    this.querySelector("#migrationIntentUnsure").addEventListener("click", () => this._chooseMigrationIntent("unsure"));
     this.querySelector("#migrationPrepareBaseline").addEventListener("click", () => this._prepareMigrationBaseline());
     this.querySelector("#migrationConfirmBaseline").addEventListener("click", () => this._confirmMigrationBaseline());
     this.querySelector("#migrationRestoreDraft").addEventListener("click", () => this._restoreMigrationDecisionDraft());
@@ -2768,18 +2815,82 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  _chooseMigrationIntent(intent) {
+    if (!["new", "existing", "unsure"].includes(intent)) return;
+    // Only a local preference; this is never sent as migration authorization.
+    this._migrationIntent = intent;
+    this._renderMigrationGuide();
+  }
+
+  _renderMigrationGuide() {
+    const guide = this.querySelector("#migrationGuide");
+    if (!guide) return;
+    const diag = this._migrationReport?.diagnostic;
+    const relevant = diag?.mode === "new_configuration" &&
+      diag?.source?.status === "resolved";
+    guide.hidden = !relevant;
+    if (!relevant) {
+      this._migrationIntent = null;
+      return;
+    }
+    guide.setAttribute("aria-label", this._t("migrationGuideTitle"));
+    const keys = {
+      migrationGuideTitle: "migrationGuideTitle",
+      migrationGuideDetected: "migrationGuideDetected",
+      migrationGuideQuestion: "migrationGuideQuestion",
+      migrationGuideSafety: "migrationGuideNoAuthorization",
+      migrationIntentNew: "migrationGuideNew",
+      migrationIntentExisting: "migrationGuideExisting",
+      migrationIntentUnsure: "migrationGuideUnsure",
+    };
+    for (const [id, key] of Object.entries(keys)) {
+      const element = this.querySelector("#" + id);
+      if (element) element.textContent = this._t(key);
+    }
+    const candidate = this.querySelector("#migrationGuideCandidate");
+    if (candidate) candidate.textContent = this._t(
+      diag.source.unreferenced_google_entity_file_present === true
+        ? "migrationGuideCandidate" : "migrationGuideNoCandidate"
+    );
+    const options = {
+      new: ["migrationIntentNew", "migrationGuideNextNew"],
+      existing: ["migrationIntentExisting", "migrationGuideNextExisting"],
+      unsure: ["migrationIntentUnsure", "migrationGuideNextUnsure"],
+    };
+    for (const [value, [id]] of Object.entries(options)) {
+      this.querySelector("#" + id)?.setAttribute(
+        "aria-pressed", String(this._migrationIntent === value)
+      );
+    }
+    const next = this.querySelector("#migrationGuideNext");
+    if (next) next.textContent = this._t(
+      options[this._migrationIntent]?.[1] || "migrationGuideAwaitChoice"
+    );
+  }
+
+  _migrationBaselineEligible() {
+    const diag = this._migrationReport?.diagnostic;
+    return diag?.mode === "assisted_migration" &&
+      diag?.review_status === "pending_review" &&
+      diag?.source?.status === "resolved" &&
+      Array.isArray(diag.global_blockers) &&
+      diag.global_blockers.length === 0;
+  }
+
   _migrationBaselineControls() {
     const prepare = this.querySelector("#migrationPrepareBaseline");
     const confirm = this.querySelector("#migrationConfirmBaseline");
-    if (prepare) prepare.disabled = this._baselineBusy === true;
+    if (prepare) prepare.disabled = this._baselineBusy === true ||
+      !this._migrationBaselineEligible();
     if (confirm) {
       confirm.hidden = !this._baselineChallenge;
-      confirm.disabled = this._baselineBusy === true || !this._baselineChallenge;
+      confirm.disabled = this._baselineBusy === true ||
+        !this._baselineChallenge || !this._migrationBaselineEligible();
     }
   }
 
   async _prepareMigrationBaseline() {
-    if (!this._hass || this._baselineBusy) return;
+    if (!this._hass || this._baselineBusy || !this._migrationBaselineEligible()) return;
     this._baselineBusy = true;
     this._baselineChallenge = null;
     this._baselinePrepared = null;
@@ -3456,6 +3567,8 @@ class HVLSPreviewPanel extends HTMLElement {
     const summary = this.querySelector("#migrationSummary");
     const content = this.querySelector("#migrationRows");
     const more = this.querySelector("#migrationMore");
+    this._renderMigrationGuide();
+    this._migrationBaselineControls();
     if (!status || !summary || !content || !more) return;
     content.replaceChildren();
     const report = this._migrationReport;
