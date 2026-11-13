@@ -10,7 +10,13 @@ from datetime import datetime
 from pathlib import Path
 
 from hvls import FileWriterError
-from hvls.owned_writer import write_owned_output
+from hvls.output_ownership_registry import OwnershipRegistry
+from hvls.owned_writer import (
+    _operation_lock,
+    _verify_current_file,
+    write_owned_output,
+)
+from hvls.restore_guard import clear_guard, create_guard, read_guard
 
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_guard import (
@@ -178,6 +184,14 @@ def restore_reviewed_backup(
             "Selected backup changed before restore."
         )
 
+    # A durable hold is created BEFORE the restore write, so an interruption
+    # cannot silently re-enable generation/Apply after a process restart.
+    create_guard(
+        ownership_registry_path,
+        entry_id=entry_id, output_path=output_path,
+        backup_id=backup_id, original_sha256=production_sha256,
+        restored_sha256=backup_sha256,
+    )
     try:
         result = write_owned_output(
             output_path=output_path,
@@ -202,4 +216,81 @@ def restore_reviewed_backup(
         "backup_id": backup_id,
         "safety_backup": result.backup_path.name,
         "bytes_written": result.bytes_written,
+        "reconciliation_required": True,
+    }
+
+
+def resolve_restored_output(
+    output_path: Path,
+    preview_path: Path,
+    *, entry_id: str, ownership_registry_path: Path,
+    production_sha256: str, preview_sha256: str,
+    resolution: str, confirmed: bool,
+) -> dict:
+    """Close a durable restore hold after explicit, fresh administrative review.
+
+    keep_restored requires semantic equality of the generated Preview and
+    restored production YAML. keep_current_labels intentionally authorizes a
+    *future, separate* Apply, without changing YAML or HA labels here.
+    cancel_failed is only for a restoration that did not change production.
+    """
+    if confirmed is not True or resolution not in {
+        "keep_restored", "keep_current_labels", "cancel_failed",
+    }:
+        raise BackupRestoreError("Explicit restore decision required")
+    if not all(isinstance(v, str) and _SHA.fullmatch(v)
+               for v in (production_sha256, preview_sha256)):
+        raise BackupRestoreError("Invalid reconciliation fingerprints")
+
+    with _operation_lock(ownership_registry_path):
+        guard = read_guard(ownership_registry_path)
+        if guard is None or guard["entry_id"] != entry_id or (
+            guard["output_path"] != str(output_path)
+        ):
+            raise BackupRestoreError("No matching restoration to reconcile")
+        if preview_path.is_symlink() or output_path.is_symlink():
+            raise BackupRestoreError("Unsafe reconciliation file")
+        production = _read_yaml(output_path)
+        preview = _read_yaml(preview_path)
+        current_sha = preview_digest(production)
+        current_preview_sha = preview_digest(preview)
+        if (not hmac.compare_digest(current_sha, production_sha256)
+                or not hmac.compare_digest(current_preview_sha, preview_sha256)):
+            raise PreviewChangedError("Production or Preview changed; review again")
+
+        record = OwnershipRegistry(ownership_registry_path).get_record(entry_id)
+        if (record is None or record.get("state") != "managed"
+                or record.get("output_path") != str(output_path)
+                or record.get("sha256") != current_sha):
+            raise BackupRestoreError("Ownership verification failed")
+        _verify_current_file(output_path, current_sha)
+
+        expected = (guard["original_sha256"] if resolution == "cancel_failed"
+                    else guard["restored_sha256"])
+        if not hmac.compare_digest(current_sha, expected):
+            raise BackupRestoreError("Restore state changed; manual review required")
+
+        try:
+            comparison = analyze_preview(preview, production)["comparison"]
+        except PreviewFormatError as exc:
+            raise BackupRestoreError("Cannot verify restored YAML") from exc
+        if comparison["status"] != "ok":
+            raise BackupRestoreError("Reconciliation comparison unavailable")
+        if resolution == "keep_restored" and (
+            not comparison["identical_entities"]
+        ):
+            raise BackupRestoreError(
+                "Preview is not yet aligned with restored production"
+            )
+        # A deliberate acceptance of current labels does not apply them to
+        # production. The administrator must perform a separate reviewed Apply.
+        clear_guard(ownership_registry_path, guard)
+    return {
+        "resolved": True, "resolution": resolution,
+        "production_unchanged": True, "apply_performed": False,
+        "comparison": {
+            "added": len(comparison["added"]),
+            "removed": len(comparison["removed"]),
+            "modified": len(comparison["modified"]),
+        },
     }
