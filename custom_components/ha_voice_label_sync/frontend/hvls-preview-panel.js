@@ -1659,6 +1659,31 @@ class HVLSPreviewPanel extends HTMLElement {
         .migration-controls { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
         .migration-controls select { max-width: 220px; font: inherit; }
         .migration-controls label { display: flex; gap: 4px; align-items: center; }
+        #assistantFilePath {
+          flex: 1 1 30rem;
+          min-width: min(100%, 18rem);
+          width: min(100%, 42rem);
+          max-width: 100%;
+          box-sizing: border-box;
+        }
+        .assistant-file-metrics {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+          gap: 10px;
+          margin: 12px 0;
+        }
+        .assistant-file-metrics[hidden] { display: none; }
+        .assistant-file-metric {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          min-width: 0;
+          border: 1px solid var(--divider-color);
+          border-radius: 8px;
+          padding: 12px;
+        }
+        .assistant-file-metric strong { font-size: 1.4rem; font-weight: 600; }
+        .assistant-file-metric span { font-size: 0.83rem; color: var(--secondary-text-color); }
         .migration-review-note { color: var(--secondary-text-color); }
         .hvls-brand {
           display: flex;
@@ -2229,6 +2254,31 @@ entity_config: !include google_assistant_entities.yaml</pre>
                 </button>
               </div>
               <p id="assistantFileResult" role="status" class="diagnostic-note"></p>
+              <div id="assistantFileMetrics" class="assistant-file-metrics"
+                aria-label="${this._t("assistantFileResultsTitle")}" hidden>
+                <div class="assistant-file-metric">
+                  <strong id="assistantMetricEntries">—</strong>
+                  <span id="assistantLabelEntries">${this._t("assistantFileMetricEntries")}</span>
+                </div>
+                <div class="assistant-file-metric">
+                  <strong id="assistantMetricTrue">—</strong>
+                  <span id="assistantLabelTrue">${this._t("assistantFileMetricTrue")}</span>
+                </div>
+                <div class="assistant-file-metric">
+                  <strong id="assistantMetricFalse">—</strong>
+                  <span id="assistantLabelFalse">${this._t("assistantFileMetricFalse")}</span>
+                </div>
+                <div class="assistant-file-metric">
+                  <strong id="assistantMetricUnset">—</strong>
+                  <span id="assistantLabelUnset">${this._t("assistantFileMetricUnset")}</span>
+                </div>
+                <div class="assistant-file-metric">
+                  <strong id="assistantMetricIssues">—</strong>
+                  <span id="assistantLabelIssues">${this._t("assistantFileMetricIssues")}</span>
+                </div>
+              </div>
+              <p id="assistantFileUnsetExplanation" class="diagnostic-note" hidden></p>
+              <p id="assistantFileConclusion" class="diagnostic-note" hidden></p>
               <p id="assistantFileSafety" class="diagnostic-note">
                 ${this._t("assistantFileSafety")}
               </p>
@@ -3169,8 +3219,12 @@ entity_config: !include google_assistant_entities.yaml</pre>
     if (detectedNote) detectedNote.textContent = packages
       ? "" : this._t("migrationGuideDetected");
     const question = this.querySelector("#migrationGuideQuestion");
-    if (question) question.textContent = this._t(packages
-      ? "assistantPackagesQuestion" : "migrationGuideQuestion");
+    const questionKey = packages ? "assistantPackagesQuestion" :
+      this._migrationIntent === "new" ? "migrationGuideSelectedNew" :
+      this._migrationIntent === "existing" ? "migrationGuideSelectedExisting" :
+      this._migrationIntent === "unsure" ? "migrationGuideSelectedUnsure" :
+      "migrationGuideQuestion";
+    if (question) question.textContent = this._t(questionKey);
     const intentControls = ["migrationIntentNew", "migrationIntentExisting", "migrationIntentUnsure"];
     for (const id of intentControls) {
       const element = this.querySelector("#" + id);
