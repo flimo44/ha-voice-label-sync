@@ -7,6 +7,7 @@ standalone entity file is NOT proof of active Google Assistant exposure.
 from __future__ import annotations
 
 from pathlib import Path, PurePosixPath
+import re
 from typing import Any
 
 from yaml.nodes import MappingNode
@@ -20,6 +21,7 @@ from .migration_discovery import (
 
 MAX_PATH_CHARS = 240
 MAX_ISSUE_EXAMPLES = 20
+MAX_ADOPTION_ENTRIES = 500
 
 
 def _safe_relative_yaml_path(value: Any) -> PurePosixPath:
@@ -77,6 +79,10 @@ def inspect_google_entity_file(
         },
         "issues": [],
         "issue_examples": [],
+        # Only validated entity IDs and safe directives, never YAML values.
+        "adoption_entries": [],
+        "adoption_entries_complete": True,
+        "file_sha256": None,
         "source_active_verified": False,
         "google_home_state_verified": False,
         "migration_authorized": False,
@@ -95,15 +101,15 @@ def inspect_google_entity_file(
             if current.is_symlink():
                 raise DiscoveryProblem("symlink_entity_file_not_allowed")
         document, _ = reader.load(file_path, kind="entity_config_include")
+        report["file_sha256"] = reader.locations[-1]["digest_sha256"]
         entries = _mapping(document)
         counts = report["counts"]
         reasons_by_code: dict[str, int] = {}
         for entity_id, node in entries.items():
             counts["entries"] += 1
-            invalid_id = (
-                "." not in entity_id or entity_id.startswith(".")
-                or entity_id.endswith(".") or entity_id.count(".") != 1
-            )
+            invalid_id = re.fullmatch(r"[a-z0-9_]+\.[a-z0-9_]+", entity_id) is None
+            exposure = "invalid"
+            has_customizations = False
             if invalid_id:
                 reasons = ["invalid_entity_id"]
             elif not isinstance(node, MappingNode):
@@ -121,17 +127,35 @@ def inspect_google_entity_file(
                 # intent calculated by _entity_details. An absent key is
                 # *not* an explicit instruction to expose the entity.
                 options = _mapping(node)
+                has_customizations = any(
+                    key in options for key in ("name", "room", "aliases")
+                )
                 expose_node = options.get("expose")
                 if expose_node is None:
+                    exposure = "unset"
                     counts["expose_not_set"] += 1
                     counts["requested_exposure"] += 1  # legacy aggregate
                 elif record["yaml_exposure_intent"] == "exclude":
+                    exposure = "exclude"
                     counts["explicitly_excluded"] += 1
                 elif record["yaml_exposure_intent"] == "expose":
+                    exposure = "expose"
                     counts["explicitly_exposed"] += 1
                     counts["requested_exposure"] += 1  # legacy aggregate
                 else:
                     counts["invalid_expose"] += 1
+            # Import review is independent of source/Google Home activation.
+            # Invalid root keys are never returned to the frontend.
+            if not invalid_id:
+                if len(report["adoption_entries"]) < MAX_ADOPTION_ENTRIES:
+                    report["adoption_entries"].append({
+                        "entity_id": entity_id,
+                        "exposure": exposure,
+                        "has_customizations": has_customizations,
+                        "reasons": sorted(set(reasons)),
+                    })
+                else:
+                    report["adoption_entries_complete"] = False
             if reasons:
                 counts["entries_with_anomalies"] += 1
                 for code in sorted(set(reasons)):
