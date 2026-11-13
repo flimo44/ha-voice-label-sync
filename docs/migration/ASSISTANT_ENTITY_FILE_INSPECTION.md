@@ -96,3 +96,34 @@ Google Assistant YAML, or migration state.
 
 This phase does not implement automatic provenance attestation, full
 QQOQCP for every entity anomaly, or migration from an unreferenced file.
+
+## Readable provenance report and practical backup checklist (PR #145)
+
+The provenance review groups its facts in three separate semantic sections
+with accessible headings: **verified by HVLS**, **unverified**, and
+**recommended next check**. This changes presentation only, not the
+underlying migration assessment or its evidence requirements.
+
+For the user-reported **old** or **unknown** provenance paths, the recommended
+next step includes an expandable, language-localized guide for manual checks
+on an *offline copy* of a Home Assistant backup:
+
+1. Open a copy of a backup without restoring it onto active Home Assistant.
+2. In `configuration.yaml`, inspect the `google_assistant:` declaration or
+   its `!include` target.
+3. In the included configuration (if any), inspect `entity_config: !include`
+   and compare its reference with the independently analyzed entity file.
+4. Record global rules such as `expose_by_default` and `exposed_domains`.
+   Do not disclose service accounts, tokens, passwords, or other secrets.
+
+A "new configuration" choice hides the historical-backup lookup guide.
+Changing the choice collapses the guide. Changes to the migration context,
+selected YAML file, or current source assessment continue to invalidate the
+selected provenance and hide the review step.
+
+**Scope:** there is no archive scan, file picker, remote connector,
+backup extraction, restoration, source attestation, Google Home exposure check,
+or migration authorization. Finding a historical include reference only
+supports a source-history hypothesis and does not certify runtime exposure.
+Automated inspection of a user-selected backup will require a separately
+reviewed design and source-isolation checks.
