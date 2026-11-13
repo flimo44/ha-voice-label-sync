@@ -2460,6 +2460,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._assistantFileReport = null;
       this._assistantFileError = null;
       this._assistantFileChecking = false;
+      this._assistantProvenanceChoice = null;
       this._renderAssistantFileStatus();
     });
     this.querySelector("#assistantFileCheck").addEventListener(
@@ -3089,6 +3090,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantFileReport = null;
     this._assistantFileError = null;
     this._assistantFileChecking = false;
+    this._assistantProvenanceChoice = null;
     this._renderMigrationGuide();
     this._renderAssistantFileStatus();
   }
@@ -3146,6 +3148,78 @@ entity_config: !include google_assistant_entities.yaml</pre>
     return translated
       ? translated[this._language === "fr" ? 0 : 1]
       : (this._language === "fr" ? "problème non identifié" : "unknown issue");
+  }
+
+  _assistantProvenanceAvailable() {
+    const diag = this._migrationReport?.diagnostic;
+    const report = this._assistantFileReport;
+    return diag?.mode === "new_configuration" &&
+      diag?.source?.status === "resolved" &&
+      ["existing", "unsure"].includes(this._migrationIntent) &&
+      !this._assistantFileChecking && !this._assistantFileError &&
+      ["parsed", "review_required"].includes(report?.status) &&
+      report?.read_only === true &&
+      report?.source_active_verified === false &&
+      report?.migration_authorized === false &&
+      report?.stage_allowed === false &&
+      report?.apply_allowed === false &&
+      report?.cutover_allowed === false;
+  }
+
+  _chooseAssistantProvenance(choice) {
+    if (!["old", "unknown", "new"].includes(choice) ||
+        !this._assistantProvenanceAvailable()) return;
+    // User recollection is local UI context only. Not provenance evidence.
+    // Never pass it to migration APIs or persist it in HA.
+    this._assistantProvenanceChoice = choice;
+    this._renderAssistantProvenance();
+  }
+
+  _renderAssistantProvenance() {
+    const section = this.querySelector("#assistantProvenance");
+    if (!section) return;
+    const visible = this._assistantProvenanceAvailable();
+    section.hidden = !visible;
+    if (!visible) return;
+    const textIds = {
+      assistantProvenanceStep: "assistantProvenanceStep",
+      assistantProvenanceQuestion: "assistantProvenanceQuestion",
+      assistantProvenanceVerifiedTitle: "assistantProvenanceVerifiedTitle",
+      assistantProvenanceVerified: "assistantProvenanceVerified",
+      assistantProvenanceMissingTitle: "assistantProvenanceMissingTitle",
+      assistantProvenanceMissing: "assistantProvenanceMissing",
+      assistantProvenanceNextTitle: "assistantProvenanceNextTitle",
+      assistantProvenanceSafety: "assistantProvenanceSafety",
+    };
+    for (const [id, key] of Object.entries(textIds)) {
+      const node = this.querySelector("#" + id);
+      if (node) node.textContent = this._t(key);
+    }
+    const choices = {
+      old: ["assistantProvenanceOld", "assistantProvenanceNextOld"],
+      unknown: ["assistantProvenanceUnknown", "assistantProvenanceNextUnknown"],
+      new: ["assistantProvenanceNew", "assistantProvenanceNextNew"],
+    };
+    for (const [value, [id]] of Object.entries(choices)) {
+      const button = this.querySelector("#" + id);
+      if (!button) continue;
+      button.textContent = this._t(id);
+      button.setAttribute(
+        "aria-pressed", String(this._assistantProvenanceChoice === value)
+      );
+    }
+    const next = this.querySelector("#assistantProvenanceNext");
+    if (next) next.textContent = this._t(
+      choices[this._assistantProvenanceChoice]?.[1] ||
+      "assistantProvenanceNextChoose"
+    );
+    const anomalies = this._assistantFileReport?.counts?.entries_with_anomalies;
+    const issues = this.querySelector("#assistantProvenanceAnomalies");
+    if (issues) {
+      issues.hidden = !Number.isSafeInteger(anomalies) || anomalies <= 0;
+      issues.textContent = issues.hidden ? "" :
+        this._tf("assistantProvenanceAnomalies", {count: anomalies});
+    }
   }
 
   _renderAssistantFileStatus() {
@@ -3241,6 +3315,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     } else {
       status.textContent = this._t("assistantFileUnavailable");
     }
+    this._renderAssistantProvenance();
   }
 
   async _checkAssistantEntityFile() {
@@ -3254,6 +3329,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantFileChecking = true;
     this._assistantFileReport = null;
     this._assistantFileError = null;
+    this._assistantProvenanceChoice = null;
     this._renderAssistantFileStatus();
     try {
       const report = await this._hass.callWS({
@@ -3309,6 +3385,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
     if (!relevant) {
       this._migrationIntent = null;
       this._assistantFileReport = null;
+      this._assistantProvenanceChoice = null;
+      this._renderAssistantProvenance();
       return;
     }
     guide.setAttribute("aria-label", this._t("migrationGuideTitle"));
@@ -4036,6 +4114,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantFileReport = null;
     this._assistantFileError = null;
     this._assistantFileChecking = false;
+    this._assistantProvenanceChoice = null;
     const button = this.querySelector("#migrationAnalyze");
     const status = this.querySelector("#migrationStatus");
     if (button) button.disabled = true;
