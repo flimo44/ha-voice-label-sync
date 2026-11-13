@@ -2717,3 +2717,88 @@ test("Assistant is the user-facing tab name in French and English", () => {
   assert.match(source, /\["migration", "tabMigration"\]/);
   assert.match(source, /id="tab-migration"/);
 });
+
+
+test("Assistant keeps advanced tools out of the initial new-setup path", () => {
+  const requests = [];
+  const {panel} = makePanel(async request => { requests.push(request); });
+  const controls = {
+    migrationAdvanced: {open: true},
+    migrationRecoveryAttention: {hidden: true, textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {mode: "new_configuration",
+    source: {status: "resolved"}}};
+  panel._renderMigrationAdvanced();
+  assert.equal(controls.migrationAdvanced.open, false);
+  assert.equal(controls.migrationRecoveryAttention.hidden, true);
+  assert.deepEqual(requests, []);
+});
+
+test("Assistant leaves the migration tools reachable when migration is detected", () => {
+  const {panel} = makePanel(async () => {});
+  const controls = {
+    migrationAdvanced: {open: false},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {mode: "assisted_migration"}};
+  panel._renderMigrationAdvanced();
+  assert.equal(controls.migrationAdvanced.open, true);
+  controls.migrationAdvanced.open = false; // User can close it manually.
+  panel._renderMigrationAdvanced();
+  assert.equal(controls.migrationAdvanced.open, false); // No forced reset.
+  panel._migrationReport.diagnostic.mode = "new_configuration";
+  panel._renderMigrationAdvanced();
+  assert.equal(controls.migrationAdvanced.open, false);
+});
+
+test("Assistant raises a visible alert and opens tools for interrupted recovery", () => {
+  const {panel} = makePanel(async () => {});
+  const controls = {
+    migrationAdvanced: {open: false},
+    migrationRecoveryAttention: {hidden: true, textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {mode: "new_configuration"}};
+  panel._renderMigrationAdvanced();
+  assert.equal(controls.migrationAdvanced.open, false);
+  panel._migrationRecoveryReport = {status: "review_required", needs_review: true};
+  panel._renderMigrationAdvanced();
+  assert.equal(controls.migrationAdvanced.open, true);
+  assert.equal(controls.migrationRecoveryAttention.hidden, false);
+  assert.match(controls.migrationRecoveryAttention.textContent, /vérification/);
+});
+
+test("Assistant changes step text after local user choice, without writes", () => {
+  const requests = [];
+  const {panel} = makePanel(async request => { requests.push(request); });
+  const controls = {};
+  for (const id of ["migrationGuide", "migrationGuideStep", "migrationGuideNext"]) {
+    controls[id] = {hidden: true, textContent: "", setAttribute() {}};
+  }
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {status: "resolved"}
+  }};
+  panel._renderMigrationGuide();
+  assert.match(controls.migrationGuideStep.textContent, /Étape 1 sur 2/);
+  panel._chooseMigrationIntent("existing");
+  assert.match(controls.migrationGuideStep.textContent, /Étape 2 sur 2/);
+  assert.match(controls.migrationGuideNext.textContent, /Vérifiez la déclaration/);
+  assert.deepEqual(requests, []);
+});
+
+test("Assistant markup keeps diagnostics behind a native accessible details panel", () => {
+  const assistant = source.slice(
+    source.indexOf('<section id="tab-migration"'),
+    source.indexOf('<section id="tab-backups"')
+  );
+  assert.match(assistant, /<details id="migrationAdvanced">\s*<summary>/);
+  assert.ok(assistant.indexOf('id="migrationGuide"') <
+    assistant.indexOf('id="migrationAdvanced"'));
+  assert.ok(assistant.indexOf('id="migrationAnalyze"') <
+    assistant.indexOf('id="migrationAdvanced"'));
+  assert.ok(assistant.indexOf('id="migrationStatus"') >
+    assistant.indexOf('id="migrationAdvanced"'));
+  assert.match(assistant, /<\/details>/);
+});
