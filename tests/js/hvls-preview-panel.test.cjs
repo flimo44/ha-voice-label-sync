@@ -3642,8 +3642,11 @@ test("Already labeled entities with generated name/room are recognized without a
     entity_id, eligible: true, has_label: true,
   }));
   const plan = panel._assistantAdoptionPlan();
-  assert.deepEqual(plan.totals, {ready: 0, already: 4, excluded: 0, review: 0});
-  assert.deepEqual(plan.candidates, []);
+  assert.equal(plan.totals.ready, 0);
+  assert.equal(plan.totals.already, 4);
+  assert.equal(plan.totals.excluded, 0);
+  assert.equal(plan.totals.review, 0);
+  assert.deepEqual(Array.from(plan.candidates), []);
   panel._renderAssistantAdoption();
   assert.equal(nodes.assistantAdoptApply.disabled, true);
   assert.equal(nodes.assistantAdoptNeedsReview.hidden, false);
@@ -3685,7 +3688,7 @@ test("Entity review shows the specific reason and never auto-adds risky entries"
   assert.match(rows.find(row => row.startsWith("light.absent")), /absente du catalogue/);
   assert.match(rows.find(row => row.startsWith("light.ineligible")), /non éligible/);
   assert.match(rows.find(row => row.startsWith("light.invalid")), /Anomalie dans la déclaration/);
-  assert.deepEqual(panel._assistantAdoptionPlan().candidates, ["light.new"]);
+  assert.deepEqual(Array.from(panel._assistantAdoptionPlan().candidates), ["light.new"]);
 });
 
 test("Confirmed reuse only updates an explicit compatible entity using existing API", async () => {
