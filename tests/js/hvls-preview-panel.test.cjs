@@ -2855,7 +2855,7 @@ test("Assistant proposes detected file and inspects it without migration writes"
   assert.equal(calls[0].path, "google_assistant_entities.yaml");
   assert.match(controls.assistantFileResult.textContent, /52 entité/);
   assert.match(controls.assistantFileResult.textContent, /0 anomalie/);
-  assert.match(controls.assistantFileSafety.textContent, /Aucune migration/);
+  assert.match(controls.assistantFileSafety.textContent, /Aucun label ni YAML/);
 });
 
 test("Assistant offers packages as unsupported other configuration", () => {
