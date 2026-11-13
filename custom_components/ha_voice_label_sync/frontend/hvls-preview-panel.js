@@ -12,7 +12,7 @@ const HVLS_TRANSLATIONS = {
     tabPreview: "Preview",
     tabBackups: "Sauvegardes",
     tabMigration: "Assistant",
-    migrationIntro: "Les simulations ne modifient ni HA, ni labels, ni YAML. La sauvegarde et le journal sont créés uniquement après votre confirmation.",
+    migrationIntro: "HVLS génère votre fichier d'entités à partir des labels Home Assistant. La gestion des labels n'exige pas que Google Assistant soit connecté. Les analyses sont en lecture seule ; tout ajout de label ou Apply demande une confirmation explicite.",
     migrationGuideTitle: "Identifions votre situation",
     migrationGuideStepIdentify: "Étape 1 — Identifiez votre situation",
     migrationGuideStepVerify: "Étape 2 sur 2 — Vérifiez les points indiqués",
@@ -87,6 +87,7 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptStale: "Fichier ou catalogue modifié depuis la vérification. Aucune nouvelle action : vérifiez à nouveau.",
     assistantAdoptNeedsReview: "Les entités exclues, absentes, non éligibles, à expose implicite ou avec nom/pièce/alias personnalisés restent à examiner ; ces réglages ne sont pas déduits des labels.",
     assistantAdoptTruncated: "Le fichier comporte trop d'entrées pour une reprise complète ; aucun ajout groupé n'est proposé.",
+    assistantProvenanceAdvanced: "ⓘ Origine du fichier et recherches dans les sauvegardes (facultatif)",
     assistantProvenanceStep: "Étape 3 sur 3 — Comprendre l'origine du fichier",
     assistantProvenanceQuestion: "À votre connaissance, d'où vient ce fichier ?",
     assistantProvenanceOld: "Il appartenait à une ancienne configuration Google Assistant",
@@ -409,7 +410,7 @@ const HVLS_TRANSLATIONS = {
     tabPreview: "Preview",
     tabBackups: "Backups",
     tabMigration: "Assistant",
-    migrationIntro: "Simulation does not change HA, labels or YAML. The protected backup and journal are created only after explicit confirmation.",
+    migrationIntro: "HVLS generates your entity YAML from Home Assistant labels. Managing labels does not require a Google Assistant connection. Inspection is read-only; label updates and Apply require explicit confirmation.",
     migrationGuideTitle: "Let's identify your situation",
     migrationGuideStepIdentify: "Step 1 — Identify your situation",
     migrationGuideStepVerify: "Step 2 of 2 — Review the recommended checks",
@@ -484,6 +485,7 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptStale: "File or catalog changed since inspection. No new action taken: inspect it again.",
     assistantAdoptNeedsReview: "Excluded, missing, ineligible, implicitly exposed or customized name/room/alias entities need review; labels cannot reconstruct those settings.",
     assistantAdoptTruncated: "File contains too many entries for a complete reuse plan; no bulk label additions are suggested.",
+    assistantProvenanceAdvanced: "ⓘ File origin and historical backup checks (optional)",
     assistantProvenanceStep: "Step 3 of 3 — Understand the file's origin",
     assistantProvenanceQuestion: "As far as you know, where did this file come from?",
     assistantProvenanceOld: "It belonged to a previous Google Assistant configuration",
@@ -2515,6 +2517,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
                 <button id="assistantAdoptApply" type="button" disabled></button>
                 <p id="assistantAdoptResult" role="status"></p>
               </section>
+              <details id="assistantProvenanceAdvanced">
+                <summary id="assistantProvenanceAdvancedTitle">${this._t("assistantProvenanceAdvanced")}</summary>
               <section id="assistantProvenance" hidden aria-labelledby="assistantProvenanceStep">
                 <h3 id="assistantProvenanceStep">${this._t("assistantProvenanceStep")}</h3>
                 <p id="assistantProvenanceQuestion">${this._t("assistantProvenanceQuestion")}</p>
@@ -2577,6 +2581,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
                   ${this._t("assistantProvenanceSafety")}
                 </p>
               </section>
+              </details>
             </div>
             <p id="migrationGuideSafety" class="diagnostic-note">${this._t("migrationGuideNoAuthorization")}</p>
           </div>
@@ -3890,6 +3895,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
       const node = this.querySelector("#" + id);
       if (node) node.textContent = this._t(id);
     }
+    const advancedTitle = this.querySelector("#assistantProvenanceAdvancedTitle");
+    if (advancedTitle) advancedTitle.textContent = this._t("assistantProvenanceAdvanced");
     this._renderAssistantHistoryStatus();
     const anomalies = this._assistantFileReport?.counts?.entries_with_anomalies;
     const issues = this.querySelector("#assistantProvenanceAnomalies");
