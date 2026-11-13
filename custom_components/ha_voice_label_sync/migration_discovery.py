@@ -258,7 +258,10 @@ def discover_google_assistant(config_dir: str | Path) -> dict[str, Any]:
     report: dict[str, Any] = {
         "schema_version": 1,
         "mode": "unsupported",
-        "source": {"status": "unsupported", "locations": [], "warnings": []},
+        "source": {
+            "status": "unsupported", "locations": [], "warnings": [],
+            "unreferenced_google_entity_file_present": False,
+        },
         "rules": {
             "expose_by_default": "unknown",
             "exposed_domains": [],
@@ -309,6 +312,12 @@ def discover_google_assistant(config_dir: str | Path) -> dict[str, Any]:
             elif cloud is not None and not isinstance(cloud, MappingNode):
                 block("unresolved_cloud_configuration")
             elif not report["global_blockers"]:
+                # File presence is a hint, NOT proof of an active or historical
+                # manual Google configuration. Never read or follow it here.
+                candidate = reader.root / "google_assistant_entities.yaml"
+                report["source"]["unreferenced_google_entity_file_present"] = (
+                    not candidate.is_symlink() and candidate.is_file()
+                )
                 report["mode"] = "new_configuration"
                 report["source"]["status"] = "resolved"
                 report["cutover_status"] = "not_applicable"

@@ -1120,6 +1120,12 @@ test("Protected baseline preparation alone never calls initialization", async ()
     migrationBaselineStatus: {textContent: ""},
   };
   panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "assisted_migration",
+    review_status: "pending_review",
+    source: {status: "resolved"},
+    global_blockers: [],
+  }};
   await panel._prepareMigrationBaseline();
   assert.deepEqual(requests.map(r => r.type), [
     "ha_voice_label_sync/prepare_migration_baseline",
@@ -2604,4 +2610,99 @@ test("Apply reason code: unknown code uses localized fallback", async () => {
   assert.equal(info.hidden, false);
   assert.match(explanation.textContent, /Impossible de valider Apply/i);
   assert.doesNotMatch(explanation.textContent, /Unexpected server state/i);
+});
+
+
+test("Guided setup reports unreferenced YAML without assuming an active setup", () => {
+  const requests = [];
+  const {panel} = makePanel(async message => { requests.push(message); });
+  const controls = {};
+  for (const id of [
+    "migrationGuide", "migrationGuideTitle", "migrationGuideDetected",
+    "migrationGuideCandidate", "migrationGuideQuestion",
+    "migrationGuideSafety", "migrationIntentNew",
+    "migrationIntentExisting", "migrationIntentUnsure",
+    "migrationGuideNext",
+  ]) {
+    controls[id] = {
+      textContent: "", hidden: true,
+      attributes: {},
+      setAttribute(name, value) { this.attributes[name] = value; },
+    };
+  }
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration",
+    review_status: "not_applicable",
+    source: {
+      status: "resolved",
+      unreferenced_google_entity_file_present: true,
+    },
+  }};
+  panel._renderMigrationGuide();
+  assert.equal(controls.migrationGuide.hidden, false);
+  assert.match(controls.migrationGuideDetected.textContent, /configuration.yaml/);
+  assert.match(controls.migrationGuideCandidate.textContent, /fichier google_assistant_entities.yaml existe/);
+  assert.match(controls.migrationGuideNext.textContent, /Choisissez votre situation/);
+  panel._chooseMigrationIntent("existing");
+  assert.equal(controls.migrationIntentExisting.attributes["aria-pressed"], "true");
+  assert.match(controls.migrationGuideNext.textContent, /Vérifiez la déclaration/);
+  assert.match(controls.migrationGuideSafety.textContent, /aucune écriture/);
+  assert.deepEqual(requests, []);
+  panel._chooseMigrationIntent("new");
+  assert.match(controls.migrationGuideNext.textContent, /Rien n'a été créé ni écrasé/);
+  assert.deepEqual(requests, []);
+});
+
+test("Guided setup handles absent candidate and unknown intent", () => {
+  const {panel} = makePanel(async () => {});
+  const controls = {};
+  for (const id of ["migrationGuide", "migrationGuideCandidate", "migrationGuideNext"]) {
+    controls[id] = {
+      textContent: "", hidden: true,
+      setAttribute() {},
+    };
+  }
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration",
+    source: {status: "resolved", unreferenced_google_entity_file_present: false},
+  }};
+  panel._chooseMigrationIntent("unsure");
+  assert.equal(controls.migrationGuide.hidden, false);
+  assert.match(controls.migrationGuideCandidate.textContent, /Aucun fichier/);
+  assert.match(controls.migrationGuideNext.textContent, /Aucun problème/);
+  panel._migrationReport = {diagnostic: {mode: "assisted_migration"}};
+  panel._renderMigrationGuide();
+  assert.equal(controls.migrationGuide.hidden, true);
+  assert.equal(panel._migrationIntent, null);
+});
+
+test("Guided intent cannot bypass protected baseline preconditions", async () => {
+  const requests = [];
+  const {panel} = makePanel(async message => { requests.push(message); });
+  const controls = {
+    migrationPrepareBaseline: {disabled: false},
+    migrationConfirmBaseline: {disabled: false, hidden: false},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration",
+    review_status: "not_applicable",
+    source: {status: "resolved", unreferenced_google_entity_file_present: true},
+    global_blockers: [],
+  }};
+  panel._migrationIntent = "existing";
+  panel._migrationBaselineControls();
+  assert.equal(controls.migrationPrepareBaseline.disabled, true);
+  await panel._prepareMigrationBaseline();
+  assert.deepEqual(requests, []);
+  panel._migrationReport = {diagnostic: {
+    mode: "assisted_migration", review_status: "blocked",
+    source: {status: "ambiguous"}, global_blockers: ["duplicate_mapping_key"],
+  }};
+  panel._migrationBaselineControls();
+  assert.equal(controls.migrationPrepareBaseline.disabled, true);
+  await panel._prepareMigrationBaseline();
+  assert.deepEqual(requests, []);
 });

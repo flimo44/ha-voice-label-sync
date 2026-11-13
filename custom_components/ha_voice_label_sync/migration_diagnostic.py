@@ -230,6 +230,10 @@ def compose_admin_diagnostic(
             "status": _code(source_status),
             "locations": locations,
             "warnings": _codes(source.get("warnings", [])),
+            "unreferenced_google_entity_file_present": (
+                source.get("unreferenced_google_entity_file_present") is True
+                if mode == "new_configuration" else False
+            ),
         },
         "rules": {
             "expose_by_default": _code(rules.get("expose_by_default")),
