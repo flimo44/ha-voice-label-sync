@@ -19,7 +19,6 @@ from pathlib import Path
 from .models import FileWriteResult
 from .output_ownership import OwnershipResult
 from .output_ownership_registry import OwnershipRegistry
-from .restore_guard import assert_not_guarded, guard_path, read_guard
 from .writers import FileWriterError, atomic_write, write_with_backup
 
 
@@ -182,7 +181,6 @@ def write_owned_output(
     retention: int = 10,
     create_backup_enabled: bool = True,
     restore_mode: bool = False,
-    expected_production_sha256: str | None = None,
 ) -> FileWriteResult:
     """Create or regenerate a verified HVLS-owned YAML.
 
@@ -209,7 +207,6 @@ def write_owned_output(
         registry_path,
         registry_path.with_name(registry_path.name + ".lock"),
         registry_path.with_name(registry_path.name + ".write.lock"),
-        guard_path(registry_path),
     }
 
     if (
@@ -233,8 +230,6 @@ def write_owned_output(
         _safe_path(output)
         _safe_path(registry_path)
         _safe_path(backups)
-        if not restore_mode:
-            assert_not_guarded(registry_path, entry_id, output)
 
         registry = OwnershipRegistry(registry_path)
         record = registry.get_record(entry_id)
@@ -281,12 +276,6 @@ def write_owned_output(
             )
 
         expected_sha256 = record["sha256"]
-        if expected_production_sha256 is not None and not hmac.compare_digest(
-            expected_sha256, expected_production_sha256
-        ):
-            raise FileWriterError(
-                "Production changed after restore review; review again"
-            )
 
         # Durable pending state and first content verification.
         registry.begin_write(
@@ -368,7 +357,6 @@ def evaluate_registered_output(
         registry_path,
         registry_path.with_name(registry_path.name + ".lock"),
         registry_path.with_name(registry_path.name + ".write.lock"),
-        guard_path(registry_path),
     }
 
     if output in reserved:
@@ -449,25 +437,6 @@ def evaluate_registered_output(
         return result(
             "unknown", False, "verification_failed",
             "Managed output cannot be verified safely.",
-        )
-
-    try:
-        guard = read_guard(registry_path)
-    except FileWriterError:
-        return result(
-            "unknown", False, "restore_guard_invalid",
-            "Restore reconciliation record cannot be verified.",
-        )
-    if guard is not None:
-        if (guard["entry_id"] != entry_id or
-                guard["output_path"] != str(output)):
-            return result(
-                "unknown", False, "restore_guard_mismatch",
-                "A restoration from another configuration is unresolved.",
-            )
-        return result(
-            "restore_pending", False, "restore_reconciliation_required",
-            "Restored YAML is protected until labels and production are reconciled.",
         )
 
     return result(
