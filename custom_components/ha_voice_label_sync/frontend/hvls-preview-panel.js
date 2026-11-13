@@ -1718,6 +1718,14 @@ class HVLSPreviewPanel extends HTMLElement {
         }
         .assistant-file-metric strong { font-size: 1.4rem; font-weight: 600; }
         .assistant-file-metric span { font-size: 0.83rem; color: var(--secondary-text-color); }
+        #assistantProvenance { border-top: 1px solid var(--divider-color); margin-top: 16px; padding-top: 12px; }
+        #assistantProvenance[hidden] { display: none; }
+        .assistant-provenance-choice[aria-pressed="true"] {
+          outline: 2px solid var(--primary-color);
+          outline-offset: 2px;
+        }
+        .assistant-provenance-facts { padding-left: 20px; }
+        .assistant-provenance-facts li { margin: 8px 0; overflow-wrap: anywhere; }
         .migration-review-note { color: var(--secondary-text-color); }
         .hvls-brand {
           display: flex;
@@ -2316,6 +2324,34 @@ entity_config: !include google_assistant_entities.yaml</pre>
               <p id="assistantFileSafety" class="diagnostic-note">
                 ${this._t("assistantFileSafety")}
               </p>
+              <section id="assistantProvenance" hidden aria-labelledby="assistantProvenanceStep">
+                <h3 id="assistantProvenanceStep">${this._t("assistantProvenanceStep")}</h3>
+                <p id="assistantProvenanceQuestion">${this._t("assistantProvenanceQuestion")}</p>
+                <div class="migration-controls" role="group"
+                  aria-label="${this._t("assistantProvenanceCategory")}">
+                  <button id="assistantProvenanceOld" type="button" class="secondary assistant-provenance-choice"
+                    aria-pressed="false">${this._t("assistantProvenanceOld")}</button>
+                  <button id="assistantProvenanceUnknown" type="button" class="secondary assistant-provenance-choice"
+                    aria-pressed="false">${this._t("assistantProvenanceUnknown")}</button>
+                  <button id="assistantProvenanceNew" type="button" class="secondary assistant-provenance-choice"
+                    aria-pressed="false">${this._t("assistantProvenanceNew")}</button>
+                </div>
+                <ul class="assistant-provenance-facts">
+                  <li><strong id="assistantProvenanceVerifiedTitle">${this._t("assistantProvenanceVerifiedTitle")}</strong>
+                    <span id="assistantProvenanceVerified">${this._t("assistantProvenanceVerified")}</span>
+                    <span id="assistantProvenanceAnomalies" hidden></span>
+                  </li>
+                  <li><strong id="assistantProvenanceMissingTitle">${this._t("assistantProvenanceMissingTitle")}</strong>
+                    <span id="assistantProvenanceMissing">${this._t("assistantProvenanceMissing")}</span>
+                  </li>
+                  <li><strong id="assistantProvenanceNextTitle">${this._t("assistantProvenanceNextTitle")}</strong>
+                    <span id="assistantProvenanceNext" role="status">${this._t("assistantProvenanceNextChoose")}</span>
+                  </li>
+                </ul>
+                <p id="assistantProvenanceSafety" class="diagnostic-note">
+                  ${this._t("assistantProvenanceSafety")}
+                </p>
+              </section>
             </div>
             <p id="migrationGuideSafety" class="diagnostic-note">${this._t("migrationGuideNoAuthorization")}</p>
           </div>
@@ -2429,6 +2465,15 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this.querySelector("#assistantFileCheck").addEventListener(
       "click", () => this._checkAssistantEntityFile()
     );
+    for (const [id, origin] of [
+      ["assistantProvenanceOld", "old"],
+      ["assistantProvenanceUnknown", "unknown"],
+      ["assistantProvenanceNew", "new"],
+    ]) {
+      this.querySelector("#" + id).addEventListener(
+        "click", () => this._chooseAssistantProvenance(origin)
+      );
+    }
     this.querySelector("#migrationPrepareBaseline").addEventListener("click", () => this._prepareMigrationBaseline());
     this.querySelector("#migrationConfirmBaseline").addEventListener("click", () => this._confirmMigrationBaseline());
     this.querySelector("#migrationRestoreDraft").addEventListener("click", () => this._restoreMigrationDecisionDraft());
