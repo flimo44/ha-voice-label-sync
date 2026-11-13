@@ -3041,7 +3041,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
           code => this._assistantFileExplanation(code)
         ).join(", ");
         const line = this._language === "fr" ? "ligne" : "line";
-        return `${issue.entity_id} (${line} ${issue.line}: ${reasons})`;
+        return `${issue.entity_id || "—"} (${line} ${issue.line}: ${reasons})`;
       });
       status.textContent = intro + " " + (issueList.length
         ? this._tf("assistantFileIssues", {issues: issueList.join(" ; ")})
