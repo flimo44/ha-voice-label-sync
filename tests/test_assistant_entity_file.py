@@ -43,7 +43,10 @@ def test_valid_file_does_not_approve_migration(inspector, tmp_path):
     assert report["counts"] == {
         "entries": 3,
         "requested_exposure": 2,
+        "explicitly_exposed": 1,
         "explicitly_excluded": 1,
+        "expose_not_set": 1,
+        "invalid_expose": 0,
         "entries_with_anomalies": 0,
     }
     assert report["read_only"] is True
@@ -67,6 +70,10 @@ def test_local_anomalies_are_counted_not_global_blockers(inspector, tmp_path):
     assert report["status"] == "review_required"
     assert report["counts"]["entries"] == 4
     assert report["counts"]["requested_exposure"] == 2
+    assert report["counts"]["explicitly_exposed"] == 1
+    assert report["counts"]["explicitly_excluded"] == 0
+    assert report["counts"]["expose_not_set"] == 1
+    assert report["counts"]["invalid_expose"] == 1
     assert report["counts"]["entries_with_anomalies"] == 3
     assert {i["code"] for i in report["issues"]} == {
         "invalid_expose_value", "invalid_room_option", "invalid_entity_id",
@@ -192,3 +199,40 @@ def test_wrong_yaml_root_keys_are_not_echoed(inspector, tmp_path):
     assert report["issue_examples"][0]["entity_id"] is None
     assert "SENSITIVE_ADMIN_PASSWORD" not in json.dumps(report)
     assert "top-secret" not in json.dumps(report)
+
+def test_empty_expose_key_is_not_counted_as_explicit_true(inspector, tmp_path):
+    (tmp_path / "entities.yaml").write_text(
+        "light.named:\n  name: Lamp\n"
+        "light.false:\n  expose: false\n"
+        "light.true:\n  expose: true\n"
+        "switch.invalid:\n  expose: definitely\n"
+        "switch.bad_structure: yes\n",
+        encoding="utf-8",
+    )
+    report = inspector.inspect_google_entity_file(tmp_path, "entities.yaml")
+    counts = report["counts"]
+    assert counts["entries"] == 5
+    assert counts["explicitly_exposed"] == 1
+    assert counts["explicitly_excluded"] == 1
+    assert counts["expose_not_set"] == 1
+    assert counts["invalid_expose"] == 1
+    # A malformed options mapping is an issue, not proof of any intent.
+    assert counts["entries_with_anomalies"] == 2
+    assert counts["requested_exposure"] == 2
+    assert report["source_active_verified"] is False
+    assert report["migration_authorized"] is False
+
+
+def test_all_expose_omitted_does_not_claim_exposure(inspector, tmp_path):
+    (tmp_path / "entities.yaml").write_text(
+        "light.one:\n  name: One\n"
+        "light.two:\n  room: Living\n",
+        encoding="utf-8",
+    )
+    report = inspector.inspect_google_entity_file(tmp_path, "entities.yaml")
+    assert report["status"] == "parsed"
+    assert report["counts"]["requested_exposure"] == 2  # legacy only
+    assert report["counts"]["explicitly_exposed"] == 0
+    assert report["counts"]["expose_not_set"] == 2
+    assert report["counts"]["explicitly_excluded"] == 0
+    assert report["google_home_state_verified"] is False
