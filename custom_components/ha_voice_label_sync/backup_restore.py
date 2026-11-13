@@ -14,6 +14,7 @@ from hvls.output_ownership_registry import OwnershipRegistry
 from hvls.owned_writer import (
     _operation_lock,
     _verify_current_file,
+    evaluate_registered_output,
     write_owned_output,
 )
 from hvls.restore_guard import clear_guard, create_guard, read_guard
@@ -184,6 +185,13 @@ def restore_reviewed_backup(
             "Selected backup changed before restore."
         )
 
+    ownership = evaluate_registered_output(
+        output_path, entry_id, ownership_registry_path,
+    )
+    if ownership.status != "managed" or not ownership.write_allowed:
+        raise BackupRestoreError(
+            "Restore ownership verification failed before creating the hold"
+        )
     # A durable hold is created BEFORE the restore write, so an interruption
     # cannot silently re-enable generation/Apply after a process restart.
     create_guard(
