@@ -2686,6 +2686,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._assistantFileError = null;
       this._assistantFileChecking = false;
       this._assistantProvenanceChoice = null;
+      this._assistantAdoptMessage = null;
       this._invalidateHistoricalReview();
       this._renderAssistantFileStatus();
     });
@@ -3335,6 +3336,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantFileError = null;
     this._assistantFileChecking = false;
     this._assistantProvenanceChoice = null;
+    this._assistantAdoptMessage = null;
     this._invalidateHistoricalReview();
     this._renderMigrationGuide();
     this._renderAssistantFileStatus();
@@ -3579,6 +3581,219 @@ entity_config: !include google_assistant_entities.yaml</pre>
         this._assistantHistoryBusy = false;
         this._renderAssistantHistoryStatus();
       }
+    }
+  }
+
+  _assistantAdoptionAvailable() {
+    const diag = this._migrationReport?.diagnostic;
+    const report = this._assistantFileReport;
+    return diag?.mode === "new_configuration" &&
+      diag?.source?.status === "resolved" &&
+      !this._assistantPackagesDetected() &&
+      ["existing", "unsure"].includes(this._migrationIntent) &&
+      !this._assistantFileChecking && !this._assistantFileError &&
+      ["parsed", "review_required"].includes(report?.status) &&
+      report?.read_only === true &&
+      report?.source_active_verified === false &&
+      report?.migration_authorized === false &&
+      report?.stage_allowed === false &&
+      report?.apply_allowed === false &&
+      report?.cutover_allowed === false &&
+      /^[a-f0-9]{64}$/.test(report?.file_sha256 || "") &&
+      Array.isArray(report?.adoption_entries);
+  }
+
+  _assistantAdoptionPlan() {
+    if (!this._assistantAdoptionAvailable() ||
+        !Array.isArray(this._entityCatalog?.entities)) return null;
+    const report = this._assistantFileReport;
+    const catalog = new Map(this._entityCatalog.entities.map(
+      entity => [entity.entity_id, entity]
+    ));
+    const seen = new Set();
+    const rows = [];
+    const candidates = [];
+    const totals = {ready: 0, already: 0, excluded: 0, review: 0};
+    for (const entry of report.adoption_entries) {
+      if (!entry || typeof entry.entity_id !== "string" ||
+          !/^[a-z0-9_]+\.[a-z0-9_]+$/.test(entry.entity_id) ||
+          seen.has(entry.entity_id) ||
+          !["expose", "exclude", "unset", "invalid"].includes(entry.exposure) ||
+          typeof entry.has_customizations !== "boolean" ||
+          !Array.isArray(entry.reasons)) return null;
+      seen.add(entry.entity_id);
+      const entity = catalog.get(entry.entity_id);
+      let category = "review";
+      if (entry.reasons.length === 0 && !entry.has_customizations) {
+        if (entry.exposure === "exclude" && entity?.has_label !== true) {
+          category = "excluded";
+        } else if (entry.exposure === "expose" && entity?.has_label === true) {
+          category = "already";
+        } else if (entry.exposure === "expose" && entity?.eligible === true &&
+                   entity?.has_label === false) {
+          category = "ready";
+          candidates.push(entry.entity_id);
+        }
+      }
+      totals[category] += 1;
+      rows.push({entity_id: entry.entity_id, category});
+    }
+    // Invalid YAML keys have no safe entity ID to display, but remain
+    // local issues. Do not silently classify them as importable entries.
+    const unlisted = Math.max(0, (report.counts?.entries || 0) - rows.length);
+    totals.review += unlisted;
+    return {
+      candidates, rows, totals,
+      complete: report.adoption_entries_complete === true &&
+        unlisted <= (report.counts?.entries_with_anomalies || 0),
+      canWrite: Array.isArray(this._entityCatalog.label_ids) &&
+        this._entityCatalog.label_ids.length === 1,
+    };
+  }
+
+  _renderAssistantAdoption() {
+    const section = this.querySelector("#assistantAdoption");
+    if (!section) return;
+    section.hidden = !this._assistantAdoptionAvailable();
+    if (section.hidden) return;
+    for (const id of ["assistantAdoptTitle", "assistantAdoptIntro",
+                      "assistantAdoptLimits", "assistantAdoptRefresh",
+                      "assistantAdoptReview"]) {
+      const node = this.querySelector("#" + id);
+      if (node) node.textContent = this._t(id);
+    }
+    const plan = this._assistantAdoptionPlan();
+    const summary = this.querySelector("#assistantAdoptSummary");
+    if (summary) summary.textContent = !plan
+      ? this._t("assistantAdoptNoCatalog")
+      : this._tf("assistantAdoptCounts", plan.totals);
+    const caution = this.querySelector("#assistantAdoptNeedsReview");
+    if (caution) {
+      caution.hidden = !plan || plan.totals.review === 0;
+      caution.textContent = this._t("assistantAdoptNeedsReview");
+    }
+    const refresh = this.querySelector("#assistantAdoptRefresh");
+    if (refresh) refresh.disabled = this._assistantAdoptBusy === true ||
+      this._entityLoading === true;
+    const action = this.querySelector("#assistantAdoptApply");
+    if (action) {
+      action.textContent = plan?.candidates.length
+        ? this._tf("assistantAdoptAction", {count: plan.candidates.length})
+        : this._t("assistantAdoptNone");
+      action.disabled = this._assistantAdoptBusy === true ||
+        this._entityWritePending === true ||
+        this._entityLoading === true ||
+        !plan?.complete || !plan?.canWrite || !plan.candidates.length;
+    }
+    const result = this.querySelector("#assistantAdoptResult");
+    if (result) result.textContent = this._assistantAdoptMessage ||
+      (plan && !plan.complete ? this._t("assistantAdoptTruncated") : "");
+    const container = this.querySelector("#assistantAdoptRows");
+    if (container) {
+      container.replaceChildren();
+      for (const entry of (plan?.rows || []).slice(0, 200)) {
+        const line = document.createElement("p");
+        const key = {
+          ready: "assistantAdoptReasonAdd",
+          already: "assistantAdoptReasonAlready",
+          excluded: "assistantAdoptReasonExclude",
+          review: "assistantAdoptReasonReview",
+        }[entry.category];
+        line.textContent = entry.entity_id + " — " + this._t(key);
+        container.appendChild(line);
+      }
+    }
+  }
+
+  async _adoptAssistantFile() {
+    const plan = this._assistantAdoptionPlan();
+    if (!this._hass || !plan?.complete || !plan.canWrite ||
+        !plan.candidates.length || this._assistantAdoptBusy ||
+        this._entityWritePending || this._entityLoading ||
+        this._applying || this._restoring || this._generating) return;
+    const ids = [...plan.candidates];
+    const path = this._assistantFilePath.trim();
+    const original = this._assistantFileReport;
+    const requestId = this._assistantFileRequestId || 0;
+    if (!window.confirm(this._tf("assistantAdoptConfirm", {
+      count: ids.length,
+    }))) return;
+
+    this._assistantAdoptBusy = true;
+    this._entityWritePending = true;
+    this._review = null;  // Label changes invalidate previous Preview approval.
+    this._loadId = (this._loadId || 0) + 1;
+    this._updateApplyButton();
+    let completed = 0;
+    let finished = false;
+    this._assistantAdoptMessage = this._tf("assistantAdoptBusy", {
+      done: completed, total: ids.length,
+    });
+    this._renderAssistantAdoption();
+    try {
+      const fresh = await this._hass.callWS({
+        type: "ha_voice_label_sync/inspect_assistant_entity_file", path,
+      });
+      if (!this._assistantAdoptionAvailable() ||
+          requestId !== (this._assistantFileRequestId || 0) ||
+          this._assistantFilePath.trim() !== path ||
+          fresh?.read_only !== true ||
+          fresh?.source_active_verified !== false ||
+          fresh?.migration_authorized !== false ||
+          fresh?.stage_allowed !== false ||
+          fresh?.apply_allowed !== false ||
+          fresh?.cutover_allowed !== false ||
+          !["parsed", "review_required"].includes(fresh.status) ||
+          fresh.file_sha256 !== original.file_sha256 ||
+          JSON.stringify(fresh.adoption_entries) !==
+            JSON.stringify(original.adoption_entries)) {
+        throw new Error("stale_source");
+      }
+      // Revalidate current labels and eligibility before starting any write.
+      if (!await this._loadEntities()) throw new Error("catalog_unavailable");
+      const verified = this._assistantAdoptionPlan();
+      if (!verified?.complete || !verified.canWrite ||
+          JSON.stringify(verified.candidates) !== JSON.stringify(ids)) {
+        throw new Error("stale_catalog");
+      }
+      for (const entity_id of ids) {
+        if (requestId !== (this._assistantFileRequestId || 0) ||
+            this._assistantFilePath.trim() !== path) {
+          throw new Error("context_changed");
+        }
+        // Existing admin-only, per-entity, eligibility-checked HA label API.
+        // No migration staging API, source YAML write or Google cutover.
+        const response = await this._hass.callWS({
+          type: "ha_voice_label_sync/set_entity_label",
+          entity_id, enabled: true, expected_enabled: false,
+        });
+        if (response?.entity_id !== entity_id ||
+            response?.has_label !== true || response?.changed !== true) {
+          throw new Error("label_not_confirmed");
+        }
+        completed += 1;
+        this._assistantAdoptMessage = this._tf("assistantAdoptBusy", {
+          done: completed, total: ids.length,
+        });
+        this._renderAssistantAdoption();
+      }
+      finished = true;
+    } catch (_error) {
+      // Fail at the first uncertain result. Never guess a rollback.
+    } finally {
+      if (completed > 0) {
+        await this._loadEntities();
+        await this._generatePreview(); // Preview only; never Apply YAML.
+      }
+      this._entityWritePending = false;
+      this._assistantAdoptBusy = false;
+      this._assistantAdoptMessage = this._tf(
+        finished ? "assistantAdoptDone" :
+          completed ? "assistantAdoptStopped" : "assistantAdoptStale",
+        {count: completed}
+      );
+      this._updateApplyButton();
+      this._renderAssistantAdoption();
     }
   }
 
