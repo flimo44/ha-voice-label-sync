@@ -77,6 +77,15 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptReasonAlready: "Déjà dans HVLS",
     assistantAdoptReasonExclude: "Exclue (expose: false) — aucun ajout",
     assistantAdoptReasonReview: "À examiner manuellement",
+    assistantAdoptReviewYamlIssue: "Anomalie dans la déclaration YAML",
+    assistantAdoptReviewInvalidExposure: "Valeur expose invalide",
+    assistantAdoptReviewMissingEntity: "Entité absente du catalogue HA",
+    assistantAdoptReviewImplicitExposure: "Directive expose absente : intention inconnue",
+    assistantAdoptReviewUnknownLabel: "État du label HVLS inconnu",
+    assistantAdoptReviewExcludedLabeled: "expose: false mais label HVLS présent",
+    assistantAdoptReviewIneligible: "Entité non éligible à la génération",
+    assistantAdoptReviewUnlabeledCustom: "Sans label HVLS ; personnalisations YAML à préserver",
+    assistantAdoptCustomValuesUnverified: "Nom, pièce ou alias du YAML non comparés aux valeurs générées",
     assistantAdoptLimits: "Ajout proposé uniquement pour expose: true, sans personnalisation et avec entité éligible. Les autres restent visibles sans bloquer l'ensemble.",
     assistantAdoptAction: "Ajouter {count} label(s) HVLS",
     assistantAdoptNone: "Aucun ajout automatique proposé. Vous pouvez toujours gérer les entités individuellement dans l'onglet Gestion des entités HVLS.",
@@ -85,7 +94,7 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptDone: "{count} label(s) ajouté(s). Le YAML d'origine est conservé ; un nouveau Preview a été demandé. Vérifiez-le avant toute application.",
     assistantAdoptStopped: "{count} label(s) confirmé(s) avant interruption. Vérifiez le catalogue actualisé : une opération sans réponse peut avoir été appliquée. Aucun réessai automatique.",
     assistantAdoptStale: "Fichier ou catalogue modifié depuis la vérification. Aucune nouvelle action : vérifiez à nouveau.",
-    assistantAdoptNeedsReview: "Les entités exclues, absentes, non éligibles, à expose implicite ou avec nom/pièce/alias personnalisés restent à examiner ; ces réglages ne sont pas déduits des labels.",
+    assistantAdoptNeedsReview: "Un label HVLS confirme la sélection, pas l'identité des noms, pièces ou alias YAML. Les entités signalées « À examiner » ne sont pas ajoutées automatiquement.",
     assistantAdoptTruncated: "Le fichier comporte trop d'entrées pour une reprise complète ; aucun ajout groupé n'est proposé.",
     assistantProvenanceAdvanced: "ⓘ Origine du fichier et recherches dans les sauvegardes (facultatif)",
     assistantProvenanceStep: "Étape 3 sur 3 — Comprendre l'origine du fichier",
@@ -475,6 +484,15 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptReasonAlready: "Already in HVLS",
     assistantAdoptReasonExclude: "Excluded (expose: false) — no addition",
     assistantAdoptReasonReview: "Requires manual review",
+    assistantAdoptReviewYamlIssue: "YAML declaration issue",
+    assistantAdoptReviewInvalidExposure: "Invalid expose directive",
+    assistantAdoptReviewMissingEntity: "Entity absent from HA catalog",
+    assistantAdoptReviewImplicitExposure: "Missing expose directive: intent unknown",
+    assistantAdoptReviewUnknownLabel: "HVLS label status unknown",
+    assistantAdoptReviewExcludedLabeled: "expose: false but HVLS label is present",
+    assistantAdoptReviewIneligible: "Entity ineligible for generation",
+    assistantAdoptReviewUnlabeledCustom: "No HVLS label; preserve YAML customizations",
+    assistantAdoptCustomValuesUnverified: "YAML name, room or aliases not compared to generated values",
     assistantAdoptLimits: "Only explicit expose: true entries with no customizations and eligible HA entities are suggested for label addition. Other entries remain visible.",
     assistantAdoptAction: "Add {count} HVLS label(s)",
     assistantAdoptNone: "No automatic additions suggested. You can still manage each entity in the HVLS Entity management tab.",
@@ -483,7 +501,7 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptDone: "{count} label(s) added. Original YAML preserved; a new Preview was requested. Review it before applying.",
     assistantAdoptStopped: "{count} label addition(s) confirmed before interruption. Check the refreshed catalog: an unanswered operation might still have succeeded. No automatic retry.",
     assistantAdoptStale: "File or catalog changed since inspection. No new action taken: inspect it again.",
-    assistantAdoptNeedsReview: "Excluded, missing, ineligible, implicitly exposed or customized name/room/alias entities need review; labels cannot reconstruct those settings.",
+    assistantAdoptNeedsReview: "An HVLS label confirms selection, not matching YAML name, room or alias values. Entries marked 'Requires manual review' are never added automatically.",
     assistantAdoptTruncated: "File contains too many entries for a complete reuse plan; no bulk label additions are suggested.",
     assistantProvenanceAdvanced: "ⓘ File origin and historical backup checks (optional)",
     assistantProvenanceStep: "Step 3 of 3 — Understand the file's origin",
@@ -3629,19 +3647,45 @@ entity_config: !include google_assistant_entities.yaml</pre>
       seen.add(entry.entity_id);
       const entity = catalog.get(entry.entity_id);
       let category = "review";
-      if (entry.reasons.length === 0 && !entry.has_customizations) {
-        if (entry.exposure === "exclude" && entity?.has_label !== true) {
+      let reasonKey = null;
+      let noteKey = null;
+      if (entry.reasons.length) {
+        reasonKey = "assistantAdoptReviewYamlIssue";
+      } else if (entry.exposure === "invalid") {
+        reasonKey = "assistantAdoptReviewInvalidExposure";
+      } else if (!entity) {
+        reasonKey = "assistantAdoptReviewMissingEntity";
+      } else if (entry.exposure === "unset") {
+        reasonKey = "assistantAdoptReviewImplicitExposure";
+      } else if (entity.has_label !== true && entity.has_label !== false) {
+        reasonKey = "assistantAdoptReviewUnknownLabel";
+      } else if (entry.exposure === "exclude") {
+        if (entity.has_label === false) {
           category = "excluded";
-        } else if (entry.exposure === "expose" && entity?.has_label === true) {
-          category = "already";
-        } else if (entry.exposure === "expose" && entity?.eligible === true &&
-                   entity?.has_label === false) {
-          category = "ready";
-          candidates.push(entry.entity_id);
+          if (entry.has_customizations) {
+            noteKey = "assistantAdoptCustomValuesUnverified";
+          }
+        } else {
+          reasonKey = "assistantAdoptReviewExcludedLabeled";
         }
+      } else if (entity.eligible !== true) {
+        reasonKey = "assistantAdoptReviewIneligible";
+      } else if (entity.has_label === true) {
+        // The label is already present. name/room are generated by HVLS too:
+        // their presence alone must not turn a labeled entity into "review".
+        // Do not claim YAML values match; the inspector never returns them.
+        category = "already";
+        if (entry.has_customizations) {
+          noteKey = "assistantAdoptCustomValuesUnverified";
+        }
+      } else if (entry.has_customizations) {
+        reasonKey = "assistantAdoptReviewUnlabeledCustom";
+      } else {
+        category = "ready";
+        candidates.push(entry.entity_id);
       }
       totals[category] += 1;
-      rows.push({entity_id: entry.entity_id, category});
+      rows.push({entity_id: entry.entity_id, category, reasonKey, noteKey});
     }
     // Invalid YAML keys have no safe entity ID to display, but remain
     // local issues. Do not silently classify them as importable entries.
@@ -3674,7 +3718,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
       : this._tf("assistantAdoptCounts", plan.totals);
     const caution = this.querySelector("#assistantAdoptNeedsReview");
     if (caution) {
-      caution.hidden = !plan || plan.totals.review === 0;
+      caution.hidden = !plan || (plan.totals.review === 0 &&
+        !plan.rows.some(row => row.noteKey));
       caution.textContent = this._t("assistantAdoptNeedsReview");
     }
     const refresh = this.querySelector("#assistantAdoptRefresh");
@@ -3704,7 +3749,10 @@ entity_config: !include google_assistant_entities.yaml</pre>
           excluded: "assistantAdoptReasonExclude",
           review: "assistantAdoptReasonReview",
         }[entry.category];
-        line.textContent = entry.entity_id + " — " + this._t(key);
+        const details = [entry.reasonKey, entry.noteKey]
+          .filter(Boolean).map(reasonKey => this._t(reasonKey));
+        line.textContent = entry.entity_id + " — " + this._t(key) +
+          (details.length ? " (" + details.join("; ") + ")" : "");
         container.appendChild(line);
       }
     }

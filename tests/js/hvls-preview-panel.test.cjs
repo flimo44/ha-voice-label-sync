@@ -3626,6 +3626,71 @@ test("Unreferenced YAML offers HVLS label reuse, not a Google connectivity block
   assert.equal(panel._migrationBaselineEligible(), false);
 });
 
+test("Already labeled entities with generated name/room are recognized without any write", () => {
+  const {panel, nodes} = standardAdoptionFixture(async () => {
+    throw Error("No write requests expected");
+  });
+  const ids = [
+    "switch.sonoff_10007b6160_1", "switch.sonoff_10007b6160_2",
+    "switch.piscine_chauffage", "switch.pompe_piscine_prise",
+  ];
+  panel._assistantFileReport.adoption_entries = ids.map(entity_id => ({
+    entity_id, exposure: "expose", has_customizations: true, reasons: [],
+  }));
+  panel._assistantFileReport.counts.entries = 4;
+  panel._entityCatalog.entities = ids.map(entity_id => ({
+    entity_id, eligible: true, has_label: true,
+  }));
+  const plan = panel._assistantAdoptionPlan();
+  assert.equal(plan.totals.ready, 0);
+  assert.equal(plan.totals.already, 4);
+  assert.equal(plan.totals.excluded, 0);
+  assert.equal(plan.totals.review, 0);
+  assert.deepEqual(Array.from(plan.candidates), []);
+  panel._renderAssistantAdoption();
+  assert.equal(nodes.assistantAdoptApply.disabled, true);
+  assert.equal(nodes.assistantAdoptNeedsReview.hidden, false);
+  assert.equal(nodes.assistantAdoptRows.children.length, 4);
+  for (const row of nodes.assistantAdoptRows.children) {
+    assert.match(row.textContent, /Déjà dans HVLS/);
+    assert.match(row.textContent, /non comparés/);
+    assert.doesNotMatch(row.textContent, /À examiner manuellement/);
+  }
+  assert.equal(panel._migrationBaselineEligible(), false);
+});
+
+test("Entity review shows the specific reason and never auto-adds risky entries", () => {
+  const {panel, nodes} = standardAdoptionFixture(async () => {
+    throw Error("No write requests expected");
+  });
+  const extra = [
+    ["switch.conflict", "exclude", false, []],
+    ["light.absent", "expose", false, []],
+    ["light.ineligible", "expose", false, []],
+    ["light.invalid", "invalid", false, ["invalid_expose"]],
+  ];
+  for (const [entity_id, exposure, has_customizations, reasons] of extra) {
+    panel._assistantFileReport.adoption_entries.push({
+      entity_id, exposure, has_customizations, reasons,
+    });
+  }
+  panel._assistantFileReport.counts.entries += extra.length;
+  panel._entityCatalog.entities.push(
+    {entity_id: "switch.conflict", eligible: true, has_label: true},
+    {entity_id: "light.ineligible", eligible: false, has_label: false},
+    {entity_id: "light.invalid", eligible: true, has_label: false},
+  );
+  panel._renderAssistantAdoption();
+  const rows = nodes.assistantAdoptRows.children.map(row => row.textContent);
+  assert.match(rows.find(row => row.startsWith("light.custom")), /personnalisations YAML/);
+  assert.match(rows.find(row => row.startsWith("light.unknown")), /Directive expose absente/);
+  assert.match(rows.find(row => row.startsWith("switch.conflict")), /expose: false mais label/);
+  assert.match(rows.find(row => row.startsWith("light.absent")), /absente du catalogue/);
+  assert.match(rows.find(row => row.startsWith("light.ineligible")), /non éligible/);
+  assert.match(rows.find(row => row.startsWith("light.invalid")), /Anomalie dans la déclaration/);
+  assert.deepEqual(Array.from(panel._assistantAdoptionPlan().candidates), ["light.new"]);
+});
+
 test("Confirmed reuse only updates an explicit compatible entity using existing API", async () => {
   const calls = [];
   const {panel, nodes} = standardAdoptionFixture(async req => {
