@@ -6,8 +6,8 @@ standalone entity file is NOT proof of active Google Assistant exposure.
 
 from __future__ import annotations
 
-from pathlib import Path, PurePosixPath
 import re
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from yaml.nodes import MappingNode
