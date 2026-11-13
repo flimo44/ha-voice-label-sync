@@ -2928,7 +2928,10 @@ entity_config: !include google_assistant_entities.yaml</pre>
     if (!["new", "existing", "unsure"].includes(intent)) return;
     // Only a local preference; this is never sent as migration authorization.
     this._migrationIntent = intent;
+    this._assistantFileRequestId = (this._assistantFileRequestId || 0) + 1;
+    this._assistantFileReport = null;
     this._renderMigrationGuide();
+    this._renderAssistantFileStatus();
   }
 
   _renderMigrationAdvanced() {
@@ -2955,15 +2958,160 @@ entity_config: !include google_assistant_entities.yaml</pre>
     }
   }
 
+  _assistantPackagesDetected() {
+    return this._migrationReport?.diagnostic?.global_blockers
+      ?.includes("packages_not_yet_supported") === true;
+  }
+
+  _assistantFileExplanation(code) {
+    const reasons = {
+      invalid_entity_file_path: ["chemin invalide", "invalid path"],
+      sensitive_file_reference: ["fichier sensible", "sensitive file"],
+      symlink_entity_file_not_allowed: ["lien symbolique interdit", "symlink prohibited"],
+      include_missing: ["fichier introuvable", "file not found"],
+      yaml_syntax_error: ["syntaxe YAML incorrecte", "invalid YAML"],
+      duplicate_mapping_key: ["clé YAML en double", "duplicate YAML key"],
+      yaml_file_too_large: ["fichier trop volumineux", "file too large"],
+      expected_mapping: ["structure YAML incorrecte", "invalid YAML structure"],
+      unreadable_yaml_file: ["fichier illisible", "unreadable file"],
+      entity_file_unavailable: ["fichier inaccessible", "file unavailable"],
+      invalid_entity_id: ["identifiant d'entité incorrect", "invalid entity ID"],
+      invalid_entity_options: ["options d'entité incorrectes", "invalid entity options"],
+      invalid_expose_value: ["valeur expose incorrecte", "invalid expose value"],
+      invalid_room_option: ["option room incorrecte", "invalid room option"],
+      invalid_name_option: ["option name incorrecte", "invalid name option"],
+      invalid_aliases_option: ["option aliases incorrecte", "invalid aliases option"],
+      unhandled_entity_option: ["option non prise en charge", "unsupported option"],
+    };
+    const translated = reasons[code];
+    return translated
+      ? translated[this._language === "fr" ? 0 : 1]
+      : (this._language === "fr" ? "problème non identifié" : "unknown issue");
+  }
+
+  _renderAssistantFileStatus() {
+    const input = this.querySelector("#assistantFilePath");
+    const button = this.querySelector("#assistantFileCheck");
+    const status = this.querySelector("#assistantFileResult");
+    const safe = this.querySelector("#assistantFileSafety");
+    const title = this.querySelector("#assistantFileTitle");
+    const label = this.querySelector("#assistantFilePathLabel");
+    const examples = this.querySelector("#assistantFileExamples > summary");
+    if (title) title.textContent = this._t("assistantFileTitle");
+    if (label) label.textContent = this._t("assistantFilePathLabel");
+    if (examples) examples.textContent = this._t("assistantFileHelp");
+    if (safe) safe.textContent = this._t("assistantFileSafety");
+    if (input) {
+      input.placeholder = this._t("assistantFilePlaceholder");
+      if (input.value !== (this._assistantFilePath || "")) {
+        input.value = this._assistantFilePath || "";
+      }
+    }
+    if (button) {
+      button.textContent = this._t("assistantFileCheck");
+      button.disabled = this._assistantFileChecking === true ||
+        !(this._assistantFilePath || "").trim();
+    }
+    if (!status) return;
+    const report = this._assistantFileReport;
+    if (this._assistantFileChecking) {
+      status.textContent = this._t("assistantFileChecking");
+    } else if (this._assistantFileError) {
+      status.textContent = this._t("assistantFileUnavailable");
+    } else if (!report) {
+      status.textContent = this._t("assistantFileNotChecked");
+    } else if (report.status === "blocked") {
+      status.textContent = this._tf("assistantFileCannotRead", {
+        reason: this._assistantFileExplanation(report.reason),
+      });
+    } else if (["parsed", "review_required"].includes(report.status)) {
+      const counts = report.counts || {};
+      const intro = this._tf("assistantFileChecked", {
+        entries: counts.entries ?? 0,
+        exposed: counts.requested_exposure ?? 0,
+        excluded: counts.explicitly_excluded ?? 0,
+        anomalies: counts.entries_with_anomalies ?? 0,
+      });
+      const issueList = (report.issue_examples || []).slice(0, 20).map(issue => {
+        const reasons = (issue.reasons || []).map(
+          code => this._assistantFileExplanation(code)
+        ).join(", ");
+        return `${issue.entity_id} (ligne ${issue.line} : ${reasons})`;
+      });
+      status.textContent = intro + " " + (issueList.length
+        ? this._tf("assistantFileIssues", {issues: issueList.join(" ; ")})
+        : this._t("assistantFileNoIssues"));
+    } else {
+      status.textContent = this._t("assistantFileUnavailable");
+    }
+  }
+
+  async _checkAssistantEntityFile() {
+    const path = (this._assistantFilePath || "").trim();
+    if (!this._hass || this._assistantFileChecking || !path) return;
+    const relevant = this._migrationReport?.diagnostic?.mode === "new_configuration" ||
+      this._assistantPackagesDetected();
+    if (!relevant || this._migrationIntent === "new") return;
+    const requestId = (this._assistantFileRequestId || 0) + 1;
+    this._assistantFileRequestId = requestId;
+    this._assistantFileChecking = true;
+    this._assistantFileReport = null;
+    this._assistantFileError = null;
+    this._renderAssistantFileStatus();
+    try {
+      const report = await this._hass.callWS({
+        type: "ha_voice_label_sync/inspect_assistant_entity_file",
+        path,
+      });
+      if (requestId === this._assistantFileRequestId &&
+          report?.read_only === true && report?.migration_authorized === false &&
+          report?.stage_allowed === false && report?.apply_allowed === false &&
+          report?.cutover_allowed === false &&
+          report?.source_active_verified === false) {
+        this._assistantFileReport = report;
+      } else if (requestId === this._assistantFileRequestId) {
+        this._assistantFileError = true;
+      }
+    } catch (_error) {
+      if (requestId === this._assistantFileRequestId) {
+        this._assistantFileError = true;
+      }
+    } finally {
+      // A previous answer must never overwrite results of a changed path.
+      if (requestId === this._assistantFileRequestId) {
+        this._assistantFileChecking = false;
+        this._renderAssistantFileStatus();
+      }
+    }
+  }
+
   _renderMigrationGuide() {
     const guide = this.querySelector("#migrationGuide");
     if (!guide) return;
     const diag = this._migrationReport?.diagnostic;
-    const relevant = diag?.mode === "new_configuration" &&
+    const packages = this._assistantPackagesDetected();
+    const isNew = diag?.mode === "new_configuration" &&
       diag?.source?.status === "resolved";
+    const relevant = isNew || packages;
+    const detected = this.querySelector("#assistantSourceDetected");
+    if (detected) {
+      const found = diag?.mode === "assisted_migration" &&
+        diag?.source?.status === "resolved";
+      detected.hidden = !found;
+      if (found) {
+        const title = this.querySelector("#assistantSourceTitle");
+        if (title) title.textContent = this._t("assistantSourceFound");
+        const summary = this.querySelector("#assistantSourceSummary");
+        if (summary) summary.textContent = this._tf("assistantSourceSummary", {
+          entries: diag.counts?.explicit_yaml_entries ?? 0,
+          paths: (diag.source?.locations || []).map(x => x.path).join(", "),
+        });
+      }
+    }
     guide.hidden = !relevant;
     if (!relevant) {
       this._migrationIntent = null;
+      this._assistantFileReport = null;
       return;
     }
     guide.setAttribute("aria-label", this._t("migrationGuideTitle"));
@@ -2981,10 +3129,22 @@ entity_config: !include google_assistant_entities.yaml</pre>
       if (element) element.textContent = this._t(key);
     }
     const candidate = this.querySelector("#migrationGuideCandidate");
-    if (candidate) candidate.textContent = this._t(
-      diag.source.unreferenced_google_entity_file_present === true
+    if (candidate) candidate.textContent = this._t(packages
+      ? "assistantPackagesDetected"
+      : diag.source.unreferenced_google_entity_file_present === true
         ? "migrationGuideCandidate" : "migrationGuideNoCandidate"
     );
+    const detectedNote = this.querySelector("#migrationGuideDetected");
+    if (detectedNote) detectedNote.textContent = packages
+      ? "" : this._t("migrationGuideDetected");
+    const question = this.querySelector("#migrationGuideQuestion");
+    if (question) question.textContent = this._t(packages
+      ? "assistantPackagesQuestion" : "migrationGuideQuestion");
+    const intentControls = ["migrationIntentNew", "migrationIntentExisting", "migrationIntentUnsure"];
+    for (const id of intentControls) {
+      const element = this.querySelector("#" + id);
+      if (element) element.hidden = packages;
+    }
     const options = {
       new: ["migrationIntentNew", "migrationGuideNextNew"],
       existing: ["migrationIntentExisting", "migrationGuideNextExisting"],
@@ -2999,9 +3159,22 @@ entity_config: !include google_assistant_entities.yaml</pre>
     if (step) step.textContent = this._t(this._migrationIntent
       ? "migrationGuideStepVerify" : "migrationGuideStepIdentify");
     const next = this.querySelector("#migrationGuideNext");
-    if (next) next.textContent = this._t(
-      options[this._migrationIntent]?.[1] || "migrationGuideAwaitChoice"
-    );
+    if (next) next.textContent = packages ? this._t("assistantPackagesQuestion") :
+      this._t(options[this._migrationIntent]?.[1] || "migrationGuideAwaitChoice");
+    const fileSection = this.querySelector("#assistantFileSection");
+    const showFile = packages || this._migrationIntent === "existing" ||
+      this._migrationIntent === "unsure";
+    if (fileSection) fileSection.hidden = !showFile;
+    if (showFile && this._assistantFilePath == null) {
+      this._assistantFilePath = !packages &&
+        diag.source.unreferenced_google_entity_file_present === true
+          ? "google_assistant_entities.yaml" : "";
+    }
+    const hint = this.querySelector("#assistantFileHint");
+    if (hint) hint.textContent = this._t(!packages &&
+      diag.source.unreferenced_google_entity_file_present === true
+        ? "assistantFileCandidate" : "assistantFileManual");
+    this._renderAssistantFileStatus();
   }
 
   _migrationBaselineEligible() {
