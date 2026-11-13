@@ -1197,6 +1197,16 @@ async def websocket_get_preview(
                         "reason_code": "restore_reconciliation_required",
                         "reason": "Restore labels before another Apply.",
                     }
+                    production_sha = result.get("production_sha256")
+                    if production_sha == pending_restore["restored_sha256"]:
+                        guard_state = "restored"
+                    elif production_sha == pending_restore["original_sha256"]:
+                        guard_state = "not_written"
+                    else:
+                        guard_state = "uncertain"
+                    result["restore_reconciliation"] = {
+                        "state": guard_state, "required": True,
+                    }
                 else:
                     ownership_details = {
                         "status": "unknown", "write_allowed": False,
