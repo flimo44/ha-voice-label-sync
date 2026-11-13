@@ -2706,3 +2706,14 @@ test("Guided intent cannot bypass protected baseline preconditions", async () =>
   await panel._prepareMigrationBaseline();
   assert.deepEqual(requests, []);
 });
+
+
+test("Assistant is the user-facing tab name in French and English", () => {
+  assert.match(source, /tabMigration: "Assistant",/);
+  const occurrences = source.match(/tabMigration: "Assistant",/g) || [];
+  assert.equal(occurrences.length, 2);
+  assert.doesNotMatch(source, /tabMigration: "Migration",/);
+  // Preserve the internal route so existing navigation remains compatible.
+  assert.match(source, /\["migration", "tabMigration"\]/);
+  assert.match(source, /id="tab-migration"/);
+});
