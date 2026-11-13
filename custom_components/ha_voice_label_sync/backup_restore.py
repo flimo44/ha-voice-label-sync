@@ -17,14 +17,13 @@ from hvls.owned_writer import (
     evaluate_registered_output,
     write_owned_output,
 )
-from .restore_guard import clear_guard, create_guard, read_guard
-
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_guard import (
     PreviewChangedError,
     preview_digest,
     validate_production_unchanged,
 )
+from .restore_guard import clear_guard, create_guard, read_guard
 
 MAX_BACKUP_BYTES = 1024 * 1024
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
