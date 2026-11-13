@@ -1551,9 +1551,7 @@ async def websocket_restore_backup(
     vol.Required("type"): WS_TYPE_RESOLVE_RESTORE,
     vol.Required("production_sha256"): str,
     vol.Required("preview_sha256"): str,
-    vol.Required("resolution"): vol.In(
-        ["keep_restored", "keep_current_labels", "cancel_failed"]
-    ),
+    vol.Required("resolution"): str,
     vol.Required("confirmed"): bool,
 })
 async def websocket_resolve_restored_output(
