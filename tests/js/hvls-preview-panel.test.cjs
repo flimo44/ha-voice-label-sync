@@ -847,6 +847,110 @@ test("Confirmed backup restore transmits reviewed hashes and refreshes Preview",
   assert.equal(controls.apply.disabled, true);
 });
 
+test("Restore of 4 entities over 3 clears stale backup diff and warns about next Apply", async () => {
+  const calls = [];
+  const {panel, controls} = makePanel(async message => {
+    calls.push(message.type);
+    if (message.type === "ha_voice_label_sync/restore_backup") {
+      return {restored: true, safety_backup: "safety.bak"};
+    }
+    if (message.type === "ha_voice_label_sync/list_backups") {
+      return {backups: [{id: "new.safety.bak", entities_count: 3,
+        timestamp: "2026-11-13", size: 432}]};
+    }
+    throw new Error("Unexpected request");
+  });
+  const nodes = {
+    backupDiff: {children: ["stale"], replaceChildren(...children) {
+      this.children = children;
+    }},
+    backupStatus: {textContent: ""},
+    backupList: {children: [], replaceChildren(...children) {
+      this.children = children;
+    }},
+    restoreBackup: {disabled: false},
+    backupRestoreNotice: {hidden: true, textContent: ""},
+    restoreSummaryNotice: {hidden: true, textContent: ""},
+  };
+  const origQuery = panel.querySelector.bind(panel);
+  panel.querySelector = selector =>
+    nodes[selector.slice(1)] || origQuery(selector);
+  panel._backupReview = {
+    backup_id: "old.bak", backup_sha256: "b".repeat(64),
+    production_sha256: "a".repeat(64),
+    comparison: {identical_text: false},
+  };
+  panel._selectedBackup = "old.bak";
+  panel._backupList = [{id: "old.bak", timestamp: "2026-11-13",
+    entities_count: 4, size: 539}];
+  panel._loadPreview = async () => {
+    panel._lastAnalysis = {
+      available: true,
+      comparison: {
+        status: "ok", added: [], removed: ["switch.piscine_chauffage"],
+        modified: [], unchanged: 3,
+      },
+    };
+  };
+
+  await panel._restoreBackup();
+  assert.deepEqual(calls, [
+    "ha_voice_label_sync/restore_backup", "ha_voice_label_sync/list_backups",
+  ]);
+  assert.equal(panel._selectedBackup, null);
+  assert.equal(panel._backupReview, null);
+  assert.deepEqual(nodes.backupDiff.children, []);
+  assert.equal(controls.apply.disabled, true);
+  assert.match(nodes.backupStatus.textContent, /Restauration terminée/);
+  assert.equal(nodes.backupRestoreNotice.hidden, false);
+  assert.equal(nodes.restoreSummaryNotice.hidden, false);
+  for (const notice of [nodes.backupRestoreNotice, nodes.restoreSummaryNotice]) {
+    assert.match(notice.textContent, /switch\.piscine_chauffage/);
+    assert.match(notice.textContent, /Un prochain Apply les supprimerait/);
+    assert.match(notice.textContent, /labels HA n'ont pas été restaurés/);
+  }
+});
+
+test("Restore warnings reflect fresh Preview comparison, including uncertainty", () => {
+  const {panel} = makePanel(async () => ({}));
+  const nodes = {
+    backupRestoreNotice: {hidden: true, textContent: ""},
+    restoreSummaryNotice: {hidden: true, textContent: ""},
+  };
+  panel.querySelector = selector => nodes[selector.slice(1)] || null;
+  panel._backupRestoreCompleted = true;
+  panel._lastAnalysis = {available: false};
+  panel._renderRestoreWarning();
+  assert.match(nodes.backupRestoreNotice.textContent, /pas vérifiée/);
+
+  panel._lastAnalysis = {available: true, comparison: {
+    status: "ok", added: ["light.new"], removed: [],
+    modified: [], unchanged: 3,
+  }};
+  panel._renderRestoreWarning();
+  assert.match(nodes.backupRestoreNotice.textContent, /1 ajout/);
+  assert.doesNotMatch(nodes.backupRestoreNotice.textContent, /supprimerait/);
+
+  panel._lastAnalysis = {available: true, comparison: {
+    status: "ok", added: [], removed: [], modified: [], unchanged: 4,
+  }};
+  panel._renderRestoreWarning();
+  assert.match(nodes.backupRestoreNotice.textContent, /même configuration/);
+
+  panel._backupRestoreCompleted = false;
+  panel._renderRestoreWarning();
+  assert.equal(nodes.backupRestoreNotice.hidden, true);
+  assert.equal(nodes.restoreSummaryNotice.hidden, true);
+  assert.equal(nodes.backupRestoreNotice.textContent, "");
+});
+
+test("Statistics identify Preview entities rather than restored production", () => {
+  assert.match(source, /metricEntities: "Entités du Preview"/);
+  assert.match(source, /metricEntities: "Preview entities"/);
+  assert.match(source, /id="backupRestoreNotice"/);
+  assert.match(source, /id="restoreSummaryNotice"/);
+});
+
 test("Identical backup is never restored even with confirmation", async () => {
   const calls = [];
   const { panel } = makePanel(async message => { calls.push(message); });
