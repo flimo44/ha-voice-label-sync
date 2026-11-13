@@ -642,6 +642,44 @@ async def websocket_get_migration_diagnostic(
     connection.send_result(msg["id"], report)
 
 
+WS_TYPE_ASSISTANT_ENTITY_FILE = f"{DOMAIN}/inspect_assistant_entity_file"
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_ASSISTANT_ENTITY_FILE,
+    vol.Required("path"): vol.All(str, vol.Length(min=1, max=240)),
+})
+async def websocket_inspect_assistant_entity_file(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Inspect an explicitly selected YAML source, without migration authority."""
+    if not hass.config_entries.async_entries(DOMAIN):
+        connection.send_error(
+            msg["id"], "not_configured", "HVLS is not configured."
+        )
+        return
+    try:
+        from .assistant_entity_file import inspect_google_entity_file
+
+        report = await hass.async_add_executor_job(
+            inspect_google_entity_file,
+            hass.config.config_dir,
+            msg["path"],
+        )
+    except Exception:
+        # Never echo a user-selected path or private YAML values.
+        connection.send_error(
+            msg["id"], "assistant_file_check_unavailable",
+            "Unable to inspect the selected file. No changes made.",
+        )
+        return
+    connection.send_result(msg["id"], report)
+
+
 WS_TYPE_MIGRATION_REVIEW = f"{DOMAIN}/get_migration_review"
 
 
@@ -1380,6 +1418,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register the HVLS WebSocket API."""
     websocket_api.async_register_command(hass, websocket_get_preview)
     websocket_api.async_register_command(hass, websocket_get_migration_diagnostic)
+    websocket_api.async_register_command(hass, websocket_inspect_assistant_entity_file)
     websocket_api.async_register_command(
         hass, websocket_get_migration_recovery_status
     )
