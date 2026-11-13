@@ -233,7 +233,7 @@ def resolve_restored_output(
     preview_path: Path,
     *, entry_id: str, ownership_registry_path: Path,
     production_sha256: str, preview_sha256: str,
-    resolution: str, confirmed: bool,
+    resolution: str, confirmed: bool, generated_content: str,
 ) -> dict:
     """Close a durable restore hold after explicit, fresh administrative review.
 
@@ -265,6 +265,12 @@ def resolve_restored_output(
         if (not hmac.compare_digest(current_sha, production_sha256)
                 or not hmac.compare_digest(current_preview_sha, preview_sha256)):
             raise PreviewChangedError("Production or Preview changed; review again")
+        # Preview must match a fresh generation from live HA registries, not
+        # a stale or manually altered file with the right-looking digest.
+        if not isinstance(generated_content, str) or preview != generated_content:
+            raise PreviewChangedError(
+                "Preview no longer matches live HA labels; regenerate first"
+            )
 
         record = OwnershipRegistry(ownership_registry_path).get_record(entry_id)
         if (record is None or record.get("state") != "managed"
