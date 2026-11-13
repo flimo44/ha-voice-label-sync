@@ -1854,6 +1854,10 @@ class HVLSPreviewPanel extends HTMLElement {
         #assistantProvenanceHelp[hidden] { display: none; }
         #assistantProvenanceHelp ol { padding-left: 22px; line-height: 1.55; }
         #assistantProvenanceHelp li { margin-bottom: 10px; }
+        #assistantHistorical { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--divider-color); }
+        #assistantHistorical[hidden] { display: none; }
+        .assistant-history-result { overflow-wrap: anywhere; line-height: 1.5; }
+        .assistant-history-result p { margin: 8px 0; }
         #assistantProvenanceHelp code { overflow-wrap: anywhere; }
         .migration-review-note { color: var(--secondary-text-color); }
         .hvls-brand {
@@ -2495,6 +2499,22 @@ entity_config: !include google_assistant_entities.yaml</pre>
                     </details>
                   </section>
                 </div>
+                <section id="assistantHistorical" hidden
+                  aria-labelledby="assistantHistoryTitle">
+                  <h4 id="assistantHistoryTitle">${this._t("assistantHistoryTitle")}</h4>
+                  <p id="assistantHistoryHow">${this._t("assistantHistoryHow")}</p>
+                  <p id="assistantHistoryFolder" class="diagnostic-note">
+                    ${this._t("assistantHistoryFolder")}
+                  </p>
+                  <button id="assistantHistoryInspect" type="button" class="secondary">
+                    ${this._t("assistantHistoryAction")}
+                  </button>
+                  <div id="assistantHistoryResult" class="assistant-history-result"
+                    role="status"></div>
+                  <p id="assistantHistorySafety" class="diagnostic-note">
+                    ${this._t("assistantHistorySafety")}
+                  </p>
+                </section>
                 <p id="assistantProvenanceSafety" class="diagnostic-note">
                   ${this._t("assistantProvenanceSafety")}
                 </p>
@@ -2612,6 +2632,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
     });
     this.querySelector("#assistantFileCheck").addEventListener(
       "click", () => this._checkAssistantEntityFile()
+    );
+    this.querySelector("#assistantHistoryInspect").addEventListener(
+      "click", () => this._inspectHistoricalYaml()
     );
     for (const [id, origin] of [
       ["assistantProvenanceOld", "old"],
