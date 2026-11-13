@@ -288,6 +288,10 @@ const HVLS_TRANSLATIONS = {
     backupConfirm: "Restaurer ce YAML en production ? Une copie de sécurité de la production actuelle sera créée obligatoirement. Les étiquettes HA ne seront pas modifiées.",
     backupRestoreFailed: "Restauration refusée : {error}",
     backupRestored: "Restauration terminée. Copie de sécurité : {backup}",
+    backupRestorePendingRemoval: "Attention : {count} entité(s) présente(s) dans le YAML restauré sont absentes du Preview : {entities}. Un prochain Apply les supprimerait à nouveau. Les labels HA n'ont pas été restaurés : rétablissez les labels si vous souhaitez conserver ces entités.",
+    backupRestorePendingOther: "Après restauration, le Preview propose encore {added} ajout(s), {removed} suppression(s) et {modified} modification(s). Les labels HA n'ont pas été restaurés. Examinez les différences avant tout Apply.",
+    backupRestoreNotVerified: "Le YAML a été restauré mais la comparaison actualisée avec le Preview n'est pas vérifiée. Actualisez le Preview et contrôlez les différences avant tout Apply.",
+    backupRestoreAligned: "Le YAML restauré et le Preview ont la même configuration par entité. Les labels HA n'ont pas été restaurés.",
     backupNoDiff: "YAML identique à la production.",
     backupDiffTitle: "Changements si cette sauvegarde est restaurée",
     backupSize: "{size} octets",
@@ -336,7 +340,7 @@ const HVLS_TRANSLATIONS = {
     excludedNote: "Diagnostic calculé sur les registres actuels. Le YAML affiché provient du dernier Preview généré.",
     unknownReason: "Motif inconnu",
     reasonCategoryFull: "Entité de configuration ou de diagnostic",
-    metricEntities: "Entités",
+    metricEntities: "Entités du Preview",
     metricRooms: "Pièces",
     byDomain: "Par domaine",
     byArea: "Par pièce",
@@ -704,6 +708,10 @@ const HVLS_TRANSLATIONS = {
     backupConfirm: "Restore this YAML to production? A safety copy of the current production file will always be created. HA labels will not be changed.",
     backupRestoreFailed: "Restore refused: {error}",
     backupRestored: "Restore completed. Safety backup: {backup}",
+    backupRestorePendingRemoval: "Warning: {count} entities in the restored production YAML are missing from Preview: {entities}. The next Apply would remove them again. HA labels were not restored; restore those labels if you want to keep these entities.",
+    backupRestorePendingOther: "After restoring, Preview still proposes {added} additions, {removed} removals and {modified} modifications. HA labels were not restored. Review changes before any Apply.",
+    backupRestoreNotVerified: "Production YAML was restored, but its updated Preview comparison could not be verified. Refresh Preview and review differences before any Apply.",
+    backupRestoreAligned: "The restored YAML and Preview have the same per-entity configuration. HA labels were not restored.",
     backupNoDiff: "YAML matches production.",
     backupDiffTitle: "Changes if this backup is restored",
     backupSize: "{size} bytes",
@@ -752,7 +760,7 @@ const HVLS_TRANSLATIONS = {
     excludedNote: "Diagnostics use the current registries. The displayed YAML comes from the last generated Preview.",
     unknownReason: "Unknown reason",
     reasonCategoryFull: "Configuration or diagnostic entity",
-    metricEntities: "Entities",
+    metricEntities: "Preview entities",
     metricRooms: "Areas",
     byDomain: "By domain",
     byArea: "By area",
@@ -1360,6 +1368,8 @@ class HVLSPreviewPanel extends HTMLElement {
       this._backupReviewNumber = (this._backupReviewNumber || 0) + 1;
       this._updateApplyButton();
       // Keep Apply locked throughout the post-apply refresh.
+      this._backupRestoreCompleted = false;
+      this._renderRestoreWarning();
       await this._loadPreview(true);
       this._setStatusKey("previewApplied", {
         path: result.output_path, bytes: result.bytes_written,
@@ -1654,6 +1664,7 @@ class HVLSPreviewPanel extends HTMLElement {
     this._syncExclusionsTab(result.exclusions);
     this._renderExclusions(this.querySelector("#exclusions"), result.exclusions);
     this._renderPreviewChanges(result);
+    this._renderRestoreWarning();
     if (!result.available || !result.summary) return;
 
     const stats = result.summary;
@@ -2427,6 +2438,8 @@ class HVLSPreviewPanel extends HTMLElement {
         </nav>
 
         <section id="tab-summary" class="hvls-tab-panel" role="tabpanel">
+          <p id="restoreSummaryNotice" class="diagnostic-note"
+            role="status" hidden></p>
           <div id="analysis"></div>
         </section>
 
@@ -2720,6 +2733,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
           <h2>${this._t("tabBackups")}</h2>
           <p id="backupIntro" class="diagnostic-note">${this._t("backupIntro")}</p>
           <p id="backupStatus" role="status"></p>
+          <p id="backupRestoreNotice" class="diagnostic-note"
+            role="status" hidden></p>
           <div id="backupList"></div>
           <div id="backupDiff"></div>
           <button id="restoreBackup" type="button" disabled>${this._t("backupRestore")}</button>
@@ -3235,6 +3250,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._backupLoading = true;
     this._backupReview = null;
     this._backupList = null;
+    // Never leave a previous comparison visible without a current selection.
+    this._renderBackupDiff();
     this._updateApplyButton();
     const status = this.querySelector("#backupStatus");
     if (status) status.textContent = this._t("backupLoading");
@@ -3364,6 +3381,46 @@ entity_config: !include google_assistant_entities.yaml</pre>
     }
   }
 
+  _renderRestoreWarning() {
+    const analysis = this._lastAnalysis;
+    const comparison = analysis?.comparison;
+    let message = "";
+    if (this._backupRestoreCompleted === true) {
+      if (!analysis?.available || analysis.error ||
+          comparison?.status !== "ok" ||
+          !Array.isArray(comparison.added) ||
+          !Array.isArray(comparison.removed) ||
+          !Array.isArray(comparison.modified)) {
+        message = this._t("backupRestoreNotVerified");
+      } else if (comparison.removed.length) {
+        // In this diff, "removed" means present in production, absent in
+        // Preview. Applying Preview would delete those restored entries.
+        const ids = comparison.removed.slice(0, 5);
+        const more = comparison.removed.length > ids.length
+          ? ` (+${comparison.removed.length - ids.length})` : "";
+        message = this._tf("backupRestorePendingRemoval", {
+          count: comparison.removed.length,
+          entities: ids.join(", ") + more,
+        });
+      } else if (comparison.added.length || comparison.modified.length) {
+        message = this._tf("backupRestorePendingOther", {
+          added: comparison.added.length,
+          removed: comparison.removed.length,
+          modified: comparison.modified.length,
+        });
+      } else {
+        message = this._t("backupRestoreAligned");
+      }
+    }
+    for (const id of ["backupRestoreNotice", "restoreSummaryNotice"]) {
+      const node = this.querySelector("#" + id);
+      if (node) {
+        node.hidden = !message;
+        node.textContent = message;
+      }
+    }
+  }
+
   async _restoreBackup() {
     const data = this._backupReview;
     if (!data || this._restoring || this._applying ||
@@ -3373,7 +3430,10 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._restoring = true;
     this._backupReviewNumber = (this._backupReviewNumber || 0) + 1;
     this._backupReview = null;
+    this._selectedBackup = null;
     this._review = null; // An earlier Preview is never approved after a restore.
+    this._renderBackupDiff();
+    this._renderBackups();
     this._updateApplyButton();
     const status = this.querySelector("#backupStatus");
     try {
@@ -3384,7 +3444,10 @@ entity_config: !include google_assistant_entities.yaml</pre>
         production_sha256: data.production_sha256,
       });
       this._restoreResult = result.safety_backup;
+      // A successful restore only changes YAML, never Home Assistant labels.
+      this._backupRestoreCompleted = true;
       await this._loadPreview(true);
+      this._renderRestoreWarning();
       this._backupList = null;
       this._selectedBackup = null;
     } catch (error) {
