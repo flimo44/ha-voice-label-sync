@@ -3329,6 +3329,193 @@ entity_config: !include google_assistant_entities.yaml</pre>
       : (this._language === "fr" ? "problème non identifié" : "unknown issue");
   }
 
+  _assistantHistoryEligible() {
+    return this._assistantProvenanceAvailable() &&
+      ["old", "unknown"].includes(this._assistantProvenanceChoice) &&
+      !!(this._assistantFilePath || "").trim();
+  }
+
+  _assistantHistoryReason(code) {
+    const mapping = {
+      historical_review_folder_missing: "assistantHistoryNoFolder",
+      historical_configuration_missing: "assistantHistoryNoConfig",
+      packages_not_yet_supported: "assistantHistoryReasonPackages",
+      symlink_historical_folder_not_allowed: "assistantHistoryReasonSymlink",
+      symlink_historical_file_not_allowed: "assistantHistoryReasonSymlink",
+      yaml_file_too_large: "assistantHistoryReasonTooLarge",
+      include_missing: "assistantHistoryReasonMissing",
+      invalid_entity_file_path: "assistantHistoryReasonUnsafe",
+      sensitive_file_reference: "assistantHistoryReasonUnsafe",
+      include_outside_review_directory: "assistantHistoryReasonUnsafe",
+      invalid_historical_path: "assistantHistoryReasonUnsafe",
+      yaml_syntax_error: "assistantHistoryReasonSyntax",
+      duplicate_mapping_key: "assistantHistoryReasonSyntax",
+      expected_mapping: "assistantHistoryReasonSyntax",
+      invalid_exposed_domains: "assistantHistoryReasonSyntax",
+      invalid_expose_by_default: "assistantHistoryReasonSyntax",
+    };
+    return this._t(mapping[code] || "assistantHistoryReasonOther");
+  }
+
+  _renderAssistantHistoryStatus() {
+    const panel = this.querySelector("#assistantHistorical");
+    if (!panel) return;
+    const eligible = this._assistantHistoryEligible();
+    panel.hidden = !eligible;
+    if (!eligible) return;
+    const heading = this.querySelector("#assistantHistoryTitle");
+    const desc = this.querySelector("#assistantHistoryHow");
+    const folder = this.querySelector("#assistantHistoryFolder");
+    const safe = this.querySelector("#assistantHistorySafety");
+    const action = this.querySelector("#assistantHistoryInspect");
+    if (heading) heading.textContent = this._t("assistantHistoryTitle");
+    if (desc) desc.textContent = this._t("assistantHistoryHow");
+    if (folder) folder.textContent = this._t("assistantHistoryFolder");
+    if (safe) safe.textContent = this._t("assistantHistorySafety");
+    if (action) {
+      action.textContent = this._t("assistantHistoryAction");
+      action.disabled = this._assistantHistoryBusy === true;
+    }
+    const target = this.querySelector("#assistantHistoryResult");
+    if (!target) return;
+    target.replaceChildren();
+    const add = (message) => {
+      const p = document.createElement("p");
+      p.textContent = message;
+      target.appendChild(p);
+    };
+    if (this._assistantHistoryBusy) {
+      add(this._t("assistantHistoryBusy"));
+      return;
+    }
+    if (this._assistantHistoryError) {
+      add(this._t("assistantHistoryUnavailable"));
+      return;
+    }
+    const report = this._assistantHistoryReport;
+    if (!report) {
+      add(this._t("assistantHistoryIdle"));
+      return;
+    }
+    if (report.status === "not_found") {
+      add(this._assistantHistoryReason(report.reason));
+      return;
+    }
+    if (report.status === "blocked") {
+      add(this._tf("assistantHistoryBlocked", {
+        reason: this._assistantHistoryReason(report.reason),
+      }));
+      return;
+    }
+    if (!["parsed", "review_required"].includes(report.status)) {
+      add(this._t("assistantHistoryUnavailable"));
+      return;
+    }
+    const declaration = {
+      direct: "assistantHistoryDeclDirect",
+      included: "assistantHistoryDeclIncluded",
+      absent: "assistantHistoryDeclAbsent",
+    };
+    add(this._tf("assistantHistoryFound", {
+      declaration: this._t(declaration[report.declaration] || "assistantHistoryDeclUnknown"),
+    }));
+    const rules = report.rules || {};
+    if (["true", "false"].includes(rules.expose_by_default)) {
+      const domainList = Array.isArray(rules.exposed_domains)
+        ? rules.exposed_domains : [];
+      const domains = !rules.exposed_domains_declared
+        ? this._t("assistantHistoryDomainsNone")
+        : domainList.length ? domainList.join(", ") :
+          this._t("assistantHistoryDomainsEmpty");
+      add(this._tf("assistantHistoryRules", {
+        defaultValue: rules.expose_by_default,
+        origin: this._t(rules.expose_by_default_explicit
+          ? "assistantHistoryRuleExplicit" : "assistantHistoryRuleImplicit"),
+        domains,
+      }));
+    }
+    const source = report.entity_source || {};
+    const sourceName = source.mode === "include"
+      ? source.path || this._t("assistantHistorySourceUnknown")
+      : source.mode === "inline" ? this._t("assistantHistorySourceInline")
+      : source.mode === "not_declared" ? this._t("assistantHistorySourceAbsent")
+      : this._t("assistantHistorySourceUnknown");
+    add(this._tf("assistantHistorySource", {source: sourceName}));
+    const matching = {
+      same: "assistantHistoryPathSame",
+      different: "assistantHistoryPathDifferent",
+    };
+    const matchingContent = {
+      identical: "assistantHistoryContentIdentical",
+      different: "assistantHistoryContentDifferent",
+    };
+    add(this._tf("assistantHistoryCompare", {
+      pathStatus: this._t(matching[source.path_relation] || "assistantHistoryPathUnknown"),
+      contentStatus: this._t(matchingContent[source.content_relation] ||
+        "assistantHistoryContentUnknown"),
+    }));
+    if (source.counts && Number.isSafeInteger(source.counts.entries) &&
+        Number.isSafeInteger(source.counts.entries_with_anomalies)) {
+      add(this._tf("assistantHistoryCounts", {
+        entries: source.counts.entries,
+        anomalies: source.counts.entries_with_anomalies,
+      }));
+    }
+    const issueTranslations = {
+      historical_entity_file_missing: "assistantHistoryIssueHistoricalMissing",
+      historical_google_assistant_absent: "assistantHistoryIssueNoConfig",
+      historical_entity_config_absent: "assistantHistoryIssueNoEntity",
+      historical_inline_entity_config: "assistantHistoryIssueInline",
+      selected_current_entity_unavailable: "assistantHistoryIssueCurrentUnavailable",
+    };
+    const issues = (report.issues || []).slice(0, 12);
+    if (issues.length) add(this._tf("assistantHistoryIssues", {
+      issues: issues.map(code => this._t(
+        issueTranslations[code] || "assistantHistoryReasonOther"
+      )).join(" ; "),
+    }));
+  }
+
+  async _inspectHistoricalYaml() {
+    if (!this._hass || !this._assistantHistoryEligible() ||
+        this._assistantHistoryBusy) return;
+    const requestId = (this._assistantHistoryRequestId || 0) + 1;
+    this._assistantHistoryRequestId = requestId;
+    this._assistantHistoryBusy = true;
+    this._assistantHistoryError = false;
+    this._assistantHistoryReport = null;
+    this._renderAssistantHistoryStatus();
+    try {
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/inspect_historical_google_yaml",
+        entity_path: this._assistantFilePath.trim(),
+      });
+      if (requestId !== this._assistantHistoryRequestId) return;
+      if (result?.read_only === true &&
+          result?.source_active_verified === false &&
+          result?.historical_runtime_verified === false &&
+          result?.google_home_state_verified === false &&
+          result?.migration_authorized === false &&
+          result?.stage_allowed === false &&
+          result?.apply_allowed === false &&
+          result?.cutover_allowed === false &&
+          ["parsed", "review_required", "blocked", "not_found"].includes(result.status)) {
+        this._assistantHistoryReport = result;
+      } else {
+        this._assistantHistoryError = true;
+      }
+    } catch (_error) {
+      if (requestId === this._assistantHistoryRequestId) {
+        this._assistantHistoryError = true;
+      }
+    } finally {
+      if (requestId === this._assistantHistoryRequestId) {
+        this._assistantHistoryBusy = false;
+        this._renderAssistantHistoryStatus();
+      }
+    }
+  }
+
   _assistantProvenanceAvailable() {
     const diag = this._migrationReport?.diagnostic;
     const report = this._assistantFileReport;
