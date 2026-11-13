@@ -258,32 +258,53 @@ def test_restore_refuses_externally_modified_owned_file(
 
 
 def test_restore_updates_ownership_digest(backup_module, sample):
-    """Restore must record the new SHA and permit later generation."""
+    """Restore records SHA, but denies generation until reconciliation."""
     import hashlib
 
+    from hvls import FileWriterError
     from hvls.output_ownership_registry import OwnershipRegistry
-    from hvls.owned_writer import write_owned_output
+    from hvls.owned_writer import evaluate_registered_output, write_owned_output
+    from hvls.restore_guard import guard_path
 
     output, backup_id, backup = sample
     make_owned(output)
-
     review = backup_module.review_backup(output, backup_id)
-
     restore(
-        backup_module,
-        output,
-        backup_id,
-        review["backup_sha256"],
-        review["production_sha256"],
+        backup_module, output, backup_id,
+        review["backup_sha256"], review["production_sha256"],
     )
-
     registry_path = output.parent / ".hvls" / "ownership.json"
     record = OwnershipRegistry(registry_path).get_record("test-installation")
-
     assert record["state"] == "managed"
-    assert record["sha256"] == hashlib.sha256(
-        backup.read_bytes()
-    ).hexdigest()
+    assert record["sha256"] == hashlib.sha256(backup.read_bytes()).hexdigest()
+    assert guard_path(registry_path).is_file()
+    assert evaluate_registered_output(
+        output, "test-installation", registry_path
+    ).reason_code == "restore_reconciliation_required"
+
+    with pytest.raises(FileWriterError, match="reconciliation"):
+        write_owned_output(
+            output_path=output,
+            content="switch.after_restore:\n  expose: true\n",
+            entry_id="test-installation",
+            ownership_registry_path=registry_path,
+            backup_directory=output.parent / ".hvls_backups",
+        )
+
+    preview_path = output.parent / ".hvls" / "preview.yaml"
+    preview_path.write_text("switch.new:\n  expose: true\n")
+    result = backup_module.resolve_restored_output(
+        output, preview_path, entry_id="test-installation",
+        ownership_registry_path=registry_path,
+        production_sha256=backup_module.preview_digest(output.read_text()),
+        preview_sha256=backup_module.preview_digest(preview_path.read_text()),
+        resolution="keep_current_labels", confirmed=True,
+    )
+    assert result["resolved"] is True
+    assert result["apply_performed"] is False
+    assert evaluate_registered_output(
+        output, "test-installation", registry_path
+    ).write_allowed is True
 
     write_owned_output(
         output_path=output,
@@ -292,7 +313,6 @@ def test_restore_updates_ownership_digest(backup_module, sample):
         ownership_registry_path=registry_path,
         backup_directory=output.parent / ".hvls_backups",
     )
-
     assert "switch.after_restore:" in output.read_text()
 
 
@@ -317,6 +337,16 @@ def test_generation_retention_preserves_restore_safety_backup(
 
     safety_path = output.parent / ".hvls_backups" / result["safety_backup"]
     safety_content = safety_path.read_bytes()
+
+    preview_path = output.parent / ".hvls" / "preview.yaml"
+    preview_path.write_text(output.read_text())
+    backup_module.resolve_restored_output(
+        output, preview_path, entry_id="test-installation",
+        ownership_registry_path=output.parent / ".hvls" / "ownership.json",
+        production_sha256=backup_module.preview_digest(output.read_text()),
+        preview_sha256=backup_module.preview_digest(preview_path.read_text()),
+        resolution="keep_restored", confirmed=True,
+    )
 
     write_owned_output(
         output_path=output,
@@ -359,3 +389,107 @@ def test_restore_safety_backup_remains_reviewable(backup_module, sample):
 
     safety_review = backup_module.review_backup(output, safety_id)
     assert safety_review["backup_id"] == safety_id
+
+
+
+def test_restore_reconcile_real_three_four_cycle(backup_module, tmp_path):
+    """Restoring four entities cannot be undone by an unsuspecting Apply."""
+    from hvls import FileWriterError
+    from hvls.owned_writer import evaluate_registered_output, write_owned_output
+
+    output = tmp_path / "google_entities.yaml"
+    preview_dir = tmp_path / ".hvls"
+    preview_dir.mkdir()
+    registry_path = preview_dir / "ownership.json"
+    backup_dir = tmp_path / ".hvls_backups"
+    backup_dir.mkdir()
+    preview_path = preview_dir / "preview.yaml"
+    original = (
+        "switch.one:\n  expose: true\n"
+        "switch.two:\n  expose: true\n"
+        "switch.three:\n  expose: true\n"
+    )
+    restored = original + "switch.piscine_chauffage:\n  expose: true\n"
+    output.write_text(original)
+    make_owned(output)
+    backup_id = "google_entities.yaml.20261113-150000.bak"
+    (backup_dir / backup_id).write_text(restored)
+    preview_path.write_text(original)
+    review = backup_module.review_backup(output, backup_id)
+    result = restore(
+        backup_module, output, backup_id,
+        review["backup_sha256"], review["production_sha256"],
+    )
+    assert result["reconciliation_required"] is True
+    assert output.read_text() == restored
+    assert backup_module.analyze_preview(
+        preview_path.read_text(), output.read_text()
+    )["comparison"]["removed"] == ["switch.piscine_chauffage"]
+    assert evaluate_registered_output(
+        output, "test-installation", registry_path
+    ).reason_code == "restore_reconciliation_required"
+
+    # Even a direct writer call, bypassing the web frontend, must refuse.
+    with pytest.raises(FileWriterError, match="reconciliation"):
+        write_owned_output(
+            output_path=output, content=original,
+            entry_id="test-installation", ownership_registry_path=registry_path,
+            backup_directory=backup_dir,
+        )
+    assert output.read_text() == restored
+
+    # Reapply the missing label -> Preview alone is regenerated -> resolve.
+    preview_path.write_text(restored)
+    resolved = backup_module.resolve_restored_output(
+        output, preview_path, entry_id="test-installation",
+        ownership_registry_path=registry_path,
+        production_sha256=backup_module.preview_digest(restored),
+        preview_sha256=backup_module.preview_digest(restored),
+        resolution="keep_restored", confirmed=True,
+    )
+    assert resolved["resolved"] is True
+    assert resolved["production_unchanged"] is True
+    assert output.read_text() == restored
+    assert evaluate_registered_output(
+        output, "test-installation", registry_path
+    ).write_allowed is True
+
+
+def test_restore_reconciliation_refuses_unaligned_or_stale(
+    backup_module, sample
+):
+    from hvls.restore_guard import guard_path
+    output, backup_id, _ = sample
+    make_owned(output)
+    review = backup_module.review_backup(output, backup_id)
+    restore(
+        backup_module, output, backup_id,
+        review["backup_sha256"], review["production_sha256"],
+    )
+    registry_path = output.parent / ".hvls" / "ownership.json"
+    preview_path = output.parent / ".hvls" / "preview.yaml"
+    preview_path.write_text("switch.only_three:\n  expose: true\n")
+    current = backup_module.preview_digest(output.read_text())
+    preview_sha = backup_module.preview_digest(preview_path.read_text())
+    common = dict(
+        entry_id="test-installation", ownership_registry_path=registry_path,
+        production_sha256=current, preview_sha256=preview_sha,
+    )
+    with pytest.raises(backup_module.BackupRestoreError, match="not yet aligned"):
+        backup_module.resolve_restored_output(
+            output, preview_path, **common,
+            resolution="keep_restored", confirmed=True,
+        )
+    with pytest.raises(backup_module.BackupRestoreError, match="Explicit"):
+        backup_module.resolve_restored_output(
+            output, preview_path, **common,
+            resolution="keep_current_labels", confirmed=False,
+        )
+    with pytest.raises(backup_module.PreviewChangedError, match="changed"):
+        backup_module.resolve_restored_output(
+            output, preview_path,
+            **{**common, "preview_sha256": "f" * 64},
+            resolution="keep_current_labels", confirmed=True,
+        )
+    assert guard_path(registry_path).is_file()
+    assert "switch.new" in output.read_text()
