@@ -2643,10 +2643,10 @@ test("Guided setup reports unreferenced YAML without assuming an active setup", 
   assert.equal(controls.migrationGuide.hidden, false);
   assert.match(controls.migrationGuideDetected.textContent, /configuration.yaml/);
   assert.match(controls.migrationGuideCandidate.textContent, /fichier google_assistant_entities.yaml existe/);
-  assert.match(controls.migrationGuideNext.textContent, /Choisissez votre situation/);
+  assert.match(controls.migrationGuideNext.textContent, /Choisissez : reprendre/);
   panel._chooseMigrationIntent("existing");
   assert.equal(controls.migrationIntentExisting.attributes["aria-pressed"], "true");
-  assert.match(controls.migrationGuideNext.textContent, /Vérifiez la déclaration/);
+  assert.match(controls.migrationGuideNext.textContent, /labels à reprendre/);
   assert.match(controls.migrationGuideSafety.textContent, /aucune écriture/);
   assert.deepEqual(requests, []);
   panel._chooseMigrationIntent("new");
@@ -2671,7 +2671,7 @@ test("Guided setup handles absent candidate and unknown intent", () => {
   panel._chooseMigrationIntent("unsure");
   assert.equal(controls.migrationGuide.hidden, false);
   assert.match(controls.migrationGuideCandidate.textContent, /Aucun fichier/);
-  assert.match(controls.migrationGuideNext.textContent, /Aucun problème/);
+  assert.match(controls.migrationGuideNext.textContent, /Indiquez le chemin/);
   panel._migrationReport = {diagnostic: {mode: "assisted_migration"}};
   panel._renderMigrationGuide();
   assert.equal(controls.migrationGuide.hidden, true);
@@ -2784,7 +2784,7 @@ test("Assistant changes step text after local user choice, without writes", () =
   assert.match(controls.migrationGuideStep.textContent, /Étape 1 —/);
   panel._chooseMigrationIntent("existing");
   assert.match(controls.migrationGuideStep.textContent, /Étape 2 sur 3/);
-  assert.match(controls.migrationGuideNext.textContent, /Vérifiez la déclaration/);
+  assert.match(controls.migrationGuideNext.textContent, /labels à reprendre/);
   panel._chooseMigrationIntent("new");
   assert.match(controls.migrationGuideStep.textContent, /Étape 2 sur 2/);
   assert.deepEqual(requests, []);
@@ -2846,7 +2846,7 @@ test("Assistant proposes detected file and inspects it without migration writes"
   assert.equal(controls.assistantFilePath.value, "google_assistant_entities.yaml");
   assert.equal(controls.assistantFileCheck.disabled, false);
   assert.match(controls.migrationGuideQuestion.textContent, /Parcours choisi/);
-  assert.doesNotMatch(controls.migrationGuideQuestion.textContent, /Souhaitez-vous/);
+  assert.doesNotMatch(controls.migrationGuideQuestion.textContent, /Comment souhaitez-vous/);
   assert.equal(calls.length, 0);
   await panel._checkAssistantEntityFile();
   assert.deepEqual(calls.map(x => x.type), [
@@ -2973,7 +2973,7 @@ test("Assistant presents explicit exposure indicators and cautions independently
     /n'est pas considérée comme expose: true/);
   assert.equal(controls.assistantFileConclusion.hidden, false);
   assert.match(controls.assistantFileConclusion.textContent,
-    /aucune déclaration Google Assistant/i);
+    /absence de raccordement Google Assistant/i);
   assert.match(controls.assistantFileResult.textContent, /52 entité/);
   assert.match(controls.assistantFileResult.textContent, /0 anomalie/);
 
@@ -3026,11 +3026,11 @@ test("Assistant selected path labels follow the choice without changing eligibil
     },
   }};
   panel._renderMigrationGuide();
-  assert.match(controls.migrationGuideQuestion.textContent, /Souhaitez-vous/);
+  assert.match(controls.migrationGuideQuestion.textContent, /Comment souhaitez-vous/);
   panel._chooseMigrationIntent("existing");
-  assert.match(controls.migrationGuideQuestion.textContent, /retrouver/);
+  assert.match(controls.migrationGuideQuestion.textContent, /Reprise d.un fichier/);
   panel._chooseMigrationIntent("unsure");
-  assert.match(controls.migrationGuideQuestion.textContent, /situation à clarifier/);
+  assert.match(controls.migrationGuideQuestion.textContent, /Choix d.un autre fichier/);
   panel._chooseMigrationIntent("new");
   assert.match(controls.migrationGuideQuestion.textContent, /nouvelle configuration/);
   assert.equal(controls.assistantFileSection.hidden, true);
@@ -3541,4 +3541,190 @@ test("Historical review is separate from migration approvals and has localized c
   assert.match(source, /hvls-history-review/);
   assert.match(source, /Historical declaration/);
   assert.match(source, /Déclaration historique/);
+});
+
+
+function standardAdoptionFixture(callWS, confirm = () => true) {
+  const {panel} = makePanel(callWS, confirm);
+  const nodes = {
+    assistantAdoption: {hidden: true},
+    assistantAdoptTitle: {textContent: ""},
+    assistantAdoptIntro: {textContent: ""},
+    assistantAdoptSummary: {textContent: ""},
+    assistantAdoptLimits: {textContent: ""},
+    assistantAdoptRefresh: {textContent: "", disabled: false},
+    assistantAdoptReview: {textContent: ""},
+    assistantAdoptApply: {textContent: "", disabled: false},
+    assistantAdoptNeedsReview: {textContent: "", hidden: true},
+    assistantAdoptResult: {textContent: ""},
+    assistantAdoptRows: {
+      children: [], replaceChildren() {this.children = [];},
+      appendChild(child) {this.children.push(child);},
+    },
+  };
+  panel.querySelector = selector => nodes[selector.slice(1)] || null;
+  panel.querySelectorAll = () => [];
+  panel._updateApplyButton = () => {};
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {status: "resolved",
+      unreferenced_google_entity_file_present: true},
+  }};
+  panel._migrationIntent = "existing";
+  panel._assistantFilePath = "google_assistant_entities.yaml";
+  panel._assistantFileReport = {
+    status: "parsed", read_only: true, source_active_verified: false,
+    migration_authorized: false, stage_allowed: false,
+    apply_allowed: false, cutover_allowed: false,
+    file_sha256: "a".repeat(64), adoption_entries_complete: true,
+    counts: {entries: 5, entries_with_anomalies: 0},
+    adoption_entries: [
+      {entity_id: "light.new", exposure: "expose",
+        has_customizations: false, reasons: []},
+      {entity_id: "light.already", exposure: "expose",
+        has_customizations: false, reasons: []},
+      {entity_id: "switch.excluded", exposure: "exclude",
+        has_customizations: false, reasons: []},
+      {entity_id: "light.custom", exposure: "expose",
+        has_customizations: true, reasons: []},
+      {entity_id: "light.unknown", exposure: "unset",
+        has_customizations: false, reasons: []},
+    ],
+  };
+  panel._entityCatalog = {
+    label_ids: ["hvls"], entities: [
+      {entity_id: "light.new", eligible: true, has_label: false},
+      {entity_id: "light.already", eligible: true, has_label: true},
+      {entity_id: "switch.excluded", eligible: true, has_label: false},
+      {entity_id: "light.custom", eligible: true, has_label: false},
+      {entity_id: "light.unknown", eligible: true, has_label: false},
+    ],
+  };
+  return {panel, nodes};
+}
+
+function cloneAdoptionReport(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+
+test("Unreferenced YAML offers HVLS label reuse, not a Google connectivity blocker", () => {
+  const {panel, nodes} = standardAdoptionFixture(async () => {
+    throw Error("No requests expected");
+  });
+  const plan = panel._assistantAdoptionPlan();
+  assert.deepEqual(Array.from(plan.candidates), ["light.new"]);
+  assert.equal(plan.totals.ready, 1);
+  assert.equal(plan.totals.already, 1);
+  assert.equal(plan.totals.excluded, 1);
+  assert.equal(plan.totals.review, 2);
+  panel._renderAssistantAdoption();
+  assert.equal(nodes.assistantAdoption.hidden, false);
+  assert.match(nodes.assistantAdoptSummary.textContent, /1 à ajouter/);
+  assert.match(nodes.assistantAdoptIntro.textContent, /sans configurer Google Assistant/);
+  assert.equal(nodes.assistantAdoptApply.disabled, false);
+  assert.equal(nodes.assistantAdoptRows.children.length, 5);
+  assert.match(nodes.assistantAdoptRows.children[2].textContent, /aucun ajout/);
+  assert.equal(panel._migrationBaselineEligible(), false);
+});
+
+test("Confirmed reuse only updates an explicit compatible entity using existing API", async () => {
+  const calls = [];
+  const {panel, nodes} = standardAdoptionFixture(async req => {
+    calls.push(req);
+    if (req.type === "ha_voice_label_sync/inspect_assistant_entity_file") {
+      return cloneAdoptionReport(panel._assistantFileReport);
+    }
+    if (req.type === "ha_voice_label_sync/set_entity_label") {
+      assert.equal(req.entity_id, "light.new");
+      assert.equal(req.enabled, true);
+      assert.equal(req.expected_enabled, false);
+      panel._entityCatalog.entities[0].has_label = true;
+      return {entity_id: req.entity_id, has_label: true, changed: true};
+    }
+    throw Error("Unexpected operation");
+  });
+  let previews = 0;
+  panel._loadEntities = async () => true;
+  panel._generatePreview = async () => { previews++; };
+  await panel._adoptAssistantFile();
+  assert.deepEqual(calls.map(req => req.type), [
+    "ha_voice_label_sync/inspect_assistant_entity_file",
+    "ha_voice_label_sync/set_entity_label",
+  ]);
+  assert.equal(previews, 1);
+  assert.match(nodes.assistantAdoptResult.textContent, /1 label/);
+  assert.deepEqual(Array.from(panel._assistantAdoptionPlan().candidates), []);
+});
+
+test("Reuse cancel sends nothing; changed YAML rejects writes before labels", async () => {
+  const requests = [];
+  const {panel} = standardAdoptionFixture(async req => {
+    requests.push(req);
+  }, () => false);
+  await panel._adoptAssistantFile();
+  assert.equal(requests.length, 0);
+  const {panel: current, nodes} = standardAdoptionFixture(async req => {
+    requests.push(req);
+    return {...cloneAdoptionReport(current._assistantFileReport),
+      file_sha256: "b".repeat(64)};
+  });
+  current._loadEntities = async () => true;
+  await current._adoptAssistantFile();
+  assert.deepEqual(requests.map(req => req.type),
+    ["ha_voice_label_sync/inspect_assistant_entity_file"]);
+  assert.match(nodes.assistantAdoptResult.textContent, /Fichier ou catalogue modifié/);
+});
+
+test("Reuse rejects forged authority, incomplete inventory or ambiguous label", async () => {
+  const {panel, nodes} = standardAdoptionFixture(async () => {
+    throw Error("No WebSocket allowed");
+  });
+  panel._assistantFileReport.stage_allowed = true;
+  assert.equal(panel._assistantAdoptionPlan(), null);
+  panel._renderAssistantAdoption();
+  assert.equal(nodes.assistantAdoption.hidden, true);
+  panel._assistantFileReport.stage_allowed = false;
+  panel._assistantFileReport.adoption_entries_complete = false;
+  panel._renderAssistantAdoption();
+  assert.equal(nodes.assistantAdoptApply.disabled, true);
+  panel._assistantFileReport.adoption_entries_complete = true;
+  panel._entityCatalog.label_ids = ["one", "two"];
+  panel._renderAssistantAdoption();
+  assert.equal(nodes.assistantAdoptApply.disabled, true);
+  await panel._adoptAssistantFile();
+});
+
+test("An uncertain second label update stops without hiding first success", async () => {
+  const calls = [];
+  const {panel, nodes} = standardAdoptionFixture(async req => {
+    calls.push(req);
+    if (req.type === "ha_voice_label_sync/inspect_assistant_entity_file") {
+      return cloneAdoptionReport(panel._assistantFileReport);
+    }
+    if (req.type === "ha_voice_label_sync/set_entity_label") {
+      if (req.entity_id === "light.new") {
+        return {entity_id: req.entity_id, has_label: true, changed: true};
+      }
+      throw Error("Simulated failure");
+    }
+    throw Error("Unexpected operation");
+  });
+  panel._assistantFileReport.adoption_entries.push({
+    entity_id: "light.second", exposure: "expose",
+    has_customizations: false, reasons: [],
+  });
+  panel._assistantFileReport.counts.entries = 6;
+  panel._entityCatalog.entities.push({
+    entity_id: "light.second", eligible: true, has_label: false,
+  });
+  panel._loadEntities = async () => true;
+  panel._generatePreview = async () => {};
+  await panel._adoptAssistantFile();
+  assert.deepEqual(calls.map(req => req.type), [
+    "ha_voice_label_sync/inspect_assistant_entity_file",
+    "ha_voice_label_sync/set_entity_label",
+    "ha_voice_label_sync/set_entity_label",
+  ]);
+  assert.match(nodes.assistantAdoptResult.textContent, /1 label/);
+  assert.match(nodes.assistantAdoptResult.textContent, /interruption/);
+  assert.equal(panel._assistantAdoptBusy, false);
 });
