@@ -51,7 +51,9 @@ def _safe_relative_yaml_path(value: Any) -> PurePosixPath:
     return path
 
 
-def inspect_google_entity_file(config_dir: str | Path, relative_path: str) -> dict[str, Any]:
+def inspect_google_entity_file(
+    config_dir: str | Path, relative_path: str
+) -> dict[str, Any]:
     """Summarize entity declarations without loading secrets or mutating state.
 
     Not an active-source oracle. Never infer live exposure, import readiness,
