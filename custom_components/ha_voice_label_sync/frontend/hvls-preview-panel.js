@@ -306,6 +306,10 @@ const HVLS_TRANSLATIONS = {
     restoreReconcileResolved: "Restauration réconciliée. Le YAML de production n'a pas été modifié ; aucun Apply effectué.",
     restoreReconcileError: "Réconciliation refusée ou incomplète. Les écritures restent protégées. Actualisez puis examinez les différences.",
     restoreReconcileWorking: "Réconciliation des labels et vérifications en cours…",
+    restoreReconcileDiff: "Différences Preview / production restaurée : {added} ajout(s), {removed} suppression(s), {modified} modification(s).",
+    restoreReconcileCancelFailed: "Annuler la reprise interrompue",
+    restoreReconcileCancelFailedConfirm: "La restauration a été interrompue avant de modifier le YAML de production. Le fichier initial a été vérifié. Retirer sa protection de reprise sans modifier les labels ni le YAML ?",
+    restoreReconcileUncertain: "État du YAML non vérifié après interruption. Aucun déblocage automatique : contrôlez les sauvegardes et l'état de propriété.",
     backupNoDiff: "YAML identique à la production.",
     backupTextOnlyDiff: "Aucune différence entre les entités. Seul le texte YAML diffère (par exemple, commentaires, ordre ou mise en forme). Restaurer remplacerait le texte du fichier de production, après sauvegarde de sécurité.",
     backupRestoreTextOnly: "Restaurer le texte YAML",
@@ -743,6 +747,10 @@ const HVLS_TRANSLATIONS = {
     restoreReconcileResolved: "Restoration reconciled. Production YAML unchanged; no Apply performed.",
     restoreReconcileError: "Reconciliation refused or incomplete. Writes remain protected. Refresh and review differences.",
     restoreReconcileWorking: "Reconciling labels and verifying state…",
+    restoreReconcileDiff: "Preview / restored production differences: {added} added, {removed} removed, {modified} modified.",
+    restoreReconcileCancelFailed: "Cancel interrupted restoration",
+    restoreReconcileCancelFailedConfirm: "Restoration stopped before editing production YAML. Original file state was verified. Remove the restore protection without changing labels or YAML?",
+    restoreReconcileUncertain: "YAML state could not be verified after interruption. No automatic unlock; inspect backups and ownership.",
     backupNoDiff: "YAML matches production.",
     backupTextOnlyDiff: "No per-entity differences. Only the YAML text differs (for example, comments, ordering or formatting). Restoring would replace the production file text, after a safety backup.",
     backupRestoreTextOnly: "Restore YAML text",
@@ -1204,6 +1212,8 @@ class HVLSPreviewPanel extends HTMLElement {
 
       this._restoreReconcilePending =
         ownership?.reason_code === "restore_reconciliation_required";
+      this._restoreReconcileState = this._restoreReconcilePending
+        ? result.restore_reconciliation?.state || "uncertain" : null;
       this._restoreReconcileReview = this._restoreReconcilePending &&
         validHash(result.production_sha256) &&
         validHash(result.preview_sha256)
@@ -2535,6 +2545,8 @@ class HVLSPreviewPanel extends HTMLElement {
               type="button" hidden></button>
             <button id="restoreReconcileKeepCurrent" class="secondary"
               type="button" hidden></button>
+            <button id="restoreReconcileCancelFailed" class="secondary"
+              type="button" hidden></button>
           </div>
           <p id="restoreReconcileStatus" role="status"></p>
         </div>
@@ -2838,6 +2850,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
     );
     this.querySelector("#restoreReconcileKeepCurrent").addEventListener(
       "click", () => this._resolveRestoreReconciliation("keep_current_labels")
+    );
+    this.querySelector("#restoreReconcileCancelFailed").addEventListener(
+      "click", () => this._resolveRestoreReconciliation("cancel_failed")
     );
     this.querySelector("#migrationAnalyze").addEventListener("click", () => this._loadMigrationReview());
     this.querySelector("#migrationIntentNew").addEventListener("click", () => this._chooseMigrationIntent("new"));
@@ -3520,8 +3535,10 @@ entity_config: !include google_assistant_entities.yaml</pre>
       Array.isArray(comparison.removed) &&
       Array.isArray(comparison.modified) &&
       !!this._restoreReconcileReview;
-    const aligned = valid && comparison.identical_entities === true;
-    const canAdd = valid && comparison.removed.length > 0 &&
+    const restored = this._restoreReconcileState === "restored";
+    const notWritten = this._restoreReconcileState === "not_written";
+    const aligned = valid && restored && comparison.identical_entities === true;
+    const canAdd = valid && restored && comparison.removed.length > 0 &&
       comparison.added.length === 0 && comparison.modified.length === 0;
     for (const [id, key] of [
       ["restoreReconcileTitle", "restoreReconcileTitle"],
@@ -3532,19 +3549,21 @@ entity_config: !include google_assistant_entities.yaml</pre>
     }
     const details = this.querySelector("#restoreReconcileDetails");
     if (details) {
-      details.textContent = valid
-        ? this._tf("restoreReconcileKeepConfirm", {
+      details.textContent = valid && (restored || notWritten)
+        ? this._tf("restoreReconcileDiff", {
             added: comparison.added.length,
             removed: comparison.removed.length,
             modified: comparison.modified.length,
           })
-        : this._t("backupRestoreNotVerified");
+        : this._t("restoreReconcileUncertain");
     }
     for (const [id, key, visible] of [
       ["restoreReconcileAddLabels", "restoreReconcileAddLabels", canAdd],
       ["restoreReconcileAligned", "restoreReconcileAligned", aligned],
       ["restoreReconcileKeepCurrent", "restoreReconcileKeepCurrent",
-        valid && !aligned],
+        valid && restored && !aligned],
+      ["restoreReconcileCancelFailed", "restoreReconcileCancelFailed",
+        valid && notWritten],
     ]) {
       const button = this.querySelector("#" + id);
       if (!button) continue;
@@ -3562,13 +3581,19 @@ entity_config: !include google_assistant_entities.yaml</pre>
         !this._restoreReconcileReview || this._restoreReconcileBusy) return false;
     const comparison = this._lastAnalysis?.comparison;
     if (comparison?.status !== "ok") return false;
-    if (mode === "keep_restored" && comparison.identical_entities !== true) {
-      return false;
-    }
-    if (!["keep_restored", "keep_current_labels"].includes(mode)) return false;
+    const restored = this._restoreReconcileState === "restored";
+    const notWritten = this._restoreReconcileState === "not_written";
+    if (mode === "keep_restored" &&
+        (!restored || comparison.identical_entities !== true)) return false;
+    if (mode === "keep_current_labels" && !restored) return false;
+    if (mode === "cancel_failed" && !notWritten) return false;
+    if (!["keep_restored", "keep_current_labels", "cancel_failed"].includes(
+      mode
+    )) return false;
     const confirmKey = mode === "keep_restored"
-      ? "restoreReconcileAlignedConfirm" : "restoreReconcileKeepConfirm";
-    const message = mode === "keep_restored" ? this._t(confirmKey)
+      ? "restoreReconcileAlignedConfirm" : mode === "cancel_failed"
+        ? "restoreReconcileCancelFailedConfirm" : "restoreReconcileKeepConfirm";
+    const message = mode !== "keep_current_labels" ? this._t(confirmKey)
       : this._tf(confirmKey, {
           added: comparison.added.length, removed: comparison.removed.length,
           modified: comparison.modified.length,
@@ -3602,6 +3627,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
   async _restoreMissingLabels() {
     const comparison = this._lastAnalysis?.comparison;
     if (!this._hass || !this._restoreReconcilePending ||
+        this._restoreReconcileState !== "restored" ||
         !this._restoreReconcileReview || this._restoreReconcileBusy ||
         comparison?.status !== "ok" ||
         comparison.added?.length !== 0 ||
