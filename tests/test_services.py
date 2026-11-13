@@ -49,7 +49,7 @@ def services_module(monkeypatch):
     base = Path(__file__).resolve().parents[1]
     component = base / "custom_components/ha_voice_label_sync"
 
-    for name in ("const", "ha_registries", "workflow_lock"):
+    for name in ("const", "ha_registries", "workflow_lock", "restore_guard"):
         fullname = f"custom_components.ha_voice_label_sync.{name}"
 
         if name == "ha_registries":
@@ -58,6 +58,8 @@ def services_module(monkeypatch):
             import asyncio
 
             install(fullname, get_workflow_lock=lambda hass: asyncio.Lock())
+        elif name == "restore_guard":
+            install(fullname, assert_not_guarded=Mock())
         else:
             spec = importlib.util.spec_from_file_location(
                 fullname,
