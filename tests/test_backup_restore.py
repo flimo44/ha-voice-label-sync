@@ -499,3 +499,93 @@ def test_restore_reconciliation_refuses_unaligned_or_stale(
         )
     assert guard_path(registry_path).is_file()
     assert "switch.new" in output.read_text()
+
+
+
+def test_restore_failure_keeps_guard_until_explicit_cancel(
+    backup_module, sample, monkeypatch
+):
+    from hvls import FileWriterError
+    from hvls.owned_writer import evaluate_registered_output
+    from hvls.restore_guard import guard_path
+
+    output, backup_id, _ = sample
+    make_owned(output)
+    original = output.read_bytes()
+    review = backup_module.review_backup(output, backup_id)
+
+    def fail_before_write(**_kwargs):
+        raise FileWriterError("simulated crash before disk write")
+
+    monkeypatch.setattr(backup_module, "write_owned_output", fail_before_write)
+    with pytest.raises(backup_module.BackupRestoreError):
+        restore(
+            backup_module, output, backup_id,
+            review["backup_sha256"], review["production_sha256"],
+        )
+
+    registry_path = output.parent / ".hvls" / "ownership.json"
+    assert output.read_bytes() == original
+    assert guard_path(registry_path).exists()
+    assert evaluate_registered_output(
+        output, "test-installation", registry_path
+    ).reason_code == "restore_reconciliation_required"
+
+    preview_path = output.parent / ".hvls" / "preview.yaml"
+    preview_path.write_text(output.read_text())
+    resolved = backup_module.resolve_restored_output(
+        output, preview_path, entry_id="test-installation",
+        ownership_registry_path=registry_path,
+        production_sha256=backup_module.preview_digest(output.read_text()),
+        preview_sha256=backup_module.preview_digest(preview_path.read_text()),
+        generated_content=preview_path.read_text(),
+        resolution="cancel_failed", confirmed=True,
+    )
+    assert resolved["resolved"] is True
+    assert not guard_path(registry_path).exists()
+    assert output.read_bytes() == original
+
+
+def test_corrupt_guard_fails_closed_for_direct_writes(tmp_path):
+    from hvls import FileWriterError
+    from hvls.owned_writer import evaluate_registered_output, write_owned_output
+    from hvls.restore_guard import guard_path
+
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.one:\n  expose: true\n")
+    make_owned(output)
+    registry = tmp_path / ".hvls" / "ownership.json"
+    guard_path(registry).write_text("{invalid")
+    assert evaluate_registered_output(
+        output, "test-installation", registry
+    ).reason_code == "restore_guard_invalid"
+    with pytest.raises(FileWriterError, match="restore guard"):
+        write_owned_output(
+            output_path=output, content="switch.two:\n  expose: true\n",
+            entry_id="test-installation", ownership_registry_path=registry,
+            backup_directory=tmp_path / ".hvls_backups",
+        )
+    assert "switch.one" in output.read_text()
+
+
+def test_reconciliation_rejects_forged_or_stale_preview(
+    backup_module, sample
+):
+    output, backup_id, _ = sample
+    make_owned(output)
+    review = backup_module.review_backup(output, backup_id)
+    restore(
+        backup_module, output, backup_id,
+        review["backup_sha256"], review["production_sha256"],
+    )
+    preview = output.parent / ".hvls" / "preview.yaml"
+    preview.write_text(output.read_text())
+    with pytest.raises(backup_module.PreviewChangedError, match="live HA labels"):
+        backup_module.resolve_restored_output(
+            output, preview, entry_id="test-installation",
+            ownership_registry_path=output.parent / ".hvls" / "ownership.json",
+            production_sha256=backup_module.preview_digest(output.read_text()),
+            preview_sha256=backup_module.preview_digest(preview.read_text()),
+            generated_content="switch.different:\n  expose: true\n",
+            resolution="keep_restored", confirmed=True,
+        )
