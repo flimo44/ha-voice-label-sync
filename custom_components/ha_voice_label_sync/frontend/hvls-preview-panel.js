@@ -292,6 +292,20 @@ const HVLS_TRANSLATIONS = {
     backupRestorePendingOther: "Après restauration, le Preview propose encore {added} ajout(s), {removed} suppression(s) et {modified} modification(s). Les labels HA n'ont pas été restaurés. Examinez les différences avant tout Apply.",
     backupRestoreNotVerified: "Le YAML a été restauré mais la comparaison actualisée avec le Preview n'est pas vérifiée. Actualisez le Preview et contrôlez les différences avant tout Apply.",
     backupRestoreAligned: "Le YAML restauré et le Preview ont la même configuration par entité. Les labels HA n'ont pas été restaurés.",
+    restoreReconcileTitle: "Restauration HVLS à finaliser",
+    restoreReconcileSummary: "Le YAML restauré est protégé. HVLS ne peut pas réécrire la production tant que vous n'avez pas choisi comment résoudre les différences avec les labels Home Assistant.",
+    restoreReconcilePending: "La restauration reste protégée même après redémarrage. Terminez-la dans l'onglet Preview avant un nouvel Apply.",
+    restoreReconcileAddLabels: "Rétablir les labels des entités restaurées",
+    restoreReconcileAligned: "Valider la cohérence et terminer la restauration",
+    restoreReconcileKeepCurrent: "Conserver les labels actuels (Apply séparé)",
+    restoreReconcileAddConfirm: "Rétablir les labels HVLS de {count} entité(s) restaurée(s) ?\\n{entities}\\n\\nAucun Apply ni changement du YAML de production.",
+    restoreReconcileKeepConfirm: "Vous choisissez les labels HA actuels. Les différences avec le YAML restauré sont : {added} ajout(s), {removed} suppression(s), {modified} modification(s). Un futur Apply pourra remplacer la configuration restaurée. La sauvegarde restera disponible. Débloquer uniquement la possibilité d'Apply (sans l'exécuter) ?",
+    restoreReconcileAlignedConfirm: "Le Preview est maintenant conforme aux entités du YAML restauré. Terminer la protection de restauration sans modifier le fichier ni effectuer Apply ?",
+    restoreReconcileCannotAdd: "Les labels ne peuvent pas être rétablis automatiquement pour toutes ces entités (absentes ou non éligibles). Examinez-les dans Gestion des entités HVLS.",
+    restoreReconcileAfterLabels: "Les labels ont été rétablis, mais le Preview reste différent du YAML restauré. Aucun Apply n'est autorisé. Examinez les personnalisations.",
+    restoreReconcileResolved: "Restauration réconciliée. Le YAML de production n'a pas été modifié ; aucun Apply effectué.",
+    restoreReconcileError: "Réconciliation refusée ou incomplète. Les écritures restent protégées. Actualisez puis examinez les différences.",
+    restoreReconcileWorking: "Réconciliation des labels et vérifications en cours…",
     backupNoDiff: "YAML identique à la production.",
     backupTextOnlyDiff: "Aucune différence entre les entités. Seul le texte YAML diffère (par exemple, commentaires, ordre ou mise en forme). Restaurer remplacerait le texte du fichier de production, après sauvegarde de sécurité.",
     backupRestoreTextOnly: "Restaurer le texte YAML",
@@ -715,6 +729,20 @@ const HVLS_TRANSLATIONS = {
     backupRestorePendingOther: "After restoring, Preview still proposes {added} additions, {removed} removals and {modified} modifications. HA labels were not restored. Review changes before any Apply.",
     backupRestoreNotVerified: "Production YAML was restored, but its updated Preview comparison could not be verified. Refresh Preview and review differences before any Apply.",
     backupRestoreAligned: "The restored YAML and Preview have the same per-entity configuration. HA labels were not restored.",
+    restoreReconcileTitle: "Complete the HVLS restoration",
+    restoreReconcileSummary: "The restored YAML is protected. HVLS cannot rewrite production until you decide how to resolve its differences with Home Assistant labels.",
+    restoreReconcilePending: "The restoration stays protected even after restart. Finish it in Preview before another Apply.",
+    restoreReconcileAddLabels: "Restore labels for restored entities",
+    restoreReconcileAligned: "Confirm matching configuration and finish restoration",
+    restoreReconcileKeepCurrent: "Keep current labels (separate Apply)",
+    restoreReconcileAddConfirm: "Restore HVLS labels to {count} restored entities?\\n{entities}\\n\\nNo Apply or production YAML modification.",
+    restoreReconcileKeepConfirm: "You chose the current HA labels. Differences from restored YAML: {added} additions, {removed} removals, {modified} modifications. A future Apply may replace the restored configuration. The backup remains available. Only unlock a separate Apply (without running it)?",
+    restoreReconcileAlignedConfirm: "Preview now matches the restored YAML entities. End restore protection without changing production or performing Apply?",
+    restoreReconcileCannotAdd: "Labels cannot safely be restored for all these entities (missing or ineligible). Inspect them in HVLS Entity Management.",
+    restoreReconcileAfterLabels: "Labels were restored, but Preview still differs from restored YAML. Apply remains blocked. Check customizations.",
+    restoreReconcileResolved: "Restoration reconciled. Production YAML unchanged; no Apply performed.",
+    restoreReconcileError: "Reconciliation refused or incomplete. Writes remain protected. Refresh and review differences.",
+    restoreReconcileWorking: "Reconciling labels and verifying state…",
     backupNoDiff: "YAML matches production.",
     backupTextOnlyDiff: "No per-entity differences. Only the YAML text differs (for example, comments, ordering or formatting). Restoring would replace the production file text, after a safety backup.",
     backupRestoreTextOnly: "Restore YAML text",
@@ -858,6 +886,7 @@ const HVLS_APPLY_REASON_KEYS = Object.freeze({
   "verification_failed": "applyReasonVerificationFailed",
   "output_path_mismatch": "applyReasonOutputPathMismatch",
   "pending_operation": "applyReasonPendingOperation",
+  "restore_reconciliation_required": "restoreReconcilePending",
   "managed_output_missing": "applyReasonManagedOutputMissing",
   "output_changed": "applyReasonOutputChanged",
   "not_configured": "applyReasonNotConfigured",
@@ -1172,6 +1201,15 @@ class HVLSPreviewPanel extends HTMLElement {
             validHash(result.production_sha256)
           )
         );
+
+      this._restoreReconcilePending =
+        ownership?.reason_code === "restore_reconciliation_required";
+      this._restoreReconcileReview = this._restoreReconcilePending &&
+        validHash(result.production_sha256) &&
+        validHash(result.preview_sha256)
+          ? {production_sha256: result.production_sha256,
+             preview_sha256: result.preview_sha256}
+          : null;
 
       const canReview =
         result.available === true &&
@@ -1671,6 +1709,7 @@ class HVLSPreviewPanel extends HTMLElement {
     this._renderExclusions(this.querySelector("#exclusions"), result.exclusions);
     this._renderPreviewChanges(result);
     this._renderRestoreWarning();
+    this._renderRestoreReconciliation();
     if (!result.available || !result.summary) return;
 
     const stats = result.summary;
@@ -2484,6 +2523,21 @@ class HVLSPreviewPanel extends HTMLElement {
         </section>
         <section id="tab-preview" class="hvls-tab-panel"
           role="tabpanel" hidden>
+        <section id="restoreReconcilePanel" class="migration-review-note"
+          role="status" hidden>
+          <h3 id="restoreReconcileTitle"></h3>
+          <p id="restoreReconcileSummary" class="diagnostic-note"></p>
+          <p id="restoreReconcileDetails" class="diagnostic-note"></p>
+          <div class="migration-controls">
+            <button id="restoreReconcileAddLabels" class="secondary"
+              type="button" hidden></button>
+            <button id="restoreReconcileAligned" class="secondary"
+              type="button" hidden></button>
+            <button id="restoreReconcileKeepCurrent" class="secondary"
+              type="button" hidden></button>
+          </div>
+          <p id="restoreReconcileStatus" role="status"></p>
+        </section>
         <div id="previewChanges"></div>
         <details id="rawDiffDetails" hidden>
           <summary>${this._t("rawDiffSummary")}</summary>
@@ -2776,6 +2830,15 @@ entity_config: !include google_assistant_entities.yaml</pre>
       "click", () => this._activateTab("migration")
     );
     this.querySelector("#restoreBackup").addEventListener("click", () => this._restoreBackup());
+    this.querySelector("#restoreReconcileAddLabels").addEventListener(
+      "click", () => this._restoreMissingLabels()
+    );
+    this.querySelector("#restoreReconcileAligned").addEventListener(
+      "click", () => this._resolveRestoreReconciliation("keep_restored")
+    );
+    this.querySelector("#restoreReconcileKeepCurrent").addEventListener(
+      "click", () => this._resolveRestoreReconciliation("keep_current_labels")
+    );
     this.querySelector("#migrationAnalyze").addEventListener("click", () => this._loadMigrationReview());
     this.querySelector("#migrationIntentNew").addEventListener("click", () => this._chooseMigrationIntent("new"));
     this.querySelector("#migrationIntentExisting").addEventListener("click", () => this._chooseMigrationIntent("existing"));
@@ -3404,7 +3467,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const analysis = this._lastAnalysis;
     const comparison = analysis?.comparison;
     let message = "";
-    if (this._backupRestoreCompleted === true) {
+    if (this._backupRestoreCompleted === true ||
+        this._restoreReconcilePending === true) {
       if (!analysis?.available || analysis.error ||
           comparison?.status !== "ok" ||
           !Array.isArray(comparison.added) ||
@@ -3428,7 +3492,12 @@ entity_config: !include google_assistant_entities.yaml</pre>
           modified: comparison.modified.length,
         });
       } else {
-        message = this._t("backupRestoreAligned");
+        message = this._restoreReconcilePending
+          ? this._t("restoreReconcilePending")
+          : this._t("backupRestoreAligned");
+      }
+      if (this._restoreReconcilePending && comparison?.removed?.length) {
+        message += " " + this._t("restoreReconcilePending");
       }
     }
     for (const id of ["backupRestoreNotice", "restoreSummaryNotice"]) {
@@ -3437,6 +3506,162 @@ entity_config: !include google_assistant_entities.yaml</pre>
         node.hidden = !message;
         node.textContent = message;
       }
+    }
+  }
+
+  _renderRestoreReconciliation() {
+    const panel = this.querySelector("#restoreReconcilePanel");
+    if (!panel) return;
+    panel.hidden = this._restoreReconcilePending !== true;
+    if (panel.hidden) return;
+    const comparison = this._lastAnalysis?.comparison;
+    const valid = comparison?.status === "ok" &&
+      Array.isArray(comparison.added) &&
+      Array.isArray(comparison.removed) &&
+      Array.isArray(comparison.modified) &&
+      !!this._restoreReconcileReview;
+    const aligned = valid && comparison.identical_entities === true;
+    const canAdd = valid && comparison.removed.length > 0 &&
+      comparison.added.length === 0 && comparison.modified.length === 0;
+    for (const [id, key] of [
+      ["restoreReconcileTitle", "restoreReconcileTitle"],
+      ["restoreReconcileSummary", "restoreReconcileSummary"],
+    ]) {
+      const node = this.querySelector("#" + id);
+      if (node) node.textContent = this._t(key);
+    }
+    const details = this.querySelector("#restoreReconcileDetails");
+    if (details) {
+      details.textContent = valid
+        ? this._tf("restoreReconcileKeepConfirm", {
+            added: comparison.added.length,
+            removed: comparison.removed.length,
+            modified: comparison.modified.length,
+          })
+        : this._t("backupRestoreNotVerified");
+    }
+    for (const [id, key, visible] of [
+      ["restoreReconcileAddLabels", "restoreReconcileAddLabels", canAdd],
+      ["restoreReconcileAligned", "restoreReconcileAligned", aligned],
+      ["restoreReconcileKeepCurrent", "restoreReconcileKeepCurrent",
+        valid && !aligned],
+    ]) {
+      const button = this.querySelector("#" + id);
+      if (!button) continue;
+      button.hidden = !visible;
+      button.disabled = !visible || this._restoreReconcileBusy === true ||
+        this._restoring === true || this._applying === true;
+      button.textContent = this._t(key);
+    }
+    const status = this.querySelector("#restoreReconcileStatus");
+    if (status) status.textContent = this._restoreReconcileMessage || "";
+  }
+
+  async _resolveRestoreReconciliation(mode) {
+    if (!this._hass || !this._restoreReconcilePending ||
+        !this._restoreReconcileReview || this._restoreReconcileBusy) return false;
+    const comparison = this._lastAnalysis?.comparison;
+    if (comparison?.status !== "ok") return false;
+    if (mode === "keep_restored" && comparison.identical_entities !== true) {
+      return false;
+    }
+    if (!["keep_restored", "keep_current_labels"].includes(mode)) return false;
+    const confirmKey = mode === "keep_restored"
+      ? "restoreReconcileAlignedConfirm" : "restoreReconcileKeepConfirm";
+    const message = mode === "keep_restored" ? this._t(confirmKey)
+      : this._tf(confirmKey, {
+          added: comparison.added.length, removed: comparison.removed.length,
+          modified: comparison.modified.length,
+        });
+    if (!window.confirm(message)) return false;
+    this._restoreReconcileBusy = true;
+    this._renderRestoreReconciliation();
+    try {
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/resolve_restored_output",
+        ...this._restoreReconcileReview,
+        resolution: mode, confirmed: true,
+      });
+      if (result?.resolved !== true || result?.apply_performed !== false ||
+          result?.production_unchanged !== true) {
+        throw new Error("invalid_reconciliation");
+      }
+      this._restoreReconcileMessage = this._t("restoreReconcileResolved");
+      await this._loadPreview();
+      return true;
+    } catch (_error) {
+      this._restoreReconcileMessage = this._t("restoreReconcileError");
+      await this._loadPreview();
+      return false;
+    } finally {
+      this._restoreReconcileBusy = false;
+      this._renderRestoreReconciliation();
+    }
+  }
+
+  async _restoreMissingLabels() {
+    const comparison = this._lastAnalysis?.comparison;
+    if (!this._hass || !this._restoreReconcilePending ||
+        !this._restoreReconcileReview || this._restoreReconcileBusy ||
+        comparison?.status !== "ok" ||
+        comparison.added?.length !== 0 ||
+        comparison.modified?.length !== 0 ||
+        !Array.isArray(comparison.removed) ||
+        comparison.removed.length === 0 || comparison.removed.length > 100) return;
+    const ids = [...comparison.removed];
+    this._restoreReconcileBusy = true;
+    this._renderRestoreReconciliation();
+    try {
+      // Use a fresh live HA registry; never infer labels from an old UI cache.
+      const catalog = await this._hass.callWS({
+        type: "ha_voice_label_sync/get_entities",
+      });
+      const entities = catalog?.entities || [];
+      if (!ids.every(id => {
+        const entity = entities.find(item => item.entity_id === id);
+        return entity?.eligible === true && entity?.has_label === false;
+      })) {
+        this._restoreReconcileMessage = this._t("restoreReconcileCannotAdd");
+        return;
+      }
+      if (!window.confirm(this._tf("restoreReconcileAddConfirm", {
+        count: ids.length, entities: ids.join(", "),
+      }))) return;
+      for (const entity_id of ids) {
+        await this._hass.callWS({
+          type: "ha_voice_label_sync/set_entity_label",
+          entity_id, enabled: true, expected_enabled: false,
+        });
+      }
+      // Generate only the Preview. The durable writer hold protects production.
+      await this._hass.callWS({type: "ha_voice_label_sync/generate_preview"});
+      await this._loadPreview();
+      if (this._lastAnalysis?.comparison?.identical_entities === true &&
+          this._restoreReconcilePending === true) {
+        // The user already confirmed restoring these labels. Ending the
+        // hold is still a separate explicit server-side verified decision.
+        const review = this._restoreReconcileReview;
+        const resolved = await this._hass.callWS({
+          type: "ha_voice_label_sync/resolve_restored_output",
+          ...review, resolution: "keep_restored", confirmed: true,
+        });
+        if (resolved?.resolved !== true ||
+            resolved?.production_unchanged !== true ||
+            resolved?.apply_performed !== false) {
+          throw new Error("reconciliation_failed");
+        }
+        this._restoreReconcileMessage = this._t("restoreReconcileResolved");
+      } else {
+        this._restoreReconcileMessage = this._t("restoreReconcileAfterLabels");
+      }
+    } catch (_error) {
+      // Partial label changes can occur; the production hold remains in place
+      // until the server verifies an explicit final reconciliation.
+      this._restoreReconcileMessage = this._t("restoreReconcileError");
+    } finally {
+      await this._loadPreview();
+      this._restoreReconcileBusy = false;
+      this._renderRestoreReconciliation();
     }
   }
 
