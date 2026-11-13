@@ -7,8 +7,8 @@ Never reads backup archives, secret includes, HA storage, or live GA state.
 
 from __future__ import annotations
 
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Any
 
 from yaml.nodes import MappingNode, ScalarNode, SequenceNode
@@ -203,7 +203,10 @@ def inspect_historical_google_yaml(
         domains = ga.get("exposed_domains")
         report["rules"]["exposed_domains_declared"] = domains is not None
         if domains is not None:
-            if not isinstance(domains, SequenceNode) or len(domains.value) > MAX_EXPOSED_DOMAINS:
+            if (
+                not isinstance(domains, SequenceNode)
+                or len(domains.value) > MAX_EXPOSED_DOMAINS
+            ):
                 raise DiscoveryProblem("invalid_exposed_domains")
             safe_domains: list[str] = []
             for item in domains.value:
