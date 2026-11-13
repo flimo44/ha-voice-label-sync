@@ -182,6 +182,7 @@ def write_owned_output(
     retention: int = 10,
     create_backup_enabled: bool = True,
     restore_mode: bool = False,
+    expected_production_sha256: str | None = None,
 ) -> FileWriteResult:
     """Create or regenerate a verified HVLS-owned YAML.
 
@@ -280,6 +281,12 @@ def write_owned_output(
             )
 
         expected_sha256 = record["sha256"]
+        if expected_production_sha256 is not None and not hmac.compare_digest(
+            expected_sha256, expected_production_sha256
+        ):
+            raise FileWriterError(
+                "Production changed after restore review; review again"
+            )
 
         # Durable pending state and first content verification.
         registry.begin_write(
