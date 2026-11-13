@@ -19,10 +19,11 @@ HVLS v0.2.0).
 3. Consulter la comparaison avec le catalogue HA actuel :
    - **à ajouter** : `expose: true` explicite, sans autre personnalisation,
      entité présente, éligible et sans label HVLS ;
-   - **déjà dans HVLS** : étiquette existante sans conflit ni personnalisation ;
+   - **déjà dans HVLS** : `expose: true`, label déjà présent et entité éligible, même si le fichier contient `name`, `room` ou `aliases` ; **le label ne prouve pas que les valeurs YAML correspondent au Preview** ;
    - **exclue** : `expose: false` sans label HVLS ;
-   - **à examiner** : `expose` absent/invalide, nom/pièce/alias personnalisé,
-     option non prise en charge, entité absente/inéligible ou conflit.
+   - **à examiner** : `expose` absent/invalide, nom/pièce/alias personnalisé
+     pour une entité non labellisée, option non prise en charge, entité absente/inéligible ou conflit.
+     Le détail indique le motif individuel, sans renvoyer les valeurs privées.
 4. Une seule confirmation humaine permet d'ajouter les labels HVLS proposés
    via l'API existante `set_entity_label`, qui valide l'éligibilité et l'état
    attendu de chaque entité. **Le fichier source n'est pas modifié.**
