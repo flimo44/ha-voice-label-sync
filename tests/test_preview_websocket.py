@@ -773,6 +773,8 @@ def test_preview_refuses_apply_from_persistent_restore_hold(websocket_module):
     ws.read_guard.return_value = {
         "entry_id": "test-installation",
         "output_path": ws.DEFAULT_OUTPUT,
+        "original_sha256": "c" * 64,
+        "restored_sha256": "d" * 64,
     }
     connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
     asyncio.run(ws.websocket_get_preview(
