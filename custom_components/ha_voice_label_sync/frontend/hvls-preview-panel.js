@@ -293,6 +293,9 @@ const HVLS_TRANSLATIONS = {
     backupRestoreNotVerified: "Le YAML a été restauré mais la comparaison actualisée avec le Preview n'est pas vérifiée. Actualisez le Preview et contrôlez les différences avant tout Apply.",
     backupRestoreAligned: "Le YAML restauré et le Preview ont la même configuration par entité. Les labels HA n'ont pas été restaurés.",
     backupNoDiff: "YAML identique à la production.",
+    backupTextOnlyDiff: "Aucune différence entre les entités. Seul le texte YAML diffère (par exemple, commentaires, ordre ou mise en forme). Restaurer remplacerait le texte du fichier de production, après sauvegarde de sécurité.",
+    backupRestoreTextOnly: "Restaurer le texte YAML",
+    backupConfirmTextOnly: "Les entités sont identiques mais le texte YAML diffère. Restaurer exactement le texte de la sauvegarde en production ? Une copie de sécurité de la production actuelle sera créée obligatoirement. Les étiquettes HA ne seront pas modifiées.",
     backupDiffTitle: "Changements si cette sauvegarde est restaurée",
     backupSize: "{size} octets",
     backupEntities: "{count} entités",
@@ -713,6 +716,9 @@ const HVLS_TRANSLATIONS = {
     backupRestoreNotVerified: "Production YAML was restored, but its updated Preview comparison could not be verified. Refresh Preview and review differences before any Apply.",
     backupRestoreAligned: "The restored YAML and Preview have the same per-entity configuration. HA labels were not restored.",
     backupNoDiff: "YAML matches production.",
+    backupTextOnlyDiff: "No per-entity differences. Only the YAML text differs (for example, comments, ordering or formatting). Restoring would replace the production file text, after a safety backup.",
+    backupRestoreTextOnly: "Restore YAML text",
+    backupConfirmTextOnly: "Entity configurations are identical but YAML text differs. Restore the backup's exact text to production? A safety copy of current production will always be created. HA labels will not be modified.",
     backupDiffTitle: "Changes if this backup is restored",
     backupSize: "{size} bytes",
     backupEntities: "{count} entities",
@@ -3327,8 +3333,13 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const container = this.querySelector("#backupDiff");
     if (!container) return;
     container.replaceChildren();
+    const restore = this.querySelector("#restoreBackup");
+    if (restore) restore.textContent = this._t("backupRestore");
     const data = this._backupReview;
-    if (!data || !data.comparison || data.comparison.status !== "ok") return;
+    if (!data || !data.comparison || data.comparison.status !== "ok") {
+      if (restore) restore.disabled = true;
+      return;
+    }
     const heading = document.createElement("h3");
     heading.textContent = this._t("backupDiffTitle");
     container.appendChild(heading);
@@ -3371,12 +3382,20 @@ entity_config: !include google_assistant_entities.yaml</pre>
       details.appendChild(items);
       container.appendChild(details);
     }
-    const restore = this.querySelector("#restoreBackup");
-    if (restore) restore.disabled = comparison.identical_text || this._restoring ||
-      this._applying || this._refreshing || this._generating || this._entityWritePending;
-    if (comparison.identical_text) {
+    const textOnly = comparison.identical_entities === true &&
+      comparison.identical_text === false;
+    if (restore) {
+      restore.textContent = this._t(textOnly
+        ? "backupRestoreTextOnly" : "backupRestore");
+      restore.disabled = comparison.identical_text === true ||
+        this._restoring || this._applying || this._refreshing ||
+        this._generating || this._entityWritePending;
+    }
+    if (comparison.identical_text === true || textOnly) {
       const text = document.createElement("p");
-      text.textContent = this._t("backupNoDiff");
+      text.className = "diagnostic-note";
+      text.textContent = this._t(textOnly
+        ? "backupTextOnlyDiff" : "backupNoDiff");
       container.appendChild(text);
     }
   }
@@ -3426,7 +3445,10 @@ entity_config: !include google_assistant_entities.yaml</pre>
     if (!data || this._restoring || this._applying ||
         this._refreshing || this._generating || this._entityWritePending ||
         data.comparison?.identical_text) return;
-    if (!window.confirm(this._t("backupConfirm"))) return;
+    const textOnly = data.comparison?.identical_entities === true &&
+      data.comparison?.identical_text === false;
+    if (!window.confirm(this._t(textOnly
+      ? "backupConfirmTextOnly" : "backupConfirm"))) return;
     this._restoring = true;
     this._backupReviewNumber = (this._backupReviewNumber || 0) + 1;
     this._backupReview = null;
