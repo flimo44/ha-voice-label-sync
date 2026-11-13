@@ -165,6 +165,7 @@ def websocket_module(monkeypatch):
     backup_module.list_backups = Mock(return_value={"backups": []})
     backup_module.review_backup = Mock()
     backup_module.restore_reviewed_backup = Mock()
+    backup_module.resolve_restored_output = Mock()
     monkeypatch.setitem(sys.modules, f"{prefix}.backup_restore", backup_module)
 
     # Mock dependencies of the apply_preview WebSocket command.
