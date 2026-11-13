@@ -2312,6 +2312,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._assistantFilePath = event.target.value;
       this._assistantFileRequestId = (this._assistantFileRequestId || 0) + 1;
       this._assistantFileReport = null;
+      this._assistantFileError = null;
+      this._assistantFileChecking = false;
       this._renderAssistantFileStatus();
     });
     this.querySelector("#assistantFileCheck").addEventListener(
@@ -2930,6 +2932,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._migrationIntent = intent;
     this._assistantFileRequestId = (this._assistantFileRequestId || 0) + 1;
     this._assistantFileReport = null;
+    this._assistantFileError = null;
+    this._assistantFileChecking = false;
     this._renderMigrationGuide();
     this._renderAssistantFileStatus();
   }
@@ -3036,7 +3040,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
         const reasons = (issue.reasons || []).map(
           code => this._assistantFileExplanation(code)
         ).join(", ");
-        return `${issue.entity_id} (ligne ${issue.line} : ${reasons})`;
+        const line = this._language === "fr" ? "ligne" : "line";
+        return `${issue.entity_id} (${line} ${issue.line}: ${reasons})`;
       });
       status.textContent = intro + " " + (issueList.length
         ? this._tf("assistantFileIssues", {issues: issueList.join(" ; ")})
@@ -3830,6 +3835,11 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._migrationLoading = true;
     const requestId = (this._migrationRequestId || 0) + 1;
     this._migrationRequestId = requestId;
+    // A refreshed HA diagnostic invalidates any earlier standalone file check.
+    this._assistantFileRequestId = (this._assistantFileRequestId || 0) + 1;
+    this._assistantFileReport = null;
+    this._assistantFileError = null;
+    this._assistantFileChecking = false;
     const button = this.querySelector("#migrationAnalyze");
     const status = this.querySelector("#migrationStatus");
     if (button) button.disabled = true;
