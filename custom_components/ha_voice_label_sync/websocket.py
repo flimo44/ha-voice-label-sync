@@ -42,6 +42,7 @@ from .preview_apply import apply_reviewed_preview
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_exclusions import analyze_exclusions
 from .preview_guard import PreviewChangedError, preview_digest
+from .restore_guard import assert_not_guarded, read_guard
 from .services import DEFAULT_DOMAINS, async_run_workflow
 from .workflow_lock import get_workflow_lock
 
@@ -1168,14 +1169,41 @@ async def websocket_get_preview(
             entries[0].entry_id,
             Path(hass.config.path(".hvls", "ownership.json")),
         )
-        result["ownership"] = {
+        ownership_details = {
             "status": ownership.status,
             "reason": ownership.reason,
             "reason_code": ownership.reason_code,
             "write_allowed": ownership.write_allowed,
         }
+        try:
+            pending_restore = await hass.async_add_executor_job(
+                read_guard, Path(hass.config.path(".hvls", "ownership.json"))
+            )
+        except FileWriterError:
+            ownership_details = {
+                "status": "unknown", "write_allowed": False,
+                "reason_code": "restore_guard_invalid",
+                "reason": "Restore record cannot be verified; production is protected.",
+            }
+        else:
+            if pending_restore is not None and ownership.status == "managed":
+                if (pending_restore["entry_id"] == entries[0].entry_id
+                        and pending_restore["output_path"] == str(output_path)):
+                    ownership_details = {
+                        "status": "restore_pending", "write_allowed": False,
+                        "reason_code": "restore_reconciliation_required",
+                        "reason": "Restore labels before another Apply.",
+                    }
+                else:
+                    ownership_details = {
+                        "status": "unknown", "write_allowed": False,
+                        "reason_code": "restore_guard_mismatch",
+                        "reason": "Another restore transaction is unresolved.",
+                    }
+        result["ownership"] = ownership_details
         result["can_apply"] = bool(
-            result.get("can_apply", False) and ownership.write_allowed
+            result.get("can_apply", False)
+            and ownership_details["write_allowed"]
         )
     else:
         result["ownership"] = {
@@ -1248,6 +1276,10 @@ async def websocket_apply_preview(
         preview_path = Path(hass.config.path(".hvls", "preview.yaml"))
 
         try:
+            assert_not_guarded(
+                Path(hass.config.path(".hvls", "ownership.json")),
+                entries[0].entry_id, output_path,
+            )
             registries = get_live_registries(hass)
             result = await hass.async_add_executor_job(
                 partial(
