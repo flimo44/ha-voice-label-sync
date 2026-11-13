@@ -84,6 +84,16 @@ const HVLS_TRANSLATIONS = {
     assistantProvenanceNextChoose: "Choisissez une provenance ci-dessus pour afficher les recherches adaptées à votre situation.",
     assistantProvenanceSafety: "Votre réponse est uniquement une indication locale, non enregistrée. Elle ne certifie ni une ancienne exposition ni l'état Google Home et ne débloque aucune étape de migration.",
     assistantProvenanceCategory: "Provenance déclarée, non vérifiée",
+    assistantProvenanceSourceLabel: "Fichier examiné",
+    assistantProvenanceChecklistTitle: "Comment retrouver la configuration d'origine ?",
+    assistantProvenanceChecklistTrigger: "ⓘ Guide pratique : où chercher dans une sauvegarde",
+    assistantProvenanceChecklistIntro: "Ces vérifications se font manuellement sur une copie de sauvegarde ; HVLS ne parcourt, n'extrait et ne modifie aucune sauvegarde à cette étape.",
+    assistantProvenanceChecklist1: "Ouvrez une copie d'une ancienne sauvegarde Home Assistant sans la restaurer sur votre instance active.",
+    assistantProvenanceChecklist2: "Dans configuration.yaml, recherchez une déclaration google_assistant: directe ou google_assistant: !include fichier.yaml.",
+    assistantProvenanceChecklist3: "Si un fichier est inclus, consultez-le dans la copie. Recherchez entity_config: !include ... et comparez sa référence au fichier examiné.",
+    assistantProvenanceChecklist4: "Relevez uniquement les réglages utiles (expose_by_default, exposed_domains). Ne communiquez ni secrets, ni clés, ni compte de service.",
+    assistantProvenanceChecklistEnd: "Une référence retrouvée dans une sauvegarde indique une configuration historique possible ; elle ne démontre pas à elle seule que Google Home exposait réellement ces entités.",
+    assistantProvenanceSourceLabelUnknown: "Aucune copie de sauvegarde n'est analysée automatiquement ici.",
     migrationAnalyze: "Actualiser la simulation (lecture seule)",
     migrationLoading: "Analyse de migration en lecture seule…",
     migrationEmpty: "Ouvrez cette section pour vérifier la configuration Google Assistant.",
@@ -404,6 +414,16 @@ const HVLS_TRANSLATIONS = {
     assistantProvenanceNextChoose: "Choose the file's origin above to see checks relevant to your situation.",
     assistantProvenanceSafety: "Your answer is local to this screen and is not saved. It does not certify previous exposure or Google Home state and does not unlock migration.",
     assistantProvenanceCategory: "Stated origin, not verified",
+    assistantProvenanceSourceLabel: "Inspected file",
+    assistantProvenanceChecklistTitle: "How do I find the original configuration?",
+    assistantProvenanceChecklistTrigger: "ⓘ Practical guide: where to look in a backup",
+    assistantProvenanceChecklistIntro: "These checks are manual and use a backup copy. HVLS does not search, extract or modify any backup during this step.",
+    assistantProvenanceChecklist1: "Open a copy of an older Home Assistant backup without restoring it to your active installation.",
+    assistantProvenanceChecklist2: "In configuration.yaml, look for a direct google_assistant: declaration or google_assistant: !include file.yaml.",
+    assistantProvenanceChecklist3: "If a file is included, inspect it in the copy. Look for entity_config: !include ... and compare its reference with the inspected file.",
+    assistantProvenanceChecklist4: "Record only relevant settings (expose_by_default, exposed_domains). Do not share secrets, keys or service accounts.",
+    assistantProvenanceChecklistEnd: "A reference found in a backup is a possible historical configuration clue; it alone does not prove that Google Home actually exposed these entities.",
+    assistantProvenanceSourceLabelUnknown: "No backup copy is automatically analyzed here.",
     migrationAnalyze: "Refresh simulation (read-only)",
     migrationLoading: "Running read-only migration assessment…",
     migrationEmpty: "Open this section to review Google Assistant configuration.",
@@ -1726,8 +1746,21 @@ class HVLSPreviewPanel extends HTMLElement {
           outline: 2px solid var(--primary-color);
           outline-offset: 2px;
         }
-        .assistant-provenance-facts { padding-left: 20px; }
-        .assistant-provenance-facts li { margin: 8px 0; overflow-wrap: anywhere; }
+        .assistant-provenance-facts { display: grid; gap: 12px; margin: 16px 0; }
+        .assistant-provenance-card {
+          padding: 12px 16px;
+          border: 1px solid var(--divider-color);
+          border-radius: 10px;
+          overflow-wrap: anywhere;
+        }
+        .assistant-provenance-card h4 { margin: 0 0 8px; font-size: 0.95rem; }
+        .assistant-provenance-card p { margin: 0; line-height: 1.55; }
+        #assistantProvenanceAnomalies:not([hidden]) { display: block; margin-top: 8px; }
+        #assistantProvenanceHelp { margin-top: 12px; }
+        #assistantProvenanceHelp[hidden] { display: none; }
+        #assistantProvenanceHelp ol { padding-left: 22px; line-height: 1.55; }
+        #assistantProvenanceHelp li { margin-bottom: 10px; }
+        #assistantProvenanceHelp code { overflow-wrap: anywhere; }
         .migration-review-note { color: var(--secondary-text-color); }
         .hvls-brand {
           display: flex;
@@ -2338,18 +2371,36 @@ entity_config: !include google_assistant_entities.yaml</pre>
                   <button id="assistantProvenanceNew" type="button" class="secondary assistant-provenance-choice"
                     aria-pressed="false">${this._t("assistantProvenanceNew")}</button>
                 </div>
-                <ul class="assistant-provenance-facts">
-                  <li><strong id="assistantProvenanceVerifiedTitle">${this._t("assistantProvenanceVerifiedTitle")}</strong>
-                    <span id="assistantProvenanceVerified">${this._t("assistantProvenanceVerified")}</span>
-                    <span id="assistantProvenanceAnomalies" hidden></span>
-                  </li>
-                  <li><strong id="assistantProvenanceMissingTitle">${this._t("assistantProvenanceMissingTitle")}</strong>
-                    <span id="assistantProvenanceMissing">${this._t("assistantProvenanceMissing")}</span>
-                  </li>
-                  <li><strong id="assistantProvenanceNextTitle">${this._t("assistantProvenanceNextTitle")}</strong>
-                    <span id="assistantProvenanceNext" role="status">${this._t("assistantProvenanceNextChoose")}</span>
-                  </li>
-                </ul>
+                <div class="assistant-provenance-facts">
+                  <section class="assistant-provenance-card"
+                    aria-labelledby="assistantProvenanceVerifiedTitle">
+                    <h4 id="assistantProvenanceVerifiedTitle">${this._t("assistantProvenanceVerifiedTitle")}</h4>
+                    <p id="assistantProvenanceVerified">${this._t("assistantProvenanceVerified")}</p>
+                    <p id="assistantProvenanceSource"></p>
+                    <p id="assistantProvenanceAnomalies" hidden></p>
+                  </section>
+                  <section class="assistant-provenance-card"
+                    aria-labelledby="assistantProvenanceMissingTitle">
+                    <h4 id="assistantProvenanceMissingTitle">${this._t("assistantProvenanceMissingTitle")}</h4>
+                    <p id="assistantProvenanceMissing">${this._t("assistantProvenanceMissing")}</p>
+                  </section>
+                  <section class="assistant-provenance-card"
+                    aria-labelledby="assistantProvenanceNextTitle">
+                    <h4 id="assistantProvenanceNextTitle">${this._t("assistantProvenanceNextTitle")}</h4>
+                    <p id="assistantProvenanceNext" role="status">${this._t("assistantProvenanceNextChoose")}</p>
+                    <details id="assistantProvenanceHelp" hidden>
+                      <summary id="assistantProvenanceHelpTrigger">${this._t("assistantProvenanceChecklistTrigger")}</summary>
+                      <p id="assistantProvenanceChecklistIntro">${this._t("assistantProvenanceChecklistIntro")}</p>
+                      <ol>
+                        <li id="assistantProvenanceChecklist1">${this._t("assistantProvenanceChecklist1")}</li>
+                        <li id="assistantProvenanceChecklist2">${this._t("assistantProvenanceChecklist2")}</li>
+                        <li id="assistantProvenanceChecklist3">${this._t("assistantProvenanceChecklist3")}</li>
+                        <li id="assistantProvenanceChecklist4">${this._t("assistantProvenanceChecklist4")}</li>
+                      </ol>
+                      <p id="assistantProvenanceChecklistEnd">${this._t("assistantProvenanceChecklistEnd")}</p>
+                    </details>
+                  </section>
+                </div>
                 <p id="assistantProvenanceSafety" class="diagnostic-note">
                   ${this._t("assistantProvenanceSafety")}
                 </p>
@@ -3174,6 +3225,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
     // User recollection is local UI context only. Not provenance evidence.
     // Never pass it to migration APIs or persist it in HA.
     this._assistantProvenanceChoice = choice;
+    // The next-step guide is tied to this local selection, not evidence.
+    const help = this.querySelector("#assistantProvenanceHelp");
+    if (help) help.open = false;
     this._renderAssistantProvenance();
   }
 
@@ -3215,6 +3269,29 @@ entity_config: !include google_assistant_entities.yaml</pre>
       choices[this._assistantProvenanceChoice]?.[1] ||
       "assistantProvenanceNextChoose"
     );
+    const source = this.querySelector("#assistantProvenanceSource");
+    if (source) source.textContent = this._assistantFilePath
+      ? this._t("assistantProvenanceSourceLabel") + " : " + this._assistantFilePath
+      : this._t("assistantProvenanceSourceLabelUnknown");
+    const help = this.querySelector("#assistantProvenanceHelp");
+    if (help) {
+      // "New configuration" must not suggest recovering historical evidence.
+      help.hidden = !["old", "unknown"].includes(this._assistantProvenanceChoice);
+      if (help.hidden) help.open = false;
+    }
+    const guideIds = [
+      "assistantProvenanceChecklistTrigger",
+      "assistantProvenanceChecklistIntro",
+      "assistantProvenanceChecklist1",
+      "assistantProvenanceChecklist2",
+      "assistantProvenanceChecklist3",
+      "assistantProvenanceChecklist4",
+      "assistantProvenanceChecklistEnd",
+    ];
+    for (const id of guideIds) {
+      const node = this.querySelector("#" + id);
+      if (node) node.textContent = this._t(id);
+    }
     const anomalies = this._assistantFileReport?.counts?.entries_with_anomalies;
     const issues = this.querySelector("#assistantProvenanceAnomalies");
     if (issues) {

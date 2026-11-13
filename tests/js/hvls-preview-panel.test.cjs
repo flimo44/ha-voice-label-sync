@@ -3198,3 +3198,140 @@ test("Assistant origin guide is a local non-authorizing step with bilingual copy
   assert.match(source, /Étape 3 sur 3/);
   assert.match(source, /Step 3 of 3/);
 });
+
+test("Assistant provenance sections have separate accessible headings and safe manual guide", () => {
+  const slice = source.slice(
+    source.indexOf('<section id="assistantProvenance"'),
+    source.indexOf('<div id="assistantSourceDetected"')
+  );
+  assert.match(slice, /class="assistant-provenance-facts"/);
+  assert.match(slice, /<section class="assistant-provenance-card"\s+aria-labelledby="assistantProvenanceVerifiedTitle">/);
+  assert.match(slice, /<section class="assistant-provenance-card"\s+aria-labelledby="assistantProvenanceMissingTitle">/);
+  assert.match(slice, /<section class="assistant-provenance-card"\s+aria-labelledby="assistantProvenanceNextTitle">/);
+  assert.match(slice, /<h4 id="assistantProvenanceVerifiedTitle">/);
+  assert.match(slice, /<h4 id="assistantProvenanceMissingTitle">/);
+  assert.match(slice, /<h4 id="assistantProvenanceNextTitle">/);
+  assert.match(slice, /<details id="assistantProvenanceHelp" hidden>/);
+  assert.match(slice, /<ol>/);
+  assert.ok(!slice.includes('class="assistant-provenance-facts"><li>'));
+  assert.match(source, /#assistantProvenanceHelp\[hidden\]\s*\{ display: none; \}/);
+});
+
+test("Assistant backup guide appears only for old or unknown local provenance", () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {calls.push(request);});
+  const ids = [
+    "assistantProvenance", "assistantProvenanceOld", "assistantProvenanceUnknown",
+    "assistantProvenanceNew", "assistantProvenanceNext", "assistantProvenanceHelp",
+    "assistantProvenanceSource", "assistantProvenanceChecklistTrigger",
+    "assistantProvenanceChecklistIntro", "assistantProvenanceChecklist1",
+    "assistantProvenanceChecklist2", "assistantProvenanceChecklist3",
+    "assistantProvenanceChecklist4", "assistantProvenanceChecklistEnd",
+  ];
+  const controls = Object.fromEntries(ids.map(id => [id, {
+    hidden: false, open: false, textContent: "",
+    setAttribute(name, value) {this[name] = value;},
+  }]));
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {status: "resolved"},
+  }};
+  panel._migrationIntent = "existing";
+  panel._assistantFilePath = "google_assistant_entities.yaml";
+  panel._assistantFileReport = {
+    status: "parsed", read_only: true, source_active_verified: false,
+    migration_authorized: false, stage_allowed: false,
+    apply_allowed: false, cutover_allowed: false,
+    counts: {entries: 52, entries_with_anomalies: 0},
+  };
+  panel._renderAssistantProvenance();
+  assert.equal(controls.assistantProvenanceHelp.hidden, true);
+  assert.match(controls.assistantProvenanceSource.textContent, /google_assistant_entities.yaml/);
+  panel._chooseAssistantProvenance("old");
+  assert.equal(controls.assistantProvenanceHelp.hidden, false);
+  assert.match(controls.assistantProvenanceChecklist1.textContent,
+    /sans la restaurer/);
+  assert.match(controls.assistantProvenanceChecklist2.textContent,
+    /configuration.yaml/);
+  assert.match(controls.assistantProvenanceChecklist3.textContent,
+    /entity_config:/);
+  assert.match(controls.assistantProvenanceChecklist4.textContent,
+    /expose_by_default/);
+  assert.match(controls.assistantProvenanceChecklist4.textContent,
+    /Ne communiquez ni secrets/);
+  assert.match(controls.assistantProvenanceChecklistEnd.textContent,
+    /ne démontre pas/);
+
+  controls.assistantProvenanceHelp.open = true;
+  panel._chooseAssistantProvenance("unknown");
+  assert.equal(controls.assistantProvenanceHelp.hidden, false);
+  assert.equal(controls.assistantProvenanceHelp.open, false);
+
+  controls.assistantProvenanceHelp.open = true;
+  panel._chooseAssistantProvenance("new");
+  assert.equal(controls.assistantProvenanceHelp.hidden, true);
+  assert.equal(controls.assistantProvenanceHelp.open, false);
+  assert.match(controls.assistantProvenanceNext.textContent, /nouvelle configuration/);
+  assert.deepEqual(calls, []);
+  assert.equal(panel._migrationBaselineEligible(), false);
+});
+
+test("Assistant hides backup guide after file check becomes invalid", () => {
+  const {panel} = makePanel(async () => {});
+  const controls = {
+    assistantProvenance: {hidden: false},
+    assistantProvenanceHelp: {hidden: false, open: true},
+  };
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {status: "resolved"},
+  }};
+  panel._migrationIntent = "existing";
+  panel._assistantProvenanceChoice = "old";
+  panel._assistantFileReport = {status: "blocked"};
+  panel._renderAssistantProvenance();
+  assert.equal(controls.assistantProvenance.hidden, true);
+  // A hidden parent suppresses the entire guide even if it was expanded earlier.
+  panel._assistantFileReport = {
+    status: "parsed", read_only: true, source_active_verified: false,
+    migration_authorized: false, stage_allowed: false, apply_allowed: false,
+    cutover_allowed: false,
+  };
+  panel._renderAssistantProvenance();
+  assert.equal(controls.assistantProvenance.hidden, false);
+  panel._assistantFileReport = null;
+  panel._renderAssistantProvenance();
+  assert.equal(controls.assistantProvenance.hidden, true);
+  assert.equal(panel._migrationBaselineEligible(), false);
+});
+
+test("Assistant manual backup instructions work in English without private file access", () => {
+  const requests = [];
+  const {panel} = makePanel(async req => requests.push(req));
+  const controls = {
+    assistantProvenance: {hidden: true},
+    assistantProvenanceHelp: {hidden: true, open: false},
+    assistantProvenanceChecklistIntro: {textContent: ""},
+    assistantProvenanceChecklistEnd: {textContent: ""},
+    assistantProvenanceNext: {textContent: ""},
+    assistantProvenanceOld: {textContent: "", setAttribute() {}},
+  };
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  panel._language = "en";
+  panel._migrationIntent = "existing";
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {status: "resolved"},
+  }};
+  panel._assistantFileReport = {
+    status: "parsed", read_only: true, source_active_verified: false,
+    migration_authorized: false, stage_allowed: false,
+    apply_allowed: false, cutover_allowed: false,
+  };
+  panel._chooseAssistantProvenance("old");
+  assert.equal(controls.assistantProvenanceHelp.hidden, false);
+  assert.match(controls.assistantProvenanceChecklistIntro.textContent,
+    /does not search, extract or modify/);
+  assert.match(controls.assistantProvenanceChecklistEnd.textContent,
+    /does not prove/);
+  assert.deepEqual(requests, []);
+});
