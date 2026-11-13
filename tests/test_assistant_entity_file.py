@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import sys
@@ -236,3 +237,63 @@ def test_all_expose_omitted_does_not_claim_exposure(inspector, tmp_path):
     assert report["counts"]["expose_not_set"] == 2
     assert report["counts"]["explicitly_excluded"] == 0
     assert report["google_home_state_verified"] is False
+
+
+def test_adoption_entries_are_safe_and_keep_exclusions(inspector, tmp_path):
+    raw = (
+        "light.ready:\n  expose: true\n"
+        "light.custom:\n  expose: true\n  name: PRIVATE_CUSTOM_NAME\n"
+        "switch.off:\n  expose: false\n"
+        "light.implicit:\n  room: SECRET_ROOM\n"
+        "light.bad:\n  expose: maybe\n"
+        "password.SECR&ET:\n  expose: true\n"
+    )
+    (tmp_path / "entities.yaml").write_text(raw, encoding="utf-8")
+    report = inspector.inspect_google_entity_file(tmp_path, "entities.yaml")
+    assert report["status"] == "review_required"
+    assert report["adoption_entries_complete"] is True
+    assert report["file_sha256"] == hashlib.sha256(raw.encode()).hexdigest()
+    assert report["adoption_entries"] == [
+        {"entity_id": "light.ready", "exposure": "expose",
+         "has_customizations": False, "reasons": []},
+        {"entity_id": "light.custom", "exposure": "expose",
+         "has_customizations": True, "reasons": []},
+        {"entity_id": "switch.off", "exposure": "exclude",
+         "has_customizations": False, "reasons": []},
+        {"entity_id": "light.implicit", "exposure": "unset",
+         "has_customizations": True, "reasons": []},
+        {"entity_id": "light.bad", "exposure": "invalid",
+         "has_customizations": False, "reasons": ["invalid_expose_value"]},
+    ]
+    payload = json.dumps(report)
+    for private in ("PRIVATE_CUSTOM_NAME", "SECRET_ROOM", "SECR&ET"):
+        assert private not in payload
+    assert report["counts"]["entries_with_anomalies"] == 2
+    assert report["migration_authorized"] is False
+    assert report["stage_allowed"] is False
+
+
+def test_adoption_preview_is_bounded_and_never_grants_write(inspector, tmp_path):
+    raw = "".join(
+        f"light.entity_{index}:\\n  expose: true\\n".replace("\\\\n", "\\n")
+        for index in range(510)
+    )
+    (tmp_path / "entities.yaml").write_text(raw, encoding="utf-8")
+    report = inspector.inspect_google_entity_file(tmp_path, "entities.yaml")
+    assert report["status"] == "parsed"
+    assert report["counts"]["entries"] == 510
+    assert len(report["adoption_entries"]) == inspector.MAX_ADOPTION_ENTRIES
+    assert report["adoption_entries_complete"] is False
+    assert report["apply_allowed"] is False
+
+
+def test_no_adoption_entries_for_blocked_or_missing_yaml(inspector, tmp_path):
+    missing = inspector.inspect_google_entity_file(tmp_path, "missing.yaml")
+    assert missing["adoption_entries"] == []
+    assert missing["file_sha256"] is None
+    (tmp_path / "invalid.yaml").write_text(
+        "light.ok: [ broken\\n", encoding="utf-8"
+    )
+    invalid = inspector.inspect_google_entity_file(tmp_path, "invalid.yaml")
+    assert invalid["adoption_entries"] == []
+    assert invalid["status"] == "blocked"
