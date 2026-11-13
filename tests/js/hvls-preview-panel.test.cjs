@@ -2802,3 +2802,133 @@ test("Assistant markup keeps diagnostics behind a native accessible details pane
     assistant.indexOf('id="migrationAdvanced"'));
   assert.match(assistant, /<\/details>/);
 });
+
+
+test("Assistant proposes detected file and inspects it without migration writes", async () => {
+  const calls = [];
+  const {panel} = makePanel(async req => {
+    calls.push(req);
+    return {
+      read_only: true, source_active_verified: false,
+      migration_authorized: false, stage_allowed: false,
+      apply_allowed: false, cutover_allowed: false,
+      status: "parsed",
+      counts: {
+        entries: 52, requested_exposure: 51,
+        explicitly_excluded: 1, entries_with_anomalies: 0,
+      },
+      issue_examples: [],
+    };
+  });
+  const ids = [
+    "migrationGuide", "migrationGuideCandidate", "migrationGuideDetected",
+    "migrationGuideQuestion", "assistantFileSection", "assistantFilePath",
+    "assistantFileCheck", "assistantFileResult", "assistantFileSafety",
+    "assistantFileHint", "migrationGuideNext",
+  ];
+  const controls = Object.fromEntries(ids.map(id => [id, {
+    textContent: "", hidden: false, value: "", disabled: false,
+    setAttribute() {},
+  }]));
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "new_configuration", source: {
+      status: "resolved", unreferenced_google_entity_file_present: true,
+    },
+    counts: {explicit_yaml_entries: 0},
+  }};
+  panel._renderMigrationGuide();
+  assert.equal(controls.assistantFileSection.hidden, true);
+  panel._chooseMigrationIntent("existing");
+  assert.equal(controls.assistantFileSection.hidden, false);
+  assert.equal(controls.assistantFilePath.value, "google_assistant_entities.yaml");
+  assert.equal(controls.assistantFileCheck.disabled, false);
+  assert.equal(calls.length, 0);
+  await panel._checkAssistantEntityFile();
+  assert.deepEqual(calls.map(x => x.type), [
+    "ha_voice_label_sync/inspect_assistant_entity_file",
+  ]);
+  assert.equal(calls[0].path, "google_assistant_entities.yaml");
+  assert.match(controls.assistantFileResult.textContent, /52 entité/);
+  assert.match(controls.assistantFileResult.textContent, /0 anomalie/);
+  assert.match(controls.assistantFileSafety.textContent, /Aucune migration/);
+});
+
+test("Assistant offers packages as unsupported other configuration", () => {
+  const {panel} = makePanel(async () => {});
+  const ids = [
+    "migrationGuide", "migrationGuideCandidate", "migrationGuideDetected",
+    "migrationGuideQuestion", "assistantFileSection", "assistantFilePath",
+    "assistantFileCheck", "assistantFileHint", "migrationGuideNext",
+    "migrationIntentNew", "migrationIntentExisting", "migrationIntentUnsure",
+  ];
+  const controls = Object.fromEntries(ids.map(id => [id, {
+    textContent: "", hidden: false, value: "", disabled: false,
+    setAttribute() {},
+  }]));
+  panel.querySelector = sel => controls[sel.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "unsupported", source: {status: "ambiguous"},
+    global_blockers: ["packages_not_yet_supported"],
+  }};
+  panel._renderMigrationGuide();
+  assert.equal(controls.migrationGuide.hidden, false);
+  assert.match(controls.migrationGuideCandidate.textContent, /packages/);
+  assert.equal(controls.assistantFileSection.hidden, false);
+  assert.equal(controls.assistantFilePath.value, "");
+  assert.equal(controls.assistantFileCheck.disabled, true);
+  assert.equal(controls.migrationIntentNew.hidden, true);
+});
+
+test("Assistant rejects a forged inspection claiming migration authorization", async () => {
+  const {panel} = makePanel(async () => ({
+    read_only: true, source_active_verified: false,
+    migration_authorized: true, stage_allowed: true,
+    apply_allowed: true, cutover_allowed: true, status: "parsed",
+  }));
+  const result = {textContent: ""};
+  panel.querySelector = sel => sel === "#assistantFileResult" ? result : null;
+  panel._migrationReport = {diagnostic: {mode: "new_configuration"}};
+  panel._migrationIntent = "existing";
+  panel._assistantFilePath = "entities.yaml";
+  await panel._checkAssistantEntityFile();
+  assert.equal(panel._assistantFileReport, null);
+  assert.match(result.textContent, /indisponible/);
+});
+
+test("Assistant discards a stale file-check response after path change", async () => {
+  const pending = deferred();
+  const calls = [];
+  const {panel} = makePanel(async req => {
+    calls.push(req);
+    return pending.promise;
+  });
+  const status = {textContent: ""};
+  panel.querySelector = sel => sel === "#assistantFileResult" ? status : null;
+  panel._migrationReport = {diagnostic: {mode: "new_configuration"}};
+  panel._migrationIntent = "existing";
+  panel._assistantFilePath = "old.yaml";
+  const checking = panel._checkAssistantEntityFile();
+  panel._assistantFilePath = "new.yaml";
+  panel._assistantFileRequestId++;
+  panel._assistantFileChecking = false;
+  panel._assistantFileReport = null;
+  pending.resolve({
+    read_only: true, source_active_verified: false,
+    migration_authorized: false, stage_allowed: false,
+    apply_allowed: false, cutover_allowed: false, status: "parsed",
+    counts: {entries: 1},
+  });
+  await checking;
+  assert.equal(calls[0].path, "old.yaml");
+  assert.equal(panel._assistantFileReport, null);
+  assert.equal(panel._assistantFileChecking, false);
+});
+
+test("Assistant examples show both Google Assistant include shapes", () => {
+  assert.match(source, /id="assistantFileExamples"/);
+  assert.match(source, /google_assistant: !include google_assistant.yaml/);
+  assert.match(source, /entity_config: !include google_assistant_entities.yaml/);
+  assert.match(source, /id="assistantFilePath"/);
+  assert.match(source, /id="assistantFileCheck"/);
+});
