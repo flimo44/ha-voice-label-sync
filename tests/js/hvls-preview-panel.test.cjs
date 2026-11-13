@@ -3630,6 +3630,11 @@ function standardAdoptionFixture(callWS, confirm = () => true) {
     assistantAdoptApply: {textContent: "", disabled: false},
     assistantAdoptNeedsReview: {textContent: "", hidden: true},
     assistantAdoptResult: {textContent: ""},
+    assistantTakeoverSection: {hidden: true},
+    assistantTakeoverTitle: {textContent: ""},
+    assistantTakeoverIntro: {textContent: ""},
+    assistantTakeoverButton: {hidden: true, disabled: true, textContent: ""},
+    assistantTakeoverResult: {textContent: ""},
     assistantAdoptRows: {
       children: [], replaceChildren() {this.children = [];},
       appendChild(child) {this.children.push(child);},
@@ -3697,6 +3702,79 @@ test("Unreferenced YAML offers HVLS label reuse, not a Google connectivity block
   assert.equal(nodes.assistantAdoptRows.children.length, 5);
   assert.match(nodes.assistantAdoptRows.children[2].textContent, /aucun ajout/);
   assert.equal(panel._migrationBaselineEligible(), false);
+});
+
+test("Confirmed existing file takeover shows diff, calls only prepare/confirm and never Apply", async () => {
+  const calls = [];
+  const confirmations = [];
+  const {panel, nodes} = standardAdoptionFixture(async request => {
+    calls.push(request);
+    if (request.type === "ha_voice_label_sync/prepare_existing_output_takeover") {
+      assert.equal(request.path, "google_assistant_entities.yaml");
+      return {
+        eligible: true, selected_path: request.path,
+        production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
+        entities: 4, issues: 0,
+        changes: {added: 0, removed: 1, modified: 2},
+      };
+    }
+    if (request.type === "ha_voice_label_sync/confirm_existing_output_takeover") {
+      assert.equal(request.confirmed, true);
+      assert.equal(request.production_sha256, "a".repeat(64));
+      assert.equal(request.preview_sha256, "b".repeat(64));
+      return {
+        taken_over: true, backup_name: "google_assistant_entities.yaml.safety.bak",
+        production_unchanged: true, apply_performed: false,
+      };
+    }
+    throw Error("No other operation expected");
+  }, message => { confirmations.push(message); return true; });
+  panel._applyBlockReasonCode = "unmanaged_output";
+  let previewReloads = 0;
+  panel._loadPreview = async () => {
+    previewReloads += 1;
+    panel._applyBlockReasonCode = null;
+  };
+  panel._renderAssistantAdoption();
+  assert.equal(nodes.assistantTakeoverSection.hidden, false);
+  assert.equal(nodes.assistantTakeoverButton.disabled, false);
+  await panel._takeOverAssistantFile();
+  assert.equal(previewReloads, 1);
+  assert.deepEqual(calls.map(r => r.type), [
+    "ha_voice_label_sync/prepare_existing_output_takeover",
+    "ha_voice_label_sync/confirm_existing_output_takeover",
+  ]);
+  assert.match(confirmations[0], /1 suppression/);
+  assert.match(confirmations[0], /2 modification/);
+  assert.match(confirmations[0], /aucun Apply/i);
+  assert.match(nodes.assistantTakeoverResult.textContent, /Sauvegarde vérifiée/);
+  assert.equal(nodes.assistantTakeoverButton.hidden, true);
+});
+
+test("Existing file takeover rejects stale source, cancellation and unsupported status", async () => {
+  for (const testCase of ["cancel", "stale", "not_unmanaged"]) {
+    const calls = [];
+    const {panel, nodes} = standardAdoptionFixture(async request => {
+      calls.push(request.type);
+      return {
+        eligible: true, selected_path: "google_assistant_entities.yaml",
+        production_sha256: testCase === "stale"
+          ? "f".repeat(64) : "a".repeat(64),
+        preview_sha256: "b".repeat(64), entities: 4, issues: 0,
+        changes: {added: 0, removed: 0, modified: 0},
+      };
+    }, () => false);
+    panel._applyBlockReasonCode = testCase === "not_unmanaged"
+      ? "registry_invalid" : "unmanaged_output";
+    panel._loadPreview = async () => {};
+    await panel._takeOverAssistantFile();
+    if (testCase === "not_unmanaged") {
+      assert.deepEqual(calls, []);
+    } else {
+      assert.deepEqual(calls, ["ha_voice_label_sync/prepare_existing_output_takeover"]);
+    }
+    assert.equal(nodes.assistantTakeoverResult.textContent.includes("Fichier repris"), false);
+  }
 });
 
 test("Already labeled entities with generated name/room are recognized without any write", () => {
