@@ -17,6 +17,7 @@ from .backup_restore import (
     BackupRestoreError,
     list_backups,
     restore_reviewed_backup,
+    resolve_restored_output,
     review_backup,
 )
 from .const import (
@@ -1435,6 +1436,7 @@ async def websocket_set_entity_label(
 WS_TYPE_LIST_BACKUPS = f"{DOMAIN}/list_backups"
 WS_TYPE_REVIEW_BACKUP = f"{DOMAIN}/review_backup"
 WS_TYPE_RESTORE_BACKUP = f"{DOMAIN}/restore_backup"
+WS_TYPE_RESOLVE_RESTORE = f"{DOMAIN}/resolve_restored_output"
 
 
 def _configured_output(hass: HomeAssistant) -> Path:
@@ -1540,6 +1542,56 @@ async def websocket_restore_backup(
         connection.send_result(msg["id"], result)
 
 
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_RESOLVE_RESTORE,
+    vol.Required("production_sha256"): str,
+    vol.Required("preview_sha256"): str,
+    vol.Required("resolution"): vol.In(
+        ["keep_restored", "keep_current_labels", "cancel_failed"]
+    ),
+    vol.Required("confirmed"): bool,
+})
+async def websocket_resolve_restored_output(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """End restore protection only after a fresh, explicit decision."""
+    async with get_workflow_lock(hass):
+        try:
+            entries = hass.config_entries.async_entries(DOMAIN)
+            if len(entries) != 1:
+                raise BackupRestoreError("HVLS entry unavailable or ambiguous")
+            path = _configured_output(hass)
+            result = await hass.async_add_executor_job(
+                partial(
+                    resolve_restored_output,
+                    path,
+                    Path(hass.config.path(".hvls", "preview.yaml")),
+                    entry_id=entries[0].entry_id,
+                    ownership_registry_path=Path(
+                        hass.config.path(".hvls", "ownership.json")
+                    ),
+                    production_sha256=msg["production_sha256"],
+                    preview_sha256=msg["preview_sha256"],
+                    resolution=msg["resolution"],
+                    confirmed=msg["confirmed"],
+                )
+            )
+        except (
+            BackupRestoreError, PreviewChangedError, FileWriterError,
+            OSError, ValueError,
+        ):
+            connection.send_error(
+                msg["id"], "restore_reconciliation_refused",
+                "The restoration cannot be reconciled. Refresh and review again.",
+            )
+            return
+    connection.send_result(msg["id"], result)
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register the HVLS WebSocket API."""
     websocket_api.async_register_command(hass, websocket_get_preview)
@@ -1616,3 +1668,6 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_list_backups)
     websocket_api.async_register_command(hass, websocket_review_backup)
     websocket_api.async_register_command(hass, websocket_restore_backup)
+    websocket_api.async_register_command(
+        hass, websocket_resolve_restored_output
+    )
