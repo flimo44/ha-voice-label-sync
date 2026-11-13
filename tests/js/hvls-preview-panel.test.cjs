@@ -1020,10 +1020,11 @@ test("Durable restore protection offers safe choices after panel reload", () => 
     "restoreReconcilePanel", "restoreReconcileTitle", "restoreReconcileSummary",
     "restoreReconcileDetails", "restoreReconcileAddLabels",
     "restoreReconcileAligned", "restoreReconcileKeepCurrent",
-    "restoreReconcileStatus",
+    "restoreReconcileCancelFailed", "restoreReconcileStatus",
   ]) nodes[id] = {hidden: true, disabled: true, textContent: ""};
   panel.querySelector = selector => nodes[selector.slice(1)] || null;
   panel._restoreReconcilePending = true;
+  panel._restoreReconcileState = "restored";
   panel._restoreReconcileReview = {
     production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
   };
@@ -1077,6 +1078,7 @@ test("Restoring a missing HVLS label reconciles without touching production", as
     throw new Error("Unexpected network operation");
   }, message => {confirmations.push(message); return true;});
   panel._restoreReconcilePending = true;
+  panel._restoreReconcileState = "restored";
   panel._restoreReconcileReview = {
     production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
   };
@@ -1112,6 +1114,7 @@ test("Ineligible restored entity cannot be silently relabeled", async () => {
       eligible: false, has_label: false}]};
   });
   panel._restoreReconcilePending = true;
+  panel._restoreReconcileState = "restored";
   panel._restoreReconcileReview = {
     production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
   };
@@ -1125,6 +1128,39 @@ test("Ineligible restored entity cannot be silently relabeled", async () => {
   assert.match(panel._restoreReconcileMessage, /ne peuvent pas être rétablis/);
 });
 
+test("Interrupted restore can be cancelled only in verified original state", async () => {
+  const calls = [], confirmations = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {resolved: true, production_unchanged: true,
+      apply_performed: false};
+  }, message => {confirmations.push(message); return true;});
+  const nodes = {};
+  for (const id of [
+    "restoreReconcilePanel", "restoreReconcileTitle", "restoreReconcileSummary",
+    "restoreReconcileDetails", "restoreReconcileAddLabels",
+    "restoreReconcileAligned", "restoreReconcileKeepCurrent",
+    "restoreReconcileCancelFailed", "restoreReconcileStatus",
+  ]) nodes[id] = {hidden: true, disabled: true, textContent: ""};
+  panel.querySelector = selector => nodes[selector.slice(1)] || null;
+  panel._restoreReconcilePending = true;
+  panel._restoreReconcileState = "not_written";
+  panel._restoreReconcileReview = {
+    production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
+  };
+  panel._lastAnalysis = {comparison: {status: "ok", added: [],
+    removed: [], modified: [], unchanged: 3, identical_entities: true}};
+  panel._renderRestoreReconciliation();
+  assert.equal(nodes.restoreReconcileCancelFailed.hidden, false);
+  assert.equal(nodes.restoreReconcileAligned.hidden, true);
+  assert.equal(nodes.restoreReconcileKeepCurrent.hidden, true);
+  panel._loadPreview = async () => {panel._restoreReconcilePending = false;};
+  assert.equal(await panel._resolveRestoreReconciliation("cancel_failed"), true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].resolution, "cancel_failed");
+  assert.match(confirmations[0], /interrompue avant de modifier/);
+});
+
 test("Choosing current labels only unlocks a future separate Apply", async () => {
   const calls = [], confirms = [];
   const {panel} = makePanel(async request => {
@@ -1133,6 +1169,7 @@ test("Choosing current labels only unlocks a future separate Apply", async () =>
       apply_performed: false};
   }, message => {confirms.push(message); return true;});
   panel._restoreReconcilePending = true;
+  panel._restoreReconcileState = "restored";
   panel._restoreReconcileReview = {
     production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
   };
