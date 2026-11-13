@@ -11,7 +11,10 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 
 from hvls import (
-    FileWriterError, GenerationRequest, RegistryError, WorkflowError,
+    FileWriterError,
+    GenerationRequest,
+    RegistryError,
+    WorkflowError,
     run_google_assistant_workflow,
 )
 from hvls.owned_writer import evaluate_registered_output
@@ -19,8 +22,8 @@ from hvls.owned_writer import evaluate_registered_output
 from .backup_restore import (
     BackupRestoreError,
     list_backups,
-    restore_reviewed_backup,
     resolve_restored_output,
+    restore_reviewed_backup,
     review_backup,
 )
 from .const import (
