@@ -14,6 +14,10 @@ const HVLS_TRANSLATIONS = {
     tabMigration: "Assistant",
     migrationIntro: "Les simulations ne modifient ni HA, ni labels, ni YAML. La sauvegarde et le journal sont créés uniquement après votre confirmation.",
     migrationGuideTitle: "Identifions votre situation",
+    migrationGuideStepIdentify: "Étape 1 sur 2 — Identifiez votre situation",
+    migrationGuideStepVerify: "Étape 2 sur 2 — Vérifiez les points indiqués",
+    migrationAdvancedTitle: "Outils de diagnostic et de migration (avancé)",
+    migrationRecoveryAttention: "Une opération antérieure nécessite une vérification. Ouvrez les outils avancés avant de continuer.",
     migrationGuideDetected: "Aucune déclaration google_assistant: trouvée dans configuration.yaml. Cela ne prouve pas qu'aucune configuration n'a jamais existé.",
     migrationGuideCandidate: "Un fichier google_assistant_entities.yaml existe, mais il n'est pas référencé par cette configuration. Son origine et son utilisation restent inconnues.",
     migrationGuideNoCandidate: "Aucun fichier google_assistant_entities.yaml habituel n'a été détecté. D'autres sources peuvent néanmoins exister.",
@@ -276,6 +280,10 @@ const HVLS_TRANSLATIONS = {
     tabMigration: "Assistant",
     migrationIntro: "Simulation does not change HA, labels or YAML. The protected backup and journal are created only after explicit confirmation.",
     migrationGuideTitle: "Let's identify your situation",
+    migrationGuideStepIdentify: "Step 1 of 2 — Identify your situation",
+    migrationGuideStepVerify: "Step 2 of 2 — Review the recommended checks",
+    migrationAdvancedTitle: "Diagnostics and migration tools (advanced)",
+    migrationRecoveryAttention: "A previous operation needs review. Open the advanced tools before continuing.",
     migrationGuideDetected: "No google_assistant: declaration was found in configuration.yaml. This does not prove that no configuration ever existed.",
     migrationGuideCandidate: "A google_assistant_entities.yaml file exists but is not referenced by the analyzed configuration. Its origin and use are unknown.",
     migrationGuideNoCandidate: "No usual google_assistant_entities.yaml file was detected. Other sources may still exist.",
@@ -651,6 +659,8 @@ class HVLSPreviewPanel extends HTMLElement {
     const migrationAnalyze = this.querySelector("#migrationAnalyze");
     if (migrationAnalyze) migrationAnalyze.textContent = this._t("migrationAnalyze");
     this._renderMigrationGuide();
+    const advancedSummary = this.querySelector("#migrationAdvanced > summary");
+    if (advancedSummary) advancedSummary.textContent = this._t("migrationAdvancedTitle");
     const migrationPrepare = this.querySelector("#migrationPrepareBaseline");
     if (migrationPrepare) migrationPrepare.textContent = this._t("migrationBaselinePrepare");
     const migrationConfirm = this.querySelector("#migrationConfirmBaseline");
@@ -2103,6 +2113,9 @@ class HVLSPreviewPanel extends HTMLElement {
           <div id="migrationGuide" class="migration-review-note" role="group"
             aria-label="${this._t("migrationGuideTitle")}" hidden>
             <h3 id="migrationGuideTitle">${this._t("migrationGuideTitle")}</h3>
+            <p id="migrationGuideStep" class="diagnostic-note">
+              ${this._t("migrationGuideStepIdentify")}
+            </p>
             <p id="migrationGuideDetected"></p>
             <p id="migrationGuideCandidate"></p>
             <p id="migrationGuideQuestion">${this._t("migrationGuideQuestion")}</p>
@@ -2120,6 +2133,9 @@ class HVLSPreviewPanel extends HTMLElement {
           <button id="migrationAnalyze" type="button" class="secondary">
             ${this._t("migrationAnalyze")}
           </button>
+          <p id="migrationRecoveryAttention" role="alert" class="diagnostic-note" hidden></p>
+          <details id="migrationAdvanced">
+            <summary>${this._t("migrationAdvancedTitle")}</summary>
           <div class="migration-controls">
             <button id="migrationPrepareBaseline" type="button" class="secondary" disabled>
               ${this._t("migrationBaselinePrepare")}
@@ -2167,6 +2183,7 @@ class HVLSPreviewPanel extends HTMLElement {
           <button id="migrationMore" type="button" class="secondary" hidden>
             ${this._t("migrationMore")}
           </button>
+          </details>
         </section>
         <section id="tab-backups" class="hvls-tab-panel" role="tabpanel" hidden>
           <h2>${this._t("tabBackups")}</h2>
@@ -2822,6 +2839,30 @@ class HVLSPreviewPanel extends HTMLElement {
     this._renderMigrationGuide();
   }
 
+  _renderMigrationAdvanced() {
+    const advanced = this.querySelector("#migrationAdvanced");
+    if (!advanced) return;
+    const mode = this._migrationReport?.diagnostic?.mode;
+    const recovery = this._migrationRecoveryReport;
+    const recoveryNeedsAttention = recovery?.needs_review === true ||
+      ["review_required", "snapshot_changed", "unavailable"].includes(recovery?.status);
+    const alert = this.querySelector("#migrationRecoveryAttention");
+    if (alert) {
+      alert.hidden = !recoveryNeedsAttention;
+      alert.textContent = recoveryNeedsAttention
+        ? this._t("migrationRecoveryAttention") : "";
+    }
+    // Never conceal recovery needing attention behind a collapsed section.
+    // For an unblocked new-configuration diagnosis, keep the tools folded.
+    const key = String(mode || "loading") + ":" + String(recoveryNeedsAttention);
+    if (this._migrationAdvancedContext !== key) {
+      if (mode || recoveryNeedsAttention) {
+        advanced.open = recoveryNeedsAttention || mode !== "new_configuration";
+        this._migrationAdvancedContext = key;
+      }
+    }
+  }
+
   _renderMigrationGuide() {
     const guide = this.querySelector("#migrationGuide");
     if (!guide) return;
@@ -2862,6 +2903,9 @@ class HVLSPreviewPanel extends HTMLElement {
         "aria-pressed", String(this._migrationIntent === value)
       );
     }
+    const step = this.querySelector("#migrationGuideStep");
+    if (step) step.textContent = this._t(this._migrationIntent
+      ? "migrationGuideStepVerify" : "migrationGuideStepIdentify");
     const next = this.querySelector("#migrationGuideNext");
     if (next) next.textContent = this._t(
       options[this._migrationIntent]?.[1] || "migrationGuideAwaitChoice"
@@ -2966,6 +3010,7 @@ class HVLSPreviewPanel extends HTMLElement {
     if (!status || !container) return;
     container.replaceChildren();
     const result = this._migrationRecoveryReport;
+    this._renderMigrationAdvanced();
     if (!result) return;
     if (result.status === "not_initialized") {
       status.textContent = this._t("migrationRecoveryNotInitialized");
@@ -3568,6 +3613,7 @@ class HVLSPreviewPanel extends HTMLElement {
     const content = this.querySelector("#migrationRows");
     const more = this.querySelector("#migrationMore");
     this._renderMigrationGuide();
+    this._renderMigrationAdvanced();
     this._migrationBaselineControls();
     if (!status || !summary || !content || !more) return;
     content.replaceChildren();
