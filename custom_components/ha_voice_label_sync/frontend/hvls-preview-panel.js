@@ -3728,6 +3728,10 @@ entity_config: !include google_assistant_entities.yaml</pre>
     } finally {
       this._restoring = false;
       this._updateApplyButton();
+      // Preview was rendered while _restoring was true: recompute the
+      // reconciliation actions now that the restore transaction is finished.
+      // This only updates the UI and never writes labels or production YAML.
+      this._renderRestoreReconciliation();
       await this._loadBackups();
       if (this._restoreResult && status) {
         status.textContent = this._tf("backupRestored", {backup: this._restoreResult})
