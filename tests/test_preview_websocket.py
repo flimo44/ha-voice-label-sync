@@ -165,7 +165,15 @@ def websocket_module(monkeypatch):
     backup_module.list_backups = Mock(return_value={"backups": []})
     backup_module.review_backup = Mock()
     backup_module.restore_reviewed_backup = Mock()
+    backup_module.resolve_restored_output = Mock()
     monkeypatch.setitem(sys.modules, f"{prefix}.backup_restore", backup_module)
+
+    restore_guard_module = ModuleType(f"{prefix}.restore_guard")
+    restore_guard_module.assert_not_guarded = Mock()
+    restore_guard_module.read_guard = Mock(return_value=None)
+    monkeypatch.setitem(
+        sys.modules, f"{prefix}.restore_guard", restore_guard_module
+    )
 
     # Mock dependencies of the apply_preview WebSocket command.
     apply_module = ModuleType(f"{prefix}.preview_apply")
@@ -738,3 +746,70 @@ def test_preview_disables_apply_for_unmanaged_yaml(
     # The diagnostic must be completely read-only.
     assert output.read_bytes() == before
     assert not registry_path.exists()
+
+
+
+def test_server_apply_is_blocked_while_restore_is_unresolved(websocket_module):
+    ws = websocket_module.websocket
+    ws.assert_not_guarded.side_effect = ws.FileWriterError(
+        "Restore reconciliation required"
+    )
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_preview(
+        make_hass(), connection,
+        {"id": 911, "preview_sha256": "a" * 64,
+         "production_sha256": "b" * 64},
+    ))
+    assert connection.send_error.call_args.args[1] == "apply_failed"
+    ws.apply_reviewed_preview.assert_not_called()
+
+
+def test_preview_refuses_apply_from_persistent_restore_hold(websocket_module):
+    ws = websocket_module.websocket
+    ws.evaluate_registered_output = Mock(return_value=SimpleNamespace(
+        status="managed", write_allowed=True,
+        reason_code="verified_owned_output", reason="Verified",
+    ))
+    ws.read_guard.return_value = {
+        "entry_id": "test-installation",
+        "output_path": ws.DEFAULT_OUTPUT,
+        "original_sha256": "c" * 64,
+        "restored_sha256": "d" * 64,
+    }
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_get_preview(
+        make_hass(), connection, {"id": 912},
+    ))
+    connection.send_error.assert_not_called()
+    result = connection.send_result.call_args.args[1]
+    assert result["ownership"]["reason_code"] == (
+        "restore_reconciliation_required"
+    )
+    assert result["ownership"]["write_allowed"] is False
+    assert result["can_apply"] is False
+
+
+def test_restore_resolution_regenerates_from_live_labels(websocket_module):
+    ws = websocket_module.websocket
+    ws.run_google_assistant_workflow = Mock(return_value=SimpleNamespace(
+        generation=SimpleNamespace(content="switch.generated:\n  expose: true\n"),
+    ))
+    ws.resolve_restored_output = Mock(return_value={
+        "resolved": True, "production_unchanged": True,
+        "apply_performed": False,
+    })
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_resolve_restored_output(
+        make_hass(), connection,
+        {"id": 913, "preview_sha256": "a" * 64,
+         "production_sha256": "b" * 64,
+         "resolution": "keep_restored", "confirmed": True},
+    ))
+    connection.send_error.assert_not_called()
+    ws.resolve_restored_output.assert_called_once()
+    assert ws.resolve_restored_output.call_args.kwargs["generated_content"] == (
+        "switch.generated:\n  expose: true\n"
+    )
+    assert ws.resolve_restored_output.call_args.kwargs["entry_id"] == (
+        "test-installation"
+    )

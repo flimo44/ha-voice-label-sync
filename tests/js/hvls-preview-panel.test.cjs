@@ -1013,6 +1013,180 @@ test("Statistics identify Preview entities rather than restored production", () 
   assert.match(source, /id="restoreSummaryNotice"/);
 });
 
+test("Durable restore protection offers safe choices after panel reload", () => {
+  const {panel} = makePanel(async () => ({}));
+  const nodes = {};
+  for (const id of [
+    "restoreReconcilePanel", "restoreReconcileTitle", "restoreReconcileSummary",
+    "restoreReconcileDetails", "restoreReconcileAddLabels",
+    "restoreReconcileAligned", "restoreReconcileKeepCurrent",
+    "restoreReconcileCancelFailed", "restoreReconcileStatus",
+  ]) nodes[id] = {hidden: true, disabled: true, textContent: ""};
+  panel.querySelector = selector => nodes[selector.slice(1)] || null;
+  panel._restoreReconcilePending = true;
+  panel._restoreReconcileState = "restored";
+  panel._restoreReconcileReview = {
+    production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
+  };
+  panel._lastAnalysis = {comparison: {
+    status: "ok", added: [], removed: ["switch.piscine_chauffage"],
+    modified: [], unchanged: 3, identical_entities: false,
+  }};
+  panel._renderRestoreReconciliation();
+  assert.equal(nodes.restoreReconcilePanel.hidden, false);
+  assert.equal(nodes.restoreReconcileAddLabels.hidden, false);
+  assert.equal(nodes.restoreReconcileAddLabels.disabled, false);
+  assert.equal(nodes.restoreReconcileKeepCurrent.hidden, false);
+  assert.equal(nodes.restoreReconcileAligned.hidden, true);
+  assert.match(nodes.restoreReconcileSummary.textContent, /YAML restauré est protégé/);
+  assert.match(nodes.restoreReconcileDetails.textContent, /1 suppression/);
+  panel._lastAnalysis.comparison = {...panel._lastAnalysis.comparison,
+    removed: [], identical_entities: true, unchanged: 4};
+  panel._renderRestoreReconciliation();
+  assert.equal(nodes.restoreReconcileAddLabels.hidden, true);
+  assert.equal(nodes.restoreReconcileAligned.hidden, false);
+  assert.equal(nodes.restoreReconcileKeepCurrent.hidden, true);
+});
+
+test("Restoring a missing HVLS label reconciles without touching production", async () => {
+  const calls = [], confirmations = [];
+  let restored = false, resolved = false;
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    if (request.type === "ha_voice_label_sync/get_entities") {
+      return {entities: [{entity_id: "switch.piscine_chauffage",
+        eligible: true, has_label: false}]};
+    }
+    if (request.type === "ha_voice_label_sync/set_entity_label") {
+      assert.equal(request.entity_id, "switch.piscine_chauffage");
+      assert.equal(request.enabled, true);
+      assert.equal(request.expected_enabled, false);
+      restored = true;
+      return {changed: true, has_label: true};
+    }
+    if (request.type === "ha_voice_label_sync/generate_preview") {
+      assert.equal(restored, true);
+      return {generated: true};
+    }
+    if (request.type === "ha_voice_label_sync/resolve_restored_output") {
+      assert.equal(request.resolution, "keep_restored");
+      assert.equal(request.confirmed, true);
+      resolved = true;
+      return {resolved: true, production_unchanged: true,
+        apply_performed: false};
+    }
+    throw new Error("Unexpected network operation");
+  }, message => {confirmations.push(message); return true;});
+  panel._restoreReconcilePending = true;
+  panel._restoreReconcileState = "restored";
+  panel._restoreReconcileReview = {
+    production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
+  };
+  panel._lastAnalysis = {comparison: {status: "ok", added: [],
+    removed: ["switch.piscine_chauffage"], modified: [],
+    unchanged: 3, identical_entities: false}};
+  panel._renderRestoreReconciliation = () => {};
+  panel._loadPreview = async () => {
+    panel._lastAnalysis.comparison = {
+      status: "ok", added: [], removed: [], modified: [],
+      unchanged: 4, identical_entities: true,
+    };
+    panel._restoreReconcilePending = !resolved;
+  };
+  await panel._restoreMissingLabels();
+  assert.equal(resolved, true);
+  assert.deepEqual(calls.map(x => x.type), [
+    "ha_voice_label_sync/get_entities",
+    "ha_voice_label_sync/set_entity_label",
+    "ha_voice_label_sync/generate_preview",
+    "ha_voice_label_sync/resolve_restored_output",
+  ]);
+  assert.match(confirmations[0], /switch.piscine_chauffage/);
+  assert.doesNotMatch(calls.map(x => x.type).join(","), /apply_preview|restore_backup/);
+  assert.equal(panel._restoreReconcilePending, false);
+});
+
+test("Ineligible restored entity cannot be silently relabeled", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request.type);
+    return {entities: [{entity_id: "switch.piscine_chauffage",
+      eligible: false, has_label: false}]};
+  });
+  panel._restoreReconcilePending = true;
+  panel._restoreReconcileState = "restored";
+  panel._restoreReconcileReview = {
+    production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
+  };
+  panel._lastAnalysis = {comparison: {status: "ok", added: [],
+    removed: ["switch.piscine_chauffage"], modified: [],
+    unchanged: 3, identical_entities: false}};
+  panel._renderRestoreReconciliation = () => {};
+  panel._loadPreview = async () => {};
+  await panel._restoreMissingLabels();
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_entities"]);
+  assert.match(panel._restoreReconcileMessage, /ne peuvent pas être rétablis/);
+});
+
+test("Interrupted restore can be cancelled only in verified original state", async () => {
+  const calls = [], confirmations = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {resolved: true, production_unchanged: true,
+      apply_performed: false};
+  }, message => {confirmations.push(message); return true;});
+  const nodes = {};
+  for (const id of [
+    "restoreReconcilePanel", "restoreReconcileTitle", "restoreReconcileSummary",
+    "restoreReconcileDetails", "restoreReconcileAddLabels",
+    "restoreReconcileAligned", "restoreReconcileKeepCurrent",
+    "restoreReconcileCancelFailed", "restoreReconcileStatus",
+  ]) nodes[id] = {hidden: true, disabled: true, textContent: ""};
+  panel.querySelector = selector => nodes[selector.slice(1)] || null;
+  panel._restoreReconcilePending = true;
+  panel._restoreReconcileState = "not_written";
+  panel._restoreReconcileReview = {
+    production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
+  };
+  panel._lastAnalysis = {comparison: {status: "ok", added: [],
+    removed: [], modified: [], unchanged: 3, identical_entities: true}};
+  panel._renderRestoreReconciliation();
+  assert.equal(nodes.restoreReconcileCancelFailed.hidden, false);
+  assert.equal(nodes.restoreReconcileAligned.hidden, true);
+  assert.equal(nodes.restoreReconcileKeepCurrent.hidden, true);
+  panel._loadPreview = async () => {panel._restoreReconcilePending = false;};
+  assert.equal(await panel._resolveRestoreReconciliation("cancel_failed"), true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].resolution, "cancel_failed");
+  assert.match(confirmations[0], /interrompue avant de modifier/);
+});
+
+test("Choosing current labels only unlocks a future separate Apply", async () => {
+  const calls = [], confirms = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {resolved: true, production_unchanged: true,
+      apply_performed: false};
+  }, message => {confirms.push(message); return true;});
+  panel._restoreReconcilePending = true;
+  panel._restoreReconcileState = "restored";
+  panel._restoreReconcileReview = {
+    production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
+  };
+  panel._lastAnalysis = {comparison: {
+    status: "ok", added: [], removed: ["switch.piscine_chauffage"],
+    modified: [], unchanged: 3, identical_entities: false,
+  }};
+  panel._renderRestoreReconciliation = () => {};
+  panel._loadPreview = async () => {panel._restoreReconcilePending = false;};
+  assert.equal(await panel._resolveRestoreReconciliation("keep_current_labels"), true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].type, "ha_voice_label_sync/resolve_restored_output");
+  assert.equal(calls[0].resolution, "keep_current_labels");
+  assert.match(confirms[0], /futur Apply pourra remplacer/);
+  assert.equal(panel._restoreReconcilePending, false);
+});
+
 test("Identical backup is never restored even with confirmation", async () => {
   const calls = [];
   const { panel } = makePanel(async message => { calls.push(message); });

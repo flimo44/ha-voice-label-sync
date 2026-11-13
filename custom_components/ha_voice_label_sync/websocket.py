@@ -10,12 +10,19 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 
-from hvls import FileWriterError, GenerationRequest, RegistryError, WorkflowError
+from hvls import (
+    FileWriterError,
+    GenerationRequest,
+    RegistryError,
+    WorkflowError,
+    run_google_assistant_workflow,
+)
 from hvls.owned_writer import evaluate_registered_output
 
 from .backup_restore import (
     BackupRestoreError,
     list_backups,
+    resolve_restored_output,
     restore_reviewed_backup,
     review_backup,
 )
@@ -38,6 +45,7 @@ from .preview_apply import apply_reviewed_preview
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_exclusions import analyze_exclusions
 from .preview_guard import PreviewChangedError, preview_digest
+from .restore_guard import assert_not_guarded, read_guard
 from .services import DEFAULT_DOMAINS, async_run_workflow
 from .workflow_lock import get_workflow_lock
 
@@ -1164,14 +1172,51 @@ async def websocket_get_preview(
             entries[0].entry_id,
             Path(hass.config.path(".hvls", "ownership.json")),
         )
-        result["ownership"] = {
+        ownership_details = {
             "status": ownership.status,
             "reason": ownership.reason,
             "reason_code": ownership.reason_code,
             "write_allowed": ownership.write_allowed,
         }
+        try:
+            pending_restore = await hass.async_add_executor_job(
+                read_guard, Path(hass.config.path(".hvls", "ownership.json"))
+            )
+        except FileWriterError:
+            ownership_details = {
+                "status": "unknown", "write_allowed": False,
+                "reason_code": "restore_guard_invalid",
+                "reason": "Restore record cannot be verified; production is protected.",
+            }
+        else:
+            if pending_restore is not None and ownership.status == "managed":
+                if (pending_restore["entry_id"] == entries[0].entry_id
+                        and pending_restore["output_path"] == str(output_path)):
+                    ownership_details = {
+                        "status": "restore_pending", "write_allowed": False,
+                        "reason_code": "restore_reconciliation_required",
+                        "reason": "Restore labels before another Apply.",
+                    }
+                    production_sha = result.get("production_sha256")
+                    if production_sha == pending_restore["restored_sha256"]:
+                        guard_state = "restored"
+                    elif production_sha == pending_restore["original_sha256"]:
+                        guard_state = "not_written"
+                    else:
+                        guard_state = "uncertain"
+                    result["restore_reconciliation"] = {
+                        "state": guard_state, "required": True,
+                    }
+                else:
+                    ownership_details = {
+                        "status": "unknown", "write_allowed": False,
+                        "reason_code": "restore_guard_mismatch",
+                        "reason": "Another restore transaction is unresolved.",
+                    }
+        result["ownership"] = ownership_details
         result["can_apply"] = bool(
-            result.get("can_apply", False) and ownership.write_allowed
+            result.get("can_apply", False)
+            and ownership_details["write_allowed"]
         )
     else:
         result["ownership"] = {
@@ -1244,6 +1289,10 @@ async def websocket_apply_preview(
         preview_path = Path(hass.config.path(".hvls", "preview.yaml"))
 
         try:
+            assert_not_guarded(
+                Path(hass.config.path(".hvls", "ownership.json")),
+                entries[0].entry_id, output_path,
+            )
             registries = get_live_registries(hass)
             result = await hass.async_add_executor_job(
                 partial(
@@ -1435,6 +1484,7 @@ async def websocket_set_entity_label(
 WS_TYPE_LIST_BACKUPS = f"{DOMAIN}/list_backups"
 WS_TYPE_REVIEW_BACKUP = f"{DOMAIN}/review_backup"
 WS_TYPE_RESTORE_BACKUP = f"{DOMAIN}/restore_backup"
+WS_TYPE_RESOLVE_RESTORE = f"{DOMAIN}/resolve_restored_output"
 
 
 def _configured_output(hass: HomeAssistant) -> Path:
@@ -1540,6 +1590,71 @@ async def websocket_restore_backup(
         connection.send_result(msg["id"], result)
 
 
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_RESOLVE_RESTORE,
+    vol.Required("production_sha256"): str,
+    vol.Required("preview_sha256"): str,
+    vol.Required("resolution"): str,
+    vol.Required("confirmed"): bool,
+})
+async def websocket_resolve_restored_output(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """End restore protection only after a fresh, explicit decision."""
+    async with get_workflow_lock(hass):
+        try:
+            entries = hass.config_entries.async_entries(DOMAIN)
+            if len(entries) != 1:
+                raise BackupRestoreError("HVLS entry unavailable or ambiguous")
+            path = _configured_output(hass)
+            settings = {**entries[0].data, **entries[0].options}
+            registries = get_live_registries(hass)
+            request = GenerationRequest(
+                label=settings.get(CONF_LABEL, DEFAULT_LABEL),
+                domains=DEFAULT_DOMAINS,
+                output_path=path,
+                dry_run=True,
+            )
+            generated = await hass.async_add_executor_job(
+                partial(
+                    run_google_assistant_workflow,
+                    request=request,
+                    registries=registries,
+                )
+            )
+            result = await hass.async_add_executor_job(
+                partial(
+                    resolve_restored_output,
+                    path,
+                    Path(hass.config.path(".hvls", "preview.yaml")),
+                    entry_id=entries[0].entry_id,
+                    ownership_registry_path=Path(
+                        hass.config.path(".hvls", "ownership.json")
+                    ),
+                    production_sha256=msg["production_sha256"],
+                    preview_sha256=msg["preview_sha256"],
+                    resolution=msg["resolution"],
+                    confirmed=msg["confirmed"],
+                    generated_content=generated.generation.content,
+                )
+            )
+        except (
+            BackupRestoreError, PreviewChangedError, FileWriterError,
+            RegistryError, WorkflowError, OSError, ValueError,
+            TypeError, KeyError, AttributeError,
+        ):
+            connection.send_error(
+                msg["id"], "restore_reconciliation_refused",
+                "The restoration cannot be reconciled. Refresh and review again.",
+            )
+            return
+    connection.send_result(msg["id"], result)
+
+
 def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register the HVLS WebSocket API."""
     websocket_api.async_register_command(hass, websocket_get_preview)
@@ -1616,3 +1731,6 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_list_backups)
     websocket_api.async_register_command(hass, websocket_review_backup)
     websocket_api.async_register_command(hass, websocket_restore_backup)
+    websocket_api.async_register_command(
+        hass, websocket_resolve_restored_output
+    )

@@ -32,6 +32,7 @@ from .const import (
     DOMAIN,
 )
 from .ha_registries import get_live_registries
+from .restore_guard import assert_not_guarded
 from .workflow_lock import get_workflow_lock
 
 _LOGGER = logging.getLogger(__name__)
@@ -112,6 +113,12 @@ async def _async_run_workflow_unlocked(
 
     if not output_path.is_absolute():
         output_path = Path(hass.config.config_dir) / output_path
+
+    if not dry_run:
+        assert_not_guarded(
+            Path(hass.config.path(".hvls", "ownership.json")),
+            entry.entry_id, output_path,
+        )
 
     # Snapshot native HA registries on the event-loop thread.
     try:
