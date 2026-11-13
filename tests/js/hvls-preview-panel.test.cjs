@@ -867,7 +867,7 @@ test("Restore of 4 entities over 3 clears stale backup diff and warns about next
     backupStatus: {textContent: ""},
     backupList: {children: [], replaceChildren(...children) {
       this.children = children;
-    }},
+    }, appendChild(child) {this.children.push(child);}},
     restoreBackup: {disabled: false},
     backupRestoreNotice: {hidden: true, textContent: ""},
     restoreSummaryNotice: {hidden: true, textContent: ""},
