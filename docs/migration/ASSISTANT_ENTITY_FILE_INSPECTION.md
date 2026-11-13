@@ -60,5 +60,39 @@ Beta VM acceptance criteria:
 6. The migration preparation button stays disabled while no resolved active
    manual configuration is detected.
 
-This phase does not implement full QQOQCP explanations or migration from
-an unreferenced file.
+## Guided provenance review (PR #144)
+
+After a successful standalone inspection (including a partially anomalous
+file with `review_required`), the Assistant displays a third, **local**
+review step for `new_configuration` plus the user-selected existing/unsure
+path. The user can say:
+- The file was part of an older Google Assistant configuration.
+- Its origin is unknown.
+- It was prepared for a new configuration.
+
+Each choice reveals an appropriate **research suggestion**, not a source
+attestation. The panel distinguishes:
+1. **Verified:** the bounded YAML file was read, explicit entries counted,
+   and local issues reported without blocking inspection of other entries.
+2. **Unknown:** the analyzed configuration does not reference the file;
+   historical `expose_by_default` / `exposed_domains`, loaded HA policy and
+   Google Home effective exposure remain unverified.
+3. **Next check:** review previous HA backups/configurations for source
+   references and global rules; never activate a historical configuration
+   merely to satisfy the assistant.
+
+A declared origin is never posted to any WebSocket endpoint, stored on
+disk, turned into approval evidence or used to satisfy baseline eligibility.
+The choice is cleared when the file path, migration path, or main discovery
+changes, and when re-inspection begins. A late stale inspection response
+cannot revive it. Packages remain classified as **Other configuration**
+and do not receive the historical-source review panel. A malformed, blocked,
+or forged inspection cannot display the review step.
+
+The test VM should verify the 52-entry example, switching the three origin
+choices, `review_required` non-global anomaly treatment, then changing the
+file path and rerunning the diagnostic. No action should modify HA labels,
+Google Assistant YAML, or migration state.
+
+This phase does not implement automatic provenance attestation, full
+QQOQCP for every entity anomaly, or migration from an unreferenced file.
