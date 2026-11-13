@@ -2544,6 +2544,79 @@ test("Apply reason code: French localization", async () => {
   assert.doesNotMatch(explanation.textContent, /Existing manual/i);
 });
 
+test("Unmanaged YAML offers Assistant inspection without unlocking Apply", async () => {
+  const calls = [];
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request.type);
+    return {
+      ...preview(false),
+      ownership: {
+        status: "unmanaged", write_allowed: false,
+        reason_code: "unmanaged_output",
+        reason: "Protected manual YAML",
+      },
+    };
+  });
+  const info = {hidden: true, open: false, title: ""};
+  const explanation = {textContent: ""};
+  const hint = {hidden: true, textContent: ""};
+  const action = {hidden: true, textContent: ""};
+  const originalQuery = panel.querySelector.bind(panel);
+  panel.querySelector = selector => ({
+    "#applyInfo": info,
+    "#applyBlockReason": explanation,
+    "#applyUnmanagedAssistantHint": hint,
+    "#applyUnmanagedAssistant": action,
+  }[selector] || originalQuery(selector));
+
+  await panel._loadPreview();
+  assert.equal(controls.apply.disabled, true);
+  assert.equal(panel._review, null);
+  assert.equal(info.hidden, false);
+  assert.equal(hint.hidden, false);
+  assert.equal(action.hidden, false);
+  assert.match(hint.textContent, /lecture seule/);
+  assert.match(hint.textContent, /pas automatiquement/);
+  assert.equal(action.textContent, "Examiner dans l'Assistant");
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_preview"]);
+  assert.match(source, /querySelector\("#applyUnmanagedAssistant"\)\.addEventListener\(/);
+  assert.match(source, /"click", \(\) => this\._activateTab\("migration"\)/);
+  panel._language = "en";
+  panel._updateApplyButton();
+  assert.match(hint.textContent, /read-only/);
+  assert.equal(action.textContent, "Inspect in Assistant");
+  assert.equal(controls.apply.disabled, true);
+  assert.equal(calls.length, 1);
+});
+
+test("Assistant shortcut is hidden for unrelated Apply refusals and healthy output", async () => {
+  let denied = true;
+  const {panel, controls} = makePanel(async () => denied
+    ? {...preview(false), ownership: {
+        status: "unmanaged", write_allowed: false,
+        reason_code: "verification_failed", reason: "Check failed",
+      }}
+    : preview(true)
+  );
+  const hint = {hidden: false, textContent: ""};
+  const action = {hidden: false, textContent: ""};
+  const originalQuery = panel.querySelector.bind(panel);
+  panel.querySelector = selector => ({
+    "#applyUnmanagedAssistantHint": hint,
+    "#applyUnmanagedAssistant": action,
+  }[selector] || originalQuery(selector));
+  await panel._loadPreview();
+  assert.equal(controls.apply.disabled, true);
+  assert.equal(hint.hidden, true);
+  assert.equal(action.hidden, true);
+  denied = false;
+  await panel._loadPreview();
+  assert.equal(controls.apply.disabled, false);
+  assert.equal(hint.hidden, true);
+  assert.equal(action.hidden, true);
+  assert.equal(hint.textContent, "");
+});
+
 test("Apply reason code: language change without new WebSocket", async () => {
   let calls = 0;
 

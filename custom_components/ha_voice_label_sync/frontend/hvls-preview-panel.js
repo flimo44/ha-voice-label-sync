@@ -369,6 +369,8 @@ const HVLS_TRANSLATIONS = {
     applyReasonRegistryInvalid: "Le registre de propriété HVLS est invalide ou illisible. Vérification nécessaire.",
     applyReasonOtherInstallation: "Ce fichier appartient à une autre installation HVLS. Écriture interdite.",
     applyReasonUnmanagedOutput: "Un fichier YAML existe déjà, mais sa propriété n'est pas vérifiée par HVLS. Il reste protégé.",
+    applyUnmanagedAssistantHint: "L'Assistant peut examiner ce fichier en lecture seule. Cette analyse ne débloque pas automatiquement l'Apply.",
+    applyUnmanagedAssistantAction: "Examiner dans l'Assistant",
     applyReasonMissingDirectory: "Le répertoire de destination est indisponible.",
     applyReasonVerificationFailed: "La vérification de sécurité du fichier a échoué. Apply reste désactivé.",
     applyReasonOutputPathMismatch: "Le chemin de sortie ne correspond plus au chemin enregistré par HVLS.",
@@ -776,6 +778,8 @@ const HVLS_TRANSLATIONS = {
     applyReasonRegistryInvalid: "The HVLS ownership registry is invalid or unreadable. Verification is required.",
     applyReasonOtherInstallation: "This file belongs to another HVLS installation. Writing is prohibited.",
     applyReasonUnmanagedOutput: "An existing YAML file is not verified as HVLS-owned. It remains protected.",
+    applyUnmanagedAssistantHint: "The Assistant can inspect this file in read-only mode. Inspection does not automatically enable Apply.",
+    applyUnmanagedAssistantAction: "Inspect in Assistant",
     applyReasonMissingDirectory: "The output directory is unavailable.",
     applyReasonVerificationFailed: "File safety verification failed. Apply remains disabled.",
     applyReasonOutputPathMismatch: "The output path no longer matches the path registered by HVLS.",
@@ -1232,6 +1236,21 @@ class HVLSPreviewPanel extends HTMLElement {
     const explanation = this.querySelector("#applyBlockReason");
     if (explanation) {
       explanation.textContent = displayReason;
+    }
+
+    // Unmanaged files can be inspected, not automatically adopted as HVLS-owned.
+    const showAssistant = Boolean(displayReason) &&
+      this._applyBlockReasonCode === "unmanaged_output";
+    const assistantHint = this.querySelector("#applyUnmanagedAssistantHint");
+    if (assistantHint) {
+      assistantHint.hidden = !showAssistant;
+      assistantHint.textContent = showAssistant
+        ? this._t("applyUnmanagedAssistantHint") : "";
+    }
+    const assistantAction = this.querySelector("#applyUnmanagedAssistant");
+    if (assistantAction) {
+      assistantAction.hidden = !showAssistant;
+      assistantAction.textContent = this._t("applyUnmanagedAssistantAction");
     }
 
     const refresh = this.querySelector("#refresh");
@@ -2318,6 +2337,13 @@ class HVLSPreviewPanel extends HTMLElement {
           border-radius:8px;
           overflow-wrap:anywhere;
         }
+        .apply-info > .apply-assistant-action {
+          display:block;
+          margin-top:8px;
+          max-width:100%;
+          white-space:normal;
+        }
+        .apply-info > .apply-assistant-action[hidden] { display:none; }
         .preview-yaml-tools { display:flex; align-items:center; justify-content:flex-end; margin:8px 0; }
         .preview-change-group {
           margin:10px 0;
@@ -2440,6 +2466,11 @@ class HVLSPreviewPanel extends HTMLElement {
           <details id="applyInfo" class="apply-info" hidden>
             <summary aria-label="${this._t("applyInfoLabel")}">ⓘ</summary>
             <p id="applyBlockReason" class="diagnostic-note"></p>
+            <p id="applyUnmanagedAssistantHint" class="diagnostic-note" hidden></p>
+            <button id="applyUnmanagedAssistant" type="button"
+              class="secondary apply-assistant-action" hidden>
+              ${this._t("applyUnmanagedAssistantAction")}
+            </button>
           </details>
           <button id="apply" type="button" disabled>${this._t("apply")}</button>
         </div>
@@ -2697,6 +2728,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this.querySelector("#refresh").addEventListener("click", () => this._refreshAll());
     this.querySelector("#copy").addEventListener("click", () => this._copyPreview());
     this.querySelector("#apply").addEventListener("click", () => this._applyPreview());
+    this.querySelector("#applyUnmanagedAssistant").addEventListener(
+      "click", () => this._activateTab("migration")
+    );
     this.querySelector("#restoreBackup").addEventListener("click", () => this._restoreBackup());
     this.querySelector("#migrationAnalyze").addEventListener("click", () => this._loadMigrationReview());
     this.querySelector("#migrationIntentNew").addEventListener("click", () => this._chooseMigrationIntent("new"));
