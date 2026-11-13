@@ -299,6 +299,7 @@ def test_restore_updates_ownership_digest(backup_module, sample):
         production_sha256=backup_module.preview_digest(output.read_text()),
         preview_sha256=backup_module.preview_digest(preview_path.read_text()),
         resolution="keep_current_labels", confirmed=True,
+        generated_content=preview_path.read_text(),
     )
     assert result["resolved"] is True
     assert result["apply_performed"] is False
@@ -346,6 +347,7 @@ def test_generation_retention_preserves_restore_safety_backup(
         production_sha256=backup_module.preview_digest(output.read_text()),
         preview_sha256=backup_module.preview_digest(preview_path.read_text()),
         resolution="keep_restored", confirmed=True,
+        generated_content=preview_path.read_text(),
     )
 
     write_owned_output(
@@ -446,6 +448,7 @@ def test_restore_reconcile_real_three_four_cycle(backup_module, tmp_path):
         production_sha256=backup_module.preview_digest(restored),
         preview_sha256=backup_module.preview_digest(restored),
         resolution="keep_restored", confirmed=True,
+        generated_content=preview_path.read_text(),
     )
     assert resolved["resolved"] is True
     assert resolved["production_unchanged"] is True
@@ -479,17 +482,20 @@ def test_restore_reconciliation_refuses_unaligned_or_stale(
         backup_module.resolve_restored_output(
             output, preview_path, **common,
             resolution="keep_restored", confirmed=True,
+        generated_content=preview_path.read_text(),
         )
     with pytest.raises(backup_module.BackupRestoreError, match="Explicit"):
         backup_module.resolve_restored_output(
             output, preview_path, **common,
             resolution="keep_current_labels", confirmed=False,
+            generated_content=preview_path.read_text(),
         )
     with pytest.raises(backup_module.PreviewChangedError, match="changed"):
         backup_module.resolve_restored_output(
             output, preview_path,
             **{**common, "preview_sha256": "f" * 64},
             resolution="keep_current_labels", confirmed=True,
+        generated_content=preview_path.read_text(),
         )
     assert guard_path(registry_path).is_file()
     assert "switch.new" in output.read_text()
