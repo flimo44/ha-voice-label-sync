@@ -1201,6 +1201,7 @@ class HVLSPreviewPanel extends HTMLElement {
           : null;
 
       this._updateApplyButton();
+      this._renderAssistantAdoption();
       this._setContent(result.content || "");
       this._renderAnalysis(result);
       if (!result.available) {
@@ -2766,6 +2767,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._assistantFileChecking = false;
       this._assistantProvenanceChoice = null;
       this._assistantAdoptMessage = null;
+      this._assistantTakeoverMessage = null;
       this._invalidateHistoricalReview();
       this._renderAssistantFileStatus();
     });
@@ -3800,7 +3802,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const takeoverSection = this.querySelector("#assistantTakeoverSection");
     const takeoverVisible = this._assistantAdoptionAvailable() &&
       this._applyBlockReasonCode === "unmanaged_output";
-    if (takeoverSection) takeoverSection.hidden = !takeoverVisible;
+    if (takeoverSection) takeoverSection.hidden = !takeoverVisible &&
+      !this._assistantTakeoverMessage;
     for (const id of ["assistantTakeoverTitle", "assistantTakeoverIntro",
                       "assistantTakeoverButton"]) {
       const node = this.querySelector("#" + id);
@@ -3809,6 +3812,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
         ? "assistantTakeoverAction" : id);
     }
     const takeoverAction = this.querySelector("#assistantTakeoverButton");
+    if (takeoverAction) takeoverAction.hidden = !takeoverVisible;
     if (takeoverAction) takeoverAction.disabled = !takeoverVisible ||
       this._assistantTakeoverBusy === true ||
       this._assistantAdoptBusy === true ||
