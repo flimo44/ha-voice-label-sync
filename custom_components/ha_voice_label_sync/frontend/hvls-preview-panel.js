@@ -83,7 +83,7 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptConfirm: "Ajouter les labels HVLS aux {count} entités compatibles ? Le fichier YAML source et Google Assistant ne seront pas modifiés. Chaque ajout est contrôlé séparément : en cas d'échec, les ajouts déjà effectués sont conservés et signalés.",
     assistantAdoptBusy: "Ajout des labels HVLS : {done} / {total}",
     assistantAdoptDone: "{count} label(s) ajouté(s). Le YAML d'origine est conservé ; un nouveau Preview a été demandé. Vérifiez-le avant toute application.",
-    assistantAdoptStopped: "{count} label(s) ajouté(s) avant interruption. Aucun autre ajout lancé. Actualisez la comparaison avant de reprendre.",
+    assistantAdoptStopped: "{count} label(s) confirmé(s) avant interruption. Vérifiez le catalogue actualisé : une opération sans réponse peut avoir été appliquée. Aucun réessai automatique.",
     assistantAdoptStale: "Fichier ou catalogue modifié depuis la vérification. Aucune nouvelle action : vérifiez à nouveau.",
     assistantAdoptNeedsReview: "Les entités exclues, absentes, non éligibles, à expose implicite ou avec nom/pièce/alias personnalisés restent à examiner ; ces réglages ne sont pas déduits des labels.",
     assistantAdoptTruncated: "Le fichier comporte trop d'entrées pour une reprise complète ; aucun ajout groupé n'est proposé.",
@@ -481,7 +481,7 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptConfirm: "Add HVLS labels to {count} eligible entities? Neither the source YAML nor Google Assistant will be changed. Each addition is checked independently: if one fails, earlier successful additions remain and are reported.",
     assistantAdoptBusy: "Adding HVLS labels: {done} / {total}",
     assistantAdoptDone: "{count} label(s) added. Original YAML preserved; a new Preview was requested. Review it before applying.",
-    assistantAdoptStopped: "{count} label(s) added before interruption. No further additions attempted. Refresh the comparison before retrying.",
+    assistantAdoptStopped: "{count} label addition(s) confirmed before interruption. Check the refreshed catalog: an unanswered operation might still have succeeded. No automatic retry.",
     assistantAdoptStale: "File or catalog changed since inspection. No new action taken: inspect it again.",
     assistantAdoptNeedsReview: "Excluded, missing, ineligible, implicitly exposed or customized name/room/alias entities need review; labels cannot reconstruct those settings.",
     assistantAdoptTruncated: "File contains too many entries for a complete reuse plan; no bulk label additions are suggested.",
@@ -3731,6 +3731,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._updateApplyButton();
     let completed = 0;
     let finished = false;
+    let writeAttempted = false;
     this._assistantAdoptMessage = this._tf("assistantAdoptBusy", {
       done: completed, total: ids.length,
     });
@@ -3768,6 +3769,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
         }
         // Existing admin-only, per-entity, eligibility-checked HA label API.
         // No migration staging API, source YAML write or Google cutover.
+        writeAttempted = true;
         const response = await this._hass.callWS({
           type: "ha_voice_label_sync/set_entity_label",
           entity_id, enabled: true, expected_enabled: false,
@@ -3786,7 +3788,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     } catch (_error) {
       // Fail at the first uncertain result. Never guess a rollback.
     } finally {
-      if (completed > 0) {
+      if (writeAttempted) {
         await this._loadEntities();
         await this._generatePreview(); // Preview only; never Apply YAML.
       }
@@ -3794,7 +3796,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._assistantAdoptBusy = false;
       this._assistantAdoptMessage = this._tf(
         finished ? "assistantAdoptDone" :
-          completed ? "assistantAdoptStopped" : "assistantAdoptStale",
+          writeAttempted ? "assistantAdoptStopped" : "assistantAdoptStale",
         {count: completed}
       );
       this._updateApplyButton();
