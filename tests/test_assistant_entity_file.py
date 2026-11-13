@@ -179,3 +179,16 @@ def test_inspector_websocket_is_admin_only_and_executor_offloaded():
         and node.name == "async_register_websocket_api"
     )
     assert "websocket_inspect_assistant_entity_file" in ast.unparse(register)
+
+
+def test_wrong_yaml_root_keys_are_not_echoed(inspector, tmp_path):
+    (tmp_path / "entities.yaml").write_text(
+        "SENSITIVE_ADMIN_PASSWORD: top-secret\n"
+        "light.safe:\n  expose: true\n",
+        encoding="utf-8",
+    )
+    report = inspector.inspect_google_entity_file(tmp_path, "entities.yaml")
+    assert report["counts"]["entries_with_anomalies"] == 1
+    assert report["issue_examples"][0]["entity_id"] is None
+    assert "SENSITIVE_ADMIN_PASSWORD" not in json.dumps(report)
+    assert "top-secret" not in json.dumps(report)
