@@ -155,3 +155,27 @@ def test_large_file_cannot_be_inspected(inspector, tmp_path):
     report = inspector.inspect_google_entity_file(tmp_path, "entities.yaml")
     assert report["status"] == "blocked"
     assert report["reason"] == "yaml_file_too_large"
+
+
+def test_inspector_websocket_is_admin_only_and_executor_offloaded():
+    import ast
+
+    tree = ast.parse((COMPONENT / "websocket.py").read_text(encoding="utf-8"))
+    handler = next(
+        node for node in tree.body
+        if isinstance(node, ast.AsyncFunctionDef)
+        and node.name == "websocket_inspect_assistant_entity_file"
+    )
+    assert any(
+        isinstance(dec, ast.Attribute) and dec.attr == "require_admin"
+        for dec in handler.decorator_list
+    )
+    code = ast.unparse(handler)
+    assert "async_add_executor_job" in code
+    assert "inspect_google_entity_file" in code
+    register = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "async_register_websocket_api"
+    )
+    assert "websocket_inspect_assistant_entity_file" in ast.unparse(register)
