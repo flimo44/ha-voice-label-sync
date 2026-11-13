@@ -127,3 +127,72 @@ or migration authorization. Finding a historical include reference only
 supports a source-history hypothesis and does not certify runtime exposure.
 Automated inspection of a user-selected backup will require a separately
 reviewed design and source-isolation checks.
+
+
+## Explicit isolated historical YAML inspection (PR #146)
+
+This adds an **admin-initiated**, entirely read-only source-check workflow.
+Administrators manually extract *only the necessary, sanitized YAML copies*
+from an earlier backup into this fixed directory in HA's configuration folder:
+
+```text
+/config/
+  configuration.yaml                      # ACTIVE -- leave untouched
+  google_assistant_entities.yaml           # selected current entity file
+  hvls-history-review/                    # MANUALLY prepared, isolated
+    configuration.yaml                    # HISTORICAL COPY, not active
+    google_assistant.yaml                 # only if referenced with !include
+    google_assistant_entities.yaml        # only if referenced with !include
+```
+
+The folder name is fixed; the WebSocket command does not accept an arbitrary
+directory path. The user must explicitly choose « Inspect historical copy
+(read-only) » in the Assistant after checking the current entity YAML and
+choosing old/unknown provenance. No directory or file is created by HVLS.
+
+The backend uses the existing bounded YAML parser and a stricter
+`_IsolatedReader`: fixed-root, YAML-only, no hidden paths, no `..`,
+no symlinks (including directory segments), no secret-bearing include
+filenames, and no include outside the isolated folder. File count, size,
+depth, alias and node limits remain enforced. It never follows unrelated
+`!secret` / credentials references, reads backup archives, opens the HA
+`.storage` folder, or restores a backup.
+
+Reports include:
+- presence of a direct or `!include` Google Assistant declaration;
+- `expose_by_default` (explicit or parser-assumed default) and validated
+  `exposed_domains`;
+- whether `entity_config` is inline, included, missing or unresolved;
+- exact relative reference comparison against the current entity YAML path;
+- SHA-256 *comparison result only* when both files are present (hashes and
+  content are not returned);
+- declaration counts and structural anomalies, with no private names, rooms,
+  aliases, or service account material;
+- safe error codes for unsafe paths, duplicates, YAML errors and missing files.
+
+The historical review does **not** update live source discovery, grant access
+to the migration baseline, create evidence, attest the selected file's origin,
+or claim Google Home exposure. Identical path and identical contents only
+establish matching snapshots at inspection time; they do not establish which
+file HA loaded previously or which entities Google Home actually exposed.
+
+User selection of another file, changing the provenance or migration intent,
+or refreshing the main diagnosis invalidates the report and ignores stale
+WebSocket replies. Packages remain unsupported; all reviews remain blocked
+for migration.
+
+VM acceptance:
+1. In the test VM, manually make a sanitized *copy* in
+   `/config/hvls-history-review/configuration.yaml`. Add matching referenced
+   YAML files only if needed, retaining relative subdirectories.
+2. Verify the file's origin choice is old/unknown and the standalone entity
+   file has been inspected.
+3. Click the explicit historical inspection button; compare reported global
+   rules and include target with the copy, not with a guessed active source.
+4. Test missing historical folder, unsafe `!include`, mismatched content,
+   and local anomaly counts. Confirm no writes or migration button enabled.
+5. Use VM snapshots and isolate external devices/Google Home connections for
+   any separate HA restart or controlled production-like test.
+
+An actual HA backup archive picker or automatic archive parsing is **out of
+scope**, as is automatic import of these historical files.
