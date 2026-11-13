@@ -66,8 +66,13 @@ def inspect_google_entity_file(
         "reason": None,
         "counts": {
             "entries": 0,
+            # Legacy aggregate: entries with expose: true OR no expose key.
+            # Neither is evidence of actual Google Home exposure.
             "requested_exposure": 0,
+            "explicitly_exposed": 0,
             "explicitly_excluded": 0,
+            "expose_not_set": 0,
+            "invalid_expose": 0,
             "entries_with_anomalies": 0,
         },
         "issues": [],
@@ -112,10 +117,21 @@ def inspect_google_entity_file(
                     reason for reason in record["reasons"]
                     if reason != "registry_and_runtime_not_yet_checked"
                 ]
-                if record["yaml_exposure_intent"] == "exclude":
+                # Distinguish the exact YAML directive from the default
+                # intent calculated by _entity_details. An absent key is
+                # *not* an explicit instruction to expose the entity.
+                options = _mapping(node)
+                expose_node = options.get("expose")
+                if expose_node is None:
+                    counts["expose_not_set"] += 1
+                    counts["requested_exposure"] += 1  # legacy aggregate
+                elif record["yaml_exposure_intent"] == "exclude":
                     counts["explicitly_excluded"] += 1
                 elif record["yaml_exposure_intent"] == "expose":
-                    counts["requested_exposure"] += 1
+                    counts["explicitly_exposed"] += 1
+                    counts["requested_exposure"] += 1  # legacy aggregate
+                else:
+                    counts["invalid_expose"] += 1
             if reasons:
                 counts["entries_with_anomalies"] += 1
                 for code in sorted(set(reasons)):
