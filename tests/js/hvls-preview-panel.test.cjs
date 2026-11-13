@@ -2781,10 +2781,12 @@ test("Assistant changes step text after local user choice, without writes", () =
     mode: "new_configuration", source: {status: "resolved"}
   }};
   panel._renderMigrationGuide();
-  assert.match(controls.migrationGuideStep.textContent, /Étape 1 sur 3/);
+  assert.match(controls.migrationGuideStep.textContent, /Étape 1 —/);
   panel._chooseMigrationIntent("existing");
   assert.match(controls.migrationGuideStep.textContent, /Étape 2 sur 3/);
   assert.match(controls.migrationGuideNext.textContent, /Vérifiez la déclaration/);
+  panel._chooseMigrationIntent("new");
+  assert.match(controls.migrationGuideStep.textContent, /Étape 2 sur 2/);
   assert.deepEqual(requests, []);
 });
 
