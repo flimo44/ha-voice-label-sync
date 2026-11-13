@@ -649,7 +649,7 @@ WS_TYPE_ASSISTANT_ENTITY_FILE = f"{DOMAIN}/inspect_assistant_entity_file"
 @websocket_api.async_response
 @websocket_api.websocket_command({
     vol.Required("type"): WS_TYPE_ASSISTANT_ENTITY_FILE,
-    vol.Required("path"): vol.All(str, vol.Length(min=1, max=240)),
+    vol.Required("path"): str,
 })
 async def websocket_inspect_assistant_entity_file(
     hass: HomeAssistant,
