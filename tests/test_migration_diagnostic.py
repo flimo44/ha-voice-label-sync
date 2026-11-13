@@ -363,3 +363,27 @@ def test_websocket_is_admin_only_and_registered():
         and node.name == "async_register_websocket_api"
     )
     assert "websocket_get_migration_diagnostic" in ast.unparse(register)
+
+
+
+def test_new_configuration_gives_orphan_evidence_without_claiming_migration(
+    diagnostic, monkeypatch, tmp_path
+):
+    _config(tmp_path, "homeassistant:\n  name: Test\n")
+    (tmp_path / "google_assistant_entities.yaml").write_text(
+        "light.secret:\n  name: NEVER_ECHO_THIS\n", encoding="utf-8"
+    )
+
+    def forbidden(*_args):
+        raise AssertionError("Orphan evidence must not trigger HA runtime access")
+
+    monkeypatch.setattr(diagnostic, "capture_live_google_runtime", forbidden)
+    monkeypatch.setattr(diagnostic, "compare_loaded_google_on_ha", forbidden)
+    report, _ = _run(diagnostic, tmp_path)
+    assert report["mode"] == "new_configuration"
+    assert report["source"]["unreferenced_google_entity_file_present"] is True
+    assert report["review_status"] == "not_applicable"
+    assert report["cutover_allowed"] is False
+    assert report["entities"] == []
+    assert "NEVER_ECHO_THIS" not in json.dumps(report)
+    assert str(tmp_path) not in json.dumps(report)
