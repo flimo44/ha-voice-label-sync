@@ -933,6 +933,15 @@ test("Restore of 4 entities over 3 clears stale backup diff and warns about next
     restoreBackup: {disabled: false},
     backupRestoreNotice: {hidden: true, textContent: ""},
     restoreSummaryNotice: {hidden: true, textContent: ""},
+    restoreReconcilePanel: {hidden: true},
+    restoreReconcileTitle: {textContent: ""},
+    restoreReconcileSummary: {textContent: ""},
+    restoreReconcileDetails: {textContent: ""},
+    restoreReconcileAddLabels: {hidden: true, disabled: true},
+    restoreReconcileAligned: {hidden: true, disabled: true},
+    restoreReconcileKeepCurrent: {hidden: true, disabled: true},
+    restoreReconcileCancelFailed: {hidden: true, disabled: true},
+    restoreReconcileStatus: {textContent: ""},
   };
   const origQuery = panel.querySelector.bind(panel);
   panel.querySelector = selector =>
@@ -945,6 +954,13 @@ test("Restore of 4 entities over 3 clears stale backup diff and warns about next
   panel._selectedBackup = "old.bak";
   panel._backupList = [{id: "old.bak", timestamp: "2026-11-13",
     entities_count: 4, size: 539}];
+  panel._restoreReconcilePending = true;
+  panel._restoreReconcileState = "restored";
+  panel._restoreReconcileReview = {
+    production_sha256: "a".repeat(64),
+    preview_sha256: "b".repeat(64),
+  };
+  let disabledDuringRestore = false;
   panel._loadPreview = async () => {
     panel._lastAnalysis = {
       available: true,
@@ -953,6 +969,9 @@ test("Restore of 4 entities over 3 clears stale backup diff and warns about next
         modified: [], unchanged: 3,
       },
     };
+    panel._renderRestoreReconciliation();
+    disabledDuringRestore = nodes.restoreReconcileAddLabels.disabled &&
+      nodes.restoreReconcileKeepCurrent.disabled;
   };
 
   await panel._restoreBackup();
@@ -963,6 +982,14 @@ test("Restore of 4 entities over 3 clears stale backup diff and warns about next
   assert.equal(panel._backupReview, null);
   assert.deepEqual(nodes.backupDiff.children, []);
   assert.equal(controls.apply.disabled, true);
+  assert.equal(disabledDuringRestore, true);
+  assert.equal(nodes.restoreReconcilePanel.hidden, false);
+  assert.equal(nodes.restoreReconcileAddLabels.hidden, false);
+  assert.equal(nodes.restoreReconcileKeepCurrent.hidden, false);
+  // Regression: buttons must become clickable immediately after restore,
+  // without an extra manual refresh and without unlocking Apply.
+  assert.equal(nodes.restoreReconcileAddLabels.disabled, false);
+  assert.equal(nodes.restoreReconcileKeepCurrent.disabled, false);
   assert.match(nodes.backupStatus.textContent, /Restauration terminée/);
   assert.equal(nodes.backupRestoreNotice.hidden, false);
   assert.equal(nodes.restoreSummaryNotice.hidden, false);
