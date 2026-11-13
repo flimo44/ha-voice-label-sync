@@ -14,8 +14,9 @@ const HVLS_TRANSLATIONS = {
     tabMigration: "Assistant",
     migrationIntro: "Les simulations ne modifient ni HA, ni labels, ni YAML. La sauvegarde et le journal sont créés uniquement après votre confirmation.",
     migrationGuideTitle: "Identifions votre situation",
-    migrationGuideStepIdentify: "Étape 1 sur 3 — Identifiez votre situation",
-    migrationGuideStepVerify: "Étape 2 sur 3 — Vérifiez les points indiqués",
+    migrationGuideStepIdentify: "Étape 1 — Identifiez votre situation",
+    migrationGuideStepVerify: "Étape 2 sur 2 — Vérifiez les points indiqués",
+    assistantProvenanceStepVerify: "Étape 2 sur 3 — Vérifiez le fichier YAML",
     migrationAdvancedTitle: "Outils de diagnostic et de migration (avancé)",
     migrationRecoveryAttention: "Une opération antérieure nécessite une vérification. Ouvrez les outils avancés avant de continuer.",
     migrationGuideDetected: "Aucune déclaration google_assistant: trouvée dans configuration.yaml. Cela ne prouve pas qu'aucune configuration n'a jamais existé.",
@@ -333,8 +334,9 @@ const HVLS_TRANSLATIONS = {
     tabMigration: "Assistant",
     migrationIntro: "Simulation does not change HA, labels or YAML. The protected backup and journal are created only after explicit confirmation.",
     migrationGuideTitle: "Let's identify your situation",
-    migrationGuideStepIdentify: "Step 1 of 3 — Identify your situation",
-    migrationGuideStepVerify: "Step 2 of 3 — Review the recommended checks",
+    migrationGuideStepIdentify: "Step 1 — Identify your situation",
+    migrationGuideStepVerify: "Step 2 of 2 — Review the recommended checks",
+    assistantProvenanceStepVerify: "Step 2 of 3 — Inspect the YAML file",
     migrationAdvancedTitle: "Diagnostics and migration tools (advanced)",
     migrationRecoveryAttention: "A previous operation needs review. Open the advanced tools before continuing.",
     migrationGuideDetected: "No google_assistant: declaration was found in configuration.yaml. This does not prove that no configuration ever existed.",
@@ -3435,8 +3437,11 @@ entity_config: !include google_assistant_entities.yaml</pre>
       );
     }
     const step = this.querySelector("#migrationGuideStep");
-    if (step) step.textContent = this._t(this._migrationIntent
-      ? "migrationGuideStepVerify" : "migrationGuideStepIdentify");
+    const stepKey = packages || this._migrationIntent === "new"
+      ? "migrationGuideStepVerify"
+      : ["existing", "unsure"].includes(this._migrationIntent)
+        ? "assistantProvenanceStepVerify" : "migrationGuideStepIdentify";
+    if (step) step.textContent = this._t(stepKey);
     const next = this.querySelector("#migrationGuideNext");
     if (next) next.textContent = packages ? this._t("assistantPackagesQuestion") :
       this._t(options[this._migrationIntent]?.[1] || "migrationGuideAwaitChoice");
