@@ -208,6 +208,7 @@ def restore_reviewed_backup(
             ownership_registry_path=ownership_registry_path,
             backup_directory=_backup_directory(output_path),
             restore_mode=True,
+            expected_production_sha256=production_sha256,
         )
     except (FileWriterError, ValueError) as exc:
         raise BackupRestoreError(
