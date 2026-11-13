@@ -3225,6 +3225,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
     // User recollection is local UI context only. Not provenance evidence.
     // Never pass it to migration APIs or persist it in HA.
     this._assistantProvenanceChoice = choice;
+    // The next-step guide is tied to this local selection, not evidence.
+    const help = this.querySelector("#assistantProvenanceHelp");
+    if (help) help.open = false;
     this._renderAssistantProvenance();
   }
 
@@ -3266,6 +3269,29 @@ entity_config: !include google_assistant_entities.yaml</pre>
       choices[this._assistantProvenanceChoice]?.[1] ||
       "assistantProvenanceNextChoose"
     );
+    const source = this.querySelector("#assistantProvenanceSource");
+    if (source) source.textContent = this._assistantFilePath
+      ? this._t("assistantProvenanceSourceLabel") + " : " + this._assistantFilePath
+      : this._t("assistantProvenanceSourceLabelUnknown");
+    const help = this.querySelector("#assistantProvenanceHelp");
+    if (help) {
+      // "New configuration" must not suggest recovering historical evidence.
+      help.hidden = !["old", "unknown"].includes(this._assistantProvenanceChoice);
+      if (help.hidden) help.open = false;
+    }
+    const guideIds = [
+      "assistantProvenanceChecklistTrigger",
+      "assistantProvenanceChecklistIntro",
+      "assistantProvenanceChecklist1",
+      "assistantProvenanceChecklist2",
+      "assistantProvenanceChecklist3",
+      "assistantProvenanceChecklist4",
+      "assistantProvenanceChecklistEnd",
+    ];
+    for (const id of guideIds) {
+      const node = this.querySelector("#" + id);
+      if (node) node.textContent = this._t(id);
+    }
     const anomalies = this._assistantFileReport?.counts?.entries_with_anomalies;
     const issues = this.querySelector("#assistantProvenanceAnomalies");
     if (issues) {
