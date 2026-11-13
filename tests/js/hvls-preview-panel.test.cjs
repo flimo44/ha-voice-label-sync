@@ -847,6 +847,68 @@ test("Confirmed backup restore transmits reviewed hashes and refreshes Preview",
   assert.equal(controls.apply.disabled, true);
 });
 
+test("Backup text-only difference is explicit and uses a separate restore action", () => {
+  const {panel, controls} = makePanel(async () => ({}));
+  const nodes = {
+    backupDiff: {children: [], replaceChildren(...children) {
+      this.children = children;
+    }, appendChild(child) {this.children.push(child);}},
+    restoreBackup: {disabled: true, textContent: ""},
+  };
+  const origQuery = panel.querySelector.bind(panel);
+  panel.querySelector = selector => nodes[selector.slice(1)] || origQuery(selector);
+  panel._backupReview = {comparison: {
+    status: "ok", added: [], removed: [], modified: [],
+    unchanged: 4, identical_entities: true, identical_text: false,
+  }};
+  panel._renderBackupDiff();
+  assert.equal(nodes.restoreBackup.disabled, false);
+  assert.equal(nodes.restoreBackup.textContent, "Restaurer le texte YAML");
+  assert.equal(nodes.backupDiff.children.length, 3);
+  assert.match(nodes.backupDiff.children[2].textContent, /Aucune différence entre les entités/);
+  assert.match(nodes.backupDiff.children[2].textContent, /sauvegarde de sécurité/);
+
+  panel._backupReview.comparison.identical_text = true;
+  panel._renderBackupDiff();
+  assert.equal(nodes.restoreBackup.disabled, true);
+  assert.equal(nodes.restoreBackup.textContent, "Restaurer cette sauvegarde");
+  assert.match(nodes.backupDiff.children[2].textContent, /YAML identique à la production/);
+
+  panel._backupReview = null;
+  panel._renderBackupDiff();
+  assert.deepEqual(nodes.backupDiff.children, []);
+  assert.equal(nodes.restoreBackup.disabled, true);
+  assert.equal(nodes.restoreBackup.textContent, "Restaurer cette sauvegarde");
+  assert.equal(controls.apply.disabled, true);
+});
+
+test("Text-only restore asks a distinct explicit confirmation without changing labels", async () => {
+  const requests = [], confirmations = [];
+  const {panel} = makePanel(async request => {
+    requests.push(request);
+    return {restored: true, safety_backup: "safety.bak"};
+  }, message => {confirmations.push(message); return false;});
+  const review = {
+    backup_id: "backup.bak", backup_sha256: "a".repeat(64),
+    production_sha256: "b".repeat(64),
+    comparison: {
+      status: "ok", identical_entities: true, identical_text: false,
+      added: [], removed: [], modified: [], unchanged: 4,
+    },
+  };
+  panel._backupReview = review;
+  await panel._restoreBackup();
+  assert.deepEqual(requests, []);
+  assert.equal(panel._backupReview, review);
+  assert.equal(confirmations.length, 1);
+  assert.match(confirmations[0], /entités sont identiques/);
+  assert.match(confirmations[0], /Une copie de sécurité/);
+  assert.match(confirmations[0], /étiquettes HA ne seront pas modifiées/);
+  panel._language = "en";
+  await panel._restoreBackup();
+  assert.match(confirmations[1], /Entity configurations are identical/);
+});
+
 test("Restore of 4 entities over 3 clears stale backup diff and warns about next Apply", async () => {
   const calls = [];
   const {panel, controls} = makePanel(async message => {
