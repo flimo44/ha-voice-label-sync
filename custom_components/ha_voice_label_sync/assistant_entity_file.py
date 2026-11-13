@@ -122,7 +122,8 @@ def inspect_google_entity_file(
                     reasons_by_code[code] = reasons_by_code.get(code, 0) + 1
                 if len(report["issue_examples"]) < MAX_ISSUE_EXAMPLES:
                     report["issue_examples"].append({
-                        "entity_id": entity_id,
+                        # Do not echo arbitrary root keys of wrong YAML files.
+                        "entity_id": None if invalid_id else entity_id,
                         "line": node.start_mark.line + 1,
                         "reasons": sorted(set(reasons)),
                     })
