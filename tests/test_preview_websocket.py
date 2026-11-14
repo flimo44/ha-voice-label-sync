@@ -743,6 +743,32 @@ def test_partial_restore_never_claims_success_or_clears_guard(websocket_module):
     ws.complete_preview_restoration.assert_not_called()
 
 
+def test_writer_failure_after_guard_creation_reports_recovery(
+    websocket_module,
+):
+    ws = _setup_reviewed_restore(websocket_module)
+    ws.restore_reviewed_backup.side_effect = ws.FileWriterError(
+        "simulated interruption after guard installation"
+    )
+    ws.read_guard.return_value = {
+        "entry_id": "test-installation", "output_path": "/config/output.yaml",
+    }
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_backup_preview(
+        make_hass(), connection, {
+            "id": 805, "backup_id": "backup.bak",
+            "backup_sha256": "a" * 64,
+            "production_sha256": "b" * 64,
+            "label_plan_sha256": "c" * 64,
+        },
+    ))
+    assert connection.send_error.call_args.args[1] == (
+        "restoration_requires_reconciliation"
+    )
+    ws.update_entity_label.assert_not_called()
+    ws.complete_preview_restoration.assert_not_called()
+
+
 def test_final_yaml_drift_leaves_restoration_protected(websocket_module):
     ws = _setup_reviewed_restore(websocket_module)
     ws.analyze_preview.return_value = {"comparison": {
