@@ -1145,7 +1145,7 @@ def test_backup_cleanup_cannot_delete_all_backups(
     files = _create_cleanup_history(output)
     ownership = tmp_path / ".hvls" / "ownership.json"
     plan = backup_module.preview_backup_cleanup(output, ownership, keep=10)
-    with pytest.raises(backup_module.BackupRestoreError, match="at least one"):
+    with pytest.raises(backup_module.BackupRestoreError, match="At least one"):
         backup_module.apply_backup_cleanup(
             output, ownership, keep=10,
             evidence_sha256=plan["evidence_sha256"], confirmed=True,
