@@ -22,6 +22,7 @@ from hvls.owned_writer import evaluate_registered_output
 from .backup_restore import (
     BackupRestoreError,
     list_backups,
+    prepare_backup_preview,
     resolve_restored_output,
     restore_reviewed_backup,
     review_backup,
@@ -1497,6 +1498,7 @@ async def websocket_set_entity_label(
 WS_TYPE_LIST_BACKUPS = f"{DOMAIN}/list_backups"
 WS_TYPE_REVIEW_BACKUP = f"{DOMAIN}/review_backup"
 WS_TYPE_RESTORE_BACKUP = f"{DOMAIN}/restore_backup"
+WS_TYPE_PREPARE_BACKUP_PREVIEW = f"{DOMAIN}/prepare_backup_preview"
 WS_TYPE_RESOLVE_RESTORE = f"{DOMAIN}/resolve_restored_output"
 
 
@@ -1563,6 +1565,56 @@ async def websocket_review_backup(
 @websocket_api.require_admin
 @websocket_api.async_response
 @websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_PREPARE_BACKUP_PREVIEW,
+    vol.Required("backup_id"): str,
+    vol.Required("backup_sha256"): str,
+    vol.Required("production_sha256"): str,
+})
+async def websocket_prepare_backup_preview(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Stage the chosen backup as a Preview, without touching production or HA."""
+    async with get_workflow_lock(hass):
+        try:
+            entries = hass.config_entries.async_entries(DOMAIN)
+            if len(entries) != 1:
+                raise BackupRestoreError("HVLS installation unavailable or ambiguous")
+            output_path = _configured_output(hass)
+            registry_path = Path(hass.config.path(".hvls", "ownership.json"))
+            # Legacy restores must be reconciled before starting another plan.
+            assert_not_guarded(registry_path, entries[0].entry_id, output_path)
+            settings = {**entries[0].data, **entries[0].options}
+            registries = get_live_registries(hass)
+            catalog = await hass.async_add_executor_job(
+                build_entity_catalog,
+                registries,
+                settings.get(CONF_LABEL, DEFAULT_LABEL),
+                DEFAULT_DOMAINS,
+            )
+            result = await hass.async_add_executor_job(
+                partial(
+                    prepare_backup_preview,
+                    output_path, msg["backup_id"],
+                    msg["backup_sha256"], msg["production_sha256"],
+                    catalog,
+                )
+            )
+        except (
+            BackupRestoreError, PreviewChangedError, FileWriterError,
+            OSError, ValueError, TypeError, KeyError, AttributeError,
+        ) as exc:
+            connection.send_error(
+                msg["id"], "backup_preview_failed", str(exc)
+            )
+            return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
     vol.Required("type"): WS_TYPE_RESTORE_BACKUP,
     vol.Required("backup_id"): str,
     vol.Required("backup_sha256"): str,
@@ -1574,34 +1626,13 @@ async def websocket_restore_backup(
     msg: dict[str, Any],
 ) -> None:
     """Only restore a backup confirmed against current production."""
-    async with get_workflow_lock(hass):
-        try:
-            path = _configured_output(hass)
-            entries = hass.config_entries.async_entries(DOMAIN)
-            result = await hass.async_add_executor_job(
-                partial(
-                    restore_reviewed_backup,
-                    path,
-                    msg["backup_id"],
-                    msg["backup_sha256"],
-                    msg["production_sha256"],
-                    entry_id=entries[0].entry_id,
-                    ownership_registry_path=Path(
-                        hass.config.path(".hvls", "ownership.json")
-                    ),
-                )
-            )
-        except (
-            BackupRestoreError,
-            PreviewChangedError,
-            FileWriterError,
-            OSError,
-            ValueError,
-        ) as exc:
-            connection.send_error(msg["id"], "backup_restore_failed", str(exc))
-            return
-        connection.send_result(msg["id"], result)
-
+    # Legacy direct restoration is forbidden: every change must be reviewed
+    # through the same Preview workflow before any write. Keep the command
+    # registered for old clients, but refuse it without touching disk/labels.
+    connection.send_error(
+        msg["id"], "restore_requires_preview",
+        "Direct restore disabled. Prepare the backup in Preview first.",
+    )
 
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -1743,6 +1774,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_generate_preview)
     websocket_api.async_register_command(hass, websocket_list_backups)
     websocket_api.async_register_command(hass, websocket_review_backup)
+    websocket_api.async_register_command(hass, websocket_prepare_backup_preview)
     websocket_api.async_register_command(hass, websocket_restore_backup)
     websocket_api.async_register_command(
         hass, websocket_resolve_restored_output
