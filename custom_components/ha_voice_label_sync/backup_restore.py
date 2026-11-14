@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import hmac
+from copy import deepcopy
 import os
 import re
 import shutil
 from datetime import datetime
 from pathlib import Path
 
-from hvls import FileWriterError
+from hvls import FileWriterError, GenerationRequest, run_google_assistant_workflow
+from hvls.engine import resolve_label_ids
 from hvls.output_ownership_registry import OwnershipRegistry
 from hvls.owned_writer import (
     _operation_lock,
@@ -125,15 +127,77 @@ def review_backup(output_path: Path, backup_id: str) -> dict:
     }
 
 
+def _project_restored_yaml(
+    candidate: str,
+    output_path: Path,
+    registries: dict,
+    label: str,
+    domains: frozenset[str],
+) -> dict:
+    """Simulate desired labels using copies of the live HA registries.
+
+    Report differences that cannot be reconstructed from labels alone
+    (renamed rooms/entities, custom YAML attributes, missing entities).
+    This function does not modify Home Assistant or files.
+    """
+    from .preview_compare import _entities
+
+    desired = {
+        entity_id for entity_id, fields in _entities(candidate).items()
+        if fields.get("expose") is True
+    }
+    projected = deepcopy(registries)
+    label_records = projected["label_registry"]["data"]["labels"]
+    candidates, _ = resolve_label_ids(label_records, label)
+    matches = {
+        entry["label_id"] for entry in label_records
+        if entry.get("label_id") in candidates
+    }
+    if len(matches) != 1:
+        return {
+            "ready": False,
+            "reason": "HVLS label unavailable or ambiguous",
+            "comparison": None,
+        }
+    label_id = next(iter(matches))
+    for entity in projected["entity_registry"]["data"]["entities"]:
+        labels = set(entity.get("labels") or [])
+        if entity["entity_id"] in desired:
+            labels.add(label_id)
+        else:
+            labels.discard(label_id)
+        entity["labels"] = sorted(labels)
+
+    request = GenerationRequest(
+        label=label, domains=domains,
+        output_path=output_path, dry_run=True,
+    )
+    generated = run_google_assistant_workflow(
+        request=request, registries=projected,
+    ).generation.content
+    comparison = analyze_preview(generated, candidate)["comparison"]
+    return {
+        "ready": comparison["status"] == "ok"
+        and comparison["identical_entities"] is True,
+        "reason": None,
+        "comparison": comparison,
+    }
+
+
 def prepare_backup_preview(
     output_path: Path, backup_id: str,
     backup_sha256: str, production_sha256: str,
     catalog: dict,
+    *,
+    registries: dict | None = None,
+    label: str | None = None,
+    domains: frozenset[str] | None = None,
 ) -> dict:
-    """Review the selected backup as a *proposal*; never write YAML or labels.
+    """Review the selected backup as a proposal; never write YAML or labels.
 
-    The reviewed digests must still match when the user opens this Preview.
-    The label plan is informative and deliberately not executable yet.
+    The review includes a projected HA generation when live registry data is
+    available. Its readiness is informational until the write transaction
+    and recovery protocol have been implemented and tested.
     """
     if not all(
         isinstance(value, str) and _SHA.fullmatch(value)
@@ -155,8 +219,6 @@ def prepare_backup_preview(
     if preview_digest(production) != production_sha256:
         raise PreviewChangedError("Production changed during preparation.")
 
-    # The HA entity registry is a snapshot, not a command. Missing, hidden or
-    # ineligible entities are reported for review instead of being omitted.
     from .preview_compare import _entities
 
     targets = _entities(content)
@@ -196,6 +258,14 @@ def prepare_backup_preview(
         if entity.get("has_label") is True and entity_id not in exposed:
             removals.append(entity_id)
 
+    projection = None
+    if registries is not None:
+        if not isinstance(label, str) or domains is None:
+            raise BackupRestoreError("Missing current HVLS generation settings")
+        projection = _project_restored_yaml(
+            content, output_path, registries, label, domains,
+        )
+
     return {
         **review,
         "available": True,
@@ -211,7 +281,8 @@ def prepare_backup_preview(
             "review": review_needed,
             "current_label_count": catalog.get("labeled"),
         },
-        "can_apply": False,  # Stage 1: transaction apply is not implemented.
+        "projection": projection,
+        "can_apply": False,  # No write or label operation allowed yet.
     }
 
 
