@@ -316,6 +316,15 @@ const HVLS_TRANSLATIONS = {
     backupPreviewApplied: "Restauration validée : {entities} entité(s), {added} étiquette(s) ajoutée(s), {removed} retirée(s). Sauvegarde de sécurité : {backup}.",
     backupPreviewApplyFailed: "Restauration refusée ou incomplète : {error}. Vérifiez la production et les éventuels contrôles de réconciliation.",
     backupPreviewLabels: "Étiquettes envisagées : {added} ajout(s), {removed} retrait(s), {review} entité(s) à examiner.",
+    manualLabelPending: "À valider",
+    manualLabelPreparing: "Simulation des étiquettes et du YAML, sans écriture…",
+    manualLabelPrepared: "{count} changement(s) d'étiquette prêt(s) dans le Preview. Aucun label ni YAML modifié.",
+    manualLabelHelp: "Modifications proposées aux étiquettes HA et au YAML de production. Rien ne sera écrit avant votre validation.",
+    manualLabelApply: "Appliquer les changements d'étiquettes",
+    manualLabelConfirm: "Appliquer les changements d'étiquettes et le YAML proposés dans le Preview ? Une sauvegarde de sécurité sera créée si un fichier de production existe.",
+    manualLabelApplied: "Modification validée : {added} étiquette(s) ajoutée(s), {removed} retirée(s). YAML et labels vérifiés.",
+    manualLabelFailed: "Préparation refusée : {error}. Aucune étiquette ni YAML modifié.",
+    manualLabelApplyFailed: "Application refusée ou incomplète : {error}. Vérifiez la production et les protections de réconciliation.",
     backupLabelAdd: "Étiquettes à ajouter",
     backupLabelRemove: "Étiquettes à retirer",
     backupLabelReview: "Entités à examiner",
@@ -804,6 +813,15 @@ const HVLS_TRANSLATIONS = {
     backupPreviewApplied: "Restore completed: {entities} entities, {added} labels added, {removed} removed. Safety backup: {backup}.",
     backupPreviewApplyFailed: "Restoration refused or incomplete: {error}. Check production and any reconciliation notice.",
     backupPreviewLabels: "Planned HA labels: {added} add, {removed} remove, {review} need review.",
+    manualLabelPending: "Pending review",
+    manualLabelPreparing: "Simulating labels and YAML without writing…",
+    manualLabelPrepared: "{count} label change(s) prepared in Preview. No labels or YAML modified.",
+    manualLabelHelp: "Proposed HA label and production YAML changes. Nothing is written until you approve.",
+    manualLabelApply: "Apply label changes",
+    manualLabelConfirm: "Apply the reviewed label changes and YAML? A safety backup will be made when production exists.",
+    manualLabelApplied: "Changes applied: {added} label(s) added, {removed} removed. YAML and labels verified.",
+    manualLabelFailed: "Preview preparation refused: {error}. No labels or YAML modified.",
+    manualLabelApplyFailed: "Apply refused or incomplete: {error}. Check production and reconciliation protections.",
     backupLabelAdd: "Labels to add",
     backupLabelRemove: "Labels to remove",
     backupLabelReview: "Entities requiring review",
@@ -1040,9 +1058,10 @@ class HVLSPreviewPanel extends HTMLElement {
       applyInfoSummary.title = this._t("applyInfoLabel");
     }
 
+    // Apply has three contextual labels (normal, restore, manual labels).
+    // Never overwrite that state-specific label during routine HA refresh.
     const texts = {
       copy: "copy",
-      apply: "apply",
       settings: "settings",
       refreshEntities: "refreshEntities",
       entityMore: "moreEntities"
@@ -1274,7 +1293,8 @@ class HVLSPreviewPanel extends HTMLElement {
     if (!this._hass || (this._applying && !afterApply)) return;
     const loadId = (this._loadId || 0) + 1;
     this._loadId = loadId;
-    this._stagedRestore = null; // Normal Preview replaces a staged backup only by user action.
+    this._stagedRestore = null; // Normal Preview replaces an obsolete staging plan.
+    this._manualLabelChanges = null;
     this._review = null;
     this._applyBlockReason = null;
     this._applyBlockReasonCode = null;
@@ -1407,12 +1427,22 @@ class HVLSPreviewPanel extends HTMLElement {
           (staged.label_plan?.remove?.length || 0) > 0
         ) &&
         /^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "");
-      button.disabled = (!this._review && !canApplyRestoration) ||
+      const canApplyManualLabels =
+        staged?.mode === "label_preview" &&
+        staged.projection?.ready === true &&
+        Array.isArray(staged.changes) &&
+        staged.changes.length > 0 &&
+        staged.label_plan?.review?.length === 0 &&
+        ["ok", "missing"].includes(staged.comparison?.status) &&
+        /^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "");
+      button.disabled = (!this._review && !canApplyRestoration &&
+        !canApplyManualLabels) ||
         this._applying === true || this._restoring === true ||
         this._generating === true || this._refreshing === true ||
         this._entityWritePending === true;
-      button.textContent = staged
-        ? this._t("backupPreviewApply") : this._t("apply");
+      button.textContent = staged?.mode === "label_preview"
+        ? this._t("manualLabelApply")
+        : staged ? this._t("backupPreviewApply") : this._t("apply");
     }
     const cancel = this.querySelector("#cancelPreview");
     if (cancel) {
@@ -1532,11 +1562,13 @@ class HVLSPreviewPanel extends HTMLElement {
     // Local cancellation only. Never write YAML, labels or ownership state.
     this._loadId = (this._loadId || 0) + 1;
     this._stagedRestore = null;
+    this._manualLabelChanges = null;
     this._review = null;
     this._applyBlockReason = null;
     this._applyBlockReasonCode = null;
     this._updateApplyButton();
     await this._loadPreview();
+    if (this._entityCatalog) this._renderEntities();
     this._review = null;  // Cancel also discards normal Preview approval.
     this._updateApplyButton();
     this._setStatusKey("previewCancelled");
@@ -1672,6 +1704,9 @@ class HVLSPreviewPanel extends HTMLElement {
   }
 
   async _applyPreview() {
+    if (this._stagedRestore?.mode === "label_preview") {
+      return this._applyManualLabelPreview();
+    }
     if (this._stagedRestore) return this._applyStagedRestore();
     if (!this._hass || !this._review || this._applying || this._restoring || this._refreshing || this._generating || this._entityWritePending) return;
 
@@ -1994,21 +2029,25 @@ class HVLSPreviewPanel extends HTMLElement {
       previewNotice.replaceChildren();
       if (this._stagedRestore) {
         const plan = this._stagedRestore.label_plan || {};
+        const isManual = this._stagedRestore.mode === "label_preview";
         const description = document.createElement("p");
-        description.textContent = this._t("backupPreviewNotExecutable") +
-          " " + this._tf("backupPreviewLabels", {
+        description.textContent = this._t(
+          isManual ? "manualLabelHelp" : "backupPreviewNotExecutable"
+        ) + " " + this._tf("backupPreviewLabels", {
             added: plan.add?.length || 0,
             removed: plan.remove?.length || 0,
             review: plan.review?.length || 0,
           });
         previewNotice.appendChild(description);
         const projection = this._stagedRestore.projection;
-        if (projection) {
+        if (projection && !isManual) {
           const warning = document.createElement("p");
           warning.className = "diagnostic-note";
-          warning.textContent = projection.ready === true
-            ? this._t("backupProjectionAligned")
-            : this._t("backupProjectionMismatch");
+          warning.textContent = isManual
+            ? this._t("manualLabelHelp")
+            : projection.ready === true
+              ? this._t("backupProjectionAligned")
+              : this._t("backupProjectionMismatch");
           previewNotice.appendChild(warning);
           const diff = projection.comparison;
           if (diff?.status === "ok" && projection.ready !== true) {
@@ -2213,7 +2252,8 @@ class HVLSPreviewPanel extends HTMLElement {
               const checkbox = document.createElement("input");
               checkbox.type = "checkbox";
               checkbox.className = "entity-hvls-checkbox";
-              checkbox.checked = true;
+              checkbox.checked = this._manualLabelChanges?.has(entity.entity_id)
+                ? this._manualLabelChanges.get(entity.entity_id) : true;
               checkbox.dataset.ineligible = "false";
               checkbox.disabled = Boolean(this._entityWritePending);
               checkbox.setAttribute("aria-label", this._tf("hvlsLabelAria", {
@@ -2223,7 +2263,11 @@ class HVLSPreviewPanel extends HTMLElement {
                 this._setEntityLabel(catalogEntity, checkbox);
               });
               const caption = document.createElement("span");
-              caption.textContent = "HVLS";
+              caption.textContent = this._manualLabelChanges?.has(entity.entity_id)
+                ? "HVLS · " + this._t("manualLabelPending") : "HVLS";
+              if (this._manualLabelChanges?.has(entity.entity_id)) {
+                control.classList.add("pending");
+              }
               control.append(checkbox, caption);
               itemRow.appendChild(control);
             }
@@ -2695,6 +2739,11 @@ class HVLSPreviewPanel extends HTMLElement {
           white-space: nowrap;
           cursor: pointer;
           font-size: 12px;
+        }
+        .entity-hvls-control.pending { color:#e6a23c; }
+        .entity-hvls-control.pending .entity-hvls-checkbox {
+          outline: 2px solid #e6a23c;
+          outline-offset: 2px;
         }
         .entity-hvls-checkbox {
           cursor: pointer;
@@ -3390,75 +3439,129 @@ entity_config: !include google_assistant_entities.yaml</pre>
   }
 
   async _setEntityLabel(entity, checkbox) {
+    // A checkbox change is ONLY a proposal. The existing HA entity label
+    // remains unchanged until the user approves the Preview.
     const current = entity.has_label === true;
-    const enabled = !current;
-    const action = this._t(enabled ? "actionAdd" : "actionRemove");
+    const wanted = checkbox.checked === true;
+    if (!this._hass || this._entityWritePending ||
+        this._applying || this._restoring || this._generating ||
+        this._refreshing ||
+        (this._stagedRestore && this._stagedRestore.mode !== "label_preview")) {
+      checkbox.checked = this._manualLabelChanges?.get(entity.entity_id) ?? current;
+      return;
+    }
+    if (wanted && !current && entity.eligible !== true) {
+      checkbox.checked = current;
+      return;
+    }
 
-    // Ne jamais considérer la case comme modifiée avant confirmation.
-    checkbox.checked = current;
-
-    if (this._entityWritePending) return;
-
-    // A stale UI or a programmatic call cannot add an ineligible entity.
-    if (enabled && entity.eligible !== true) return;
-
-    const confirmed = window.confirm(
-      this._tf("confirmLabel", {action}) + "\n\n" +
-      `${entity.name || entity.entity_id}\n` +
-      `${entity.entity_id}\n\n` +
-      this._t("otherLabelsPreserved")
-    );
-
-    if (!confirmed) return;
+    const choices = new Map(this._manualLabelChanges || []);
+    if (wanted === current) choices.delete(entity.entity_id);
+    else choices.set(entity.entity_id, wanted);
 
     this._entityWritePending = true;
-    // The previous Preview approval predates this label change.
+    this._loadId = (this._loadId || 0) + 1;
+    this._stagedRestore = null;
+    this._review = null;
+    this._updateApplyButton();
+    this._setStatusKey("manualLabelPreparing");
+    try {
+      if (!choices.size) {
+        this._manualLabelChanges = null;
+        await this._loadPreview();
+        this._activateTab("preview");
+        return;
+      }
+      const changes = [...choices.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([entity_id, enabled]) => ({entity_id, enabled}));
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/prepare_manual_label_preview",
+        changes,
+      });
+      if (result?.mode !== "label_preview" ||
+          result.projection?.ready !== true ||
+          !Array.isArray(result.changes) ||
+          !/^[0-9a-f]{64}$/.test(result.label_plan_sha256 || "")) {
+        throw new Error("Invalid manual-label Preview");
+      }
+      this._manualLabelChanges = choices;
+      this._stagedRestore = result;
+      this._previewContent = result.content;
+      this._previewPath = result.path;
+      this._applyBlockReason = this._t("manualLabelHelp");
+      this._applyBlockReasonCode = null;
+      this._renderAnalysis(result);
+      this._setContent(result.content);
+      this._setStatusKey("manualLabelPrepared", {count: choices.size});
+      this._activateTab("preview");
+    } catch (error) {
+      this._manualLabelChanges = null;
+      this._stagedRestore = null;
+      checkbox.checked = current;
+      await this._loadPreview();
+      this._review = null;  // Do not revive a previous Apply approval.
+      this._setStatusKey("manualLabelFailed", {
+        error: error.message || String(error),
+      });
+    } finally {
+      this._entityWritePending = false;
+      if (this._entityCatalog) this._renderEntities();
+      if (this._lastAnalysis) this._renderAnalysis(this._lastAnalysis);
+      this._updateApplyButton();
+    }
+  }
+
+  async _applyManualLabelPreview() {
+    const stage = this._stagedRestore;
+    if (!this._hass || stage?.mode !== "label_preview" ||
+        stage.projection?.ready !== true || !stage.changes?.length ||
+        !/^[0-9a-f]{64}$/.test(stage.label_plan_sha256 || "") ||
+        this._entityWritePending || this._restoring || this._applying ||
+        this._generating || this._refreshing) return;
+    if (!window.confirm(this._t("manualLabelConfirm"))) return;
+
+    this._applying = true;
     this._loadId = (this._loadId || 0) + 1;
     this._review = null;
     this._updateApplyButton();
-    let reloadSucceeded = false;
-
-    const controls = Array.from(
-      this.querySelectorAll(".entity-hvls-checkbox")
-    );
-    controls.forEach((control) => { control.disabled = true; });
-
+    let applied = null;
     try {
-      const result = await this._hass.callWS({
-        type: "ha_voice_label_sync/set_entity_label",
-        entity_id: entity.entity_id,
-        enabled,
-        expected_enabled: current,
+      applied = await this._hass.callWS({
+        type: "ha_voice_label_sync/apply_manual_label_preview",
+        changes: stage.changes,
+        preview_sha256: stage.preview_sha256,
+        production_sha256: stage.production_sha256,
+        label_plan_sha256: stage.label_plan_sha256,
       });
-
-      if (result.entity_id !== entity.entity_id ||
-          result.has_label !== enabled) {
-        throw new Error(this._t("inconsistentRegistry"));
+      if (applied?.applied !== true || applied?.reconciled !== true) {
+        throw new Error("Unverified label-Preview Apply response");
       }
-
-      // Le catalogue est relu depuis les registres réels de HA.
-      const reloaded = await this._loadEntities();
-      reloadSucceeded = reloaded;
-      if (!reloaded) {
-        window.alert(
-          this._t("reloadFailed")
-        );
-      }
+      this._manualLabelChanges = null;
+      this._stagedRestore = null;
+      this._backupList = null;
+      await this._hass.callWS({
+        type: "ha_voice_label_sync/generate_preview",
+      });
+      await this._loadPreview(true);
+      await this._loadEntities();
+      this._setStatusKey("manualLabelApplied", {
+        added: applied.label_additions, removed: applied.label_removals,
+      });
     } catch (error) {
-      checkbox.checked = current;
-      window.alert(
-        this._tf("updateFailed", {entity: entity.entity_id}) + "\n" +
-        (error.message || String(error))
-      );
+      // A partial server failure may have installed the durable guard.
+      // Always discard the old approval and show the current HA state.
+      this._stagedRestore = null;
+      this._manualLabelChanges = null;
+      await this._loadPreview(true);
+      await this._loadEntities();
+      this._setStatusKey("manualLabelApplyFailed", {
+        error: error.message || String(error),
+      });
     } finally {
-      this._entityWritePending = false;
-      this.querySelectorAll(".entity-hvls-checkbox").forEach(
-        (control) => { control.disabled = control.dataset.ineligible === "true"; }
-      );
+      this._applying = false;
+      this._updateApplyButton();
     }
-    // Regenerate only after successful label update + catalog reload.
-    // This writes the Preview file, never the Google Assistant production file.
-    if (reloadSucceeded) await this._generatePreview();
   }
 
   _openEntityDetails(entityId) {
@@ -3653,7 +3756,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
           const checkbox = document.createElement("input");
           checkbox.type = "checkbox";
           checkbox.className = "entity-hvls-checkbox";
-          checkbox.checked = entity.has_label === true;
+          checkbox.checked = this._manualLabelChanges?.has(entity.entity_id)
+            ? this._manualLabelChanges.get(entity.entity_id)
+            : entity.has_label === true;
           const ineligibleToAdd = entity.eligible !== true && entity.has_label !== true;
           checkbox.dataset.ineligible = String(ineligibleToAdd);
           checkbox.disabled = Boolean(this._entityWritePending) || ineligibleToAdd;
@@ -3667,7 +3772,11 @@ entity_config: !include google_assistant_entities.yaml</pre>
           });
 
           const controlText = document.createElement("span");
-          controlText.textContent = "HVLS";
+          controlText.textContent = this._manualLabelChanges?.has(entity.entity_id)
+            ? "HVLS · " + this._t("manualLabelPending") : "HVLS";
+          if (this._manualLabelChanges?.has(entity.entity_id)) {
+            control.classList.add("pending");
+          }
 
           control.append(checkbox, controlText);
           row.append(info, label, control);
