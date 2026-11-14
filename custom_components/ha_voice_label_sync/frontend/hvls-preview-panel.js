@@ -3955,6 +3955,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       });
     } finally {
       this._backupLoading = false;
+      this._renderBackupCleanup();
     }
   }
 
