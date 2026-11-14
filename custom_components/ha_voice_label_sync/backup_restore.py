@@ -255,7 +255,6 @@ def prepare_backup_preview(
     from .preview_compare import _entities
 
     original_targets = _entities(backup_content)
-    original_production = _entities(production)
     original_exposed = {
         eid for eid, fields in original_targets.items()
         if fields.get("expose") is True
