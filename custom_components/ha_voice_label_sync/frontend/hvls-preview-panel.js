@@ -2039,7 +2039,7 @@ class HVLSPreviewPanel extends HTMLElement {
           });
         previewNotice.appendChild(description);
         const projection = this._stagedRestore.projection;
-        if (projection) {
+        if (projection && !isManual) {
           const warning = document.createElement("p");
           warning.className = "diagnostic-note";
           warning.textContent = isManual
