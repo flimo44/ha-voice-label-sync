@@ -288,6 +288,9 @@ const HVLS_TRANSLATIONS = {
     backupPreviewPrepared: "Restauration préparée : {added} ajout(s), {removed} suppression(s), {modified} modification(s). Aucun fichier ni label modifié.",
     backupPreviewNotExecutable: "Preview de restauration : contrôlez les changements. L'application de cette restauration n'est pas encore activée dans cette version.",
     backupPreviewLabels: "Étiquettes envisagées : {added} ajout(s), {removed} retrait(s), {review} entité(s) à examiner.",
+    backupLabelAdd: "Étiquettes à ajouter",
+    backupLabelRemove: "Étiquettes à retirer",
+    backupLabelReview: "Entités à examiner",
     backupConfirm: "Restaurer ce YAML en production ? Une copie de sécurité de la production actuelle sera créée obligatoirement. Les étiquettes HA ne seront pas modifiées.",
     backupRestoreFailed: "Restauration refusée : {error}",
     backupRestored: "Restauration terminée. Copie de sécurité : {backup}",
@@ -734,6 +737,9 @@ const HVLS_TRANSLATIONS = {
     backupPreviewPrepared: "Restore staged: {added} added, {removed} removed, {modified} modified. No YAML or labels changed.",
     backupPreviewNotExecutable: "Restore Preview: review the changes. Applying this restoration is not enabled in this version yet.",
     backupPreviewLabels: "Planned HA labels: {added} add, {removed} remove, {review} need review.",
+    backupLabelAdd: "Labels to add",
+    backupLabelRemove: "Labels to remove",
+    backupLabelReview: "Entities requiring review",
     backupConfirm: "Restore this YAML to production? A safety copy of the current production file will always be created. HA labels will not be changed.",
     backupRestoreFailed: "Restore refused: {error}",
     backupRestored: "Restore completed. Safety backup: {backup}",
@@ -1735,14 +1741,42 @@ class HVLSPreviewPanel extends HTMLElement {
     const previewNotice = this.querySelector("#backupPreviewNotice");
     if (previewNotice) {
       previewNotice.hidden = !this._stagedRestore;
+      previewNotice.replaceChildren();
       if (this._stagedRestore) {
         const plan = this._stagedRestore.label_plan || {};
-        previewNotice.textContent = this._t("backupPreviewNotExecutable") +
+        const description = document.createElement("p");
+        description.textContent = this._t("backupPreviewNotExecutable") +
           " " + this._tf("backupPreviewLabels", {
             added: plan.add?.length || 0,
             removed: plan.remove?.length || 0,
             review: plan.review?.length || 0,
           });
+        previewNotice.appendChild(description);
+        // The actual proposed HA-label operations must be visible individually,
+        // including exceptional entities. The Preview is never an implicit write.
+        for (const [action, label, items] of [
+          ["add", "backupLabelAdd", plan.add || []],
+          ["remove", "backupLabelRemove", plan.remove || []],
+          ["review", "backupLabelReview", plan.review || []],
+        ]) {
+          if (!items.length) continue;
+          const details = document.createElement("details");
+          details.className = "domain-details";
+          const heading = document.createElement("summary");
+          heading.textContent = `${this._t(label)} (${items.length})`;
+          details.appendChild(heading);
+          const list = document.createElement("ul");
+          for (const item of items) {
+            const row = document.createElement("li");
+            const entityId = typeof item === "string" ? item : item.entity_id;
+            row.textContent = action === "review"
+              ? `${entityId} — ${item.reason || this._t("unknownHVLS")}`
+              : entityId;
+            list.appendChild(row);
+          }
+          details.appendChild(list);
+          previewNotice.appendChild(details);
+        }
       }
     }
     // The dashboard describes what is on disk, not the changes proposed by
