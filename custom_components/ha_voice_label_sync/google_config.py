@@ -424,14 +424,17 @@ def render_initial_setup_diagnostic(
         return fr if french else en
 
     def safe(value: Any) -> str:
-        value = str(value).replace("\\r", " ").replace("\\n", " ")[:240]
+        value = str(value).replace("\r", " ").replace("\n", " ")[:240]
         for char in ("\\", "`", "*", "_", "[", "]", "(", ")", "<", ">", "|"):
             value = value.replace(char, "\\" + char)
         return value
 
     discoveries = {
         "found": tr("Fichier détecté", "File detected"),
-        "not_found": tr("Aucun fichier détecté", "No file detected"),
+        "not_found": tr(
+            "Aucune source Google Assistant identifiée",
+            "No Google Assistant source identified",
+        ),
         "file_missing": tr("Fichier déclaré mais absent", "Declared file missing"),
         "ambiguous": tr("Configuration ambiguë", "Ambiguous configuration"),
         "unsafe_path": tr("Chemin source non sûr", "Unsafe source path"),
@@ -439,7 +442,10 @@ def render_initial_setup_diagnostic(
 
     outputs = {
         "absent": tr("Fichier absent", "File does not exist"),
-        "existing": tr("Fichier déjà présent", "File already exists"),
+        "existing": tr(
+            "Fichier existant détecté",
+            "Existing file detected",
+        ),
         "unsafe": tr("Chemin non sûr", "Unsafe path"),
     }
 
@@ -447,12 +453,12 @@ def render_initial_setup_diagnostic(
     output = report.get("output_status", "unsafe")
 
     lines = [
-        "### " + tr("Diagnostic Google Assistant", "Google Assistant diagnostic"),
-        "**" + tr("Configuration", "Configuration") + " :** "
+        "### " + tr("Diagnostic initial HVLS", "HVLS initial diagnostic"),
+        "**" + tr("Source Google Assistant", "Google Assistant source") + " :** "
         + safe(discoveries.get(discovery, discoveries["ambiguous"])),
         "**" + tr("Fichier source", "Source file") + " :** "
         + safe(report.get("source_path") or tr("Non identifié", "Not identified")),
-        "**" + tr("Destination HVLS", "HVLS output") + " :** "
+        "**" + tr("Fichier YAML HVLS", "HVLS YAML file") + " :** "
         + safe(outputs.get(output, outputs["unsafe"])),
     ]
 
@@ -474,12 +480,12 @@ def render_initial_setup_diagnostic(
 
     if output == "existing":
         lines.append(tr(
-            "Installation possible : le fichier existant reste intact. "
-            "Après installation, ouvrez l'Assistant HVLS pour vérifier "
-            "le fichier et autoriser séparément sa prise en charge.",
-            "Installation is allowed: the existing file stays untouched. "
-            "After installation, open the HVLS Assistant to review the "
-            "file and separately authorize its takeover.",
+            "Vous pouvez installer HVLS : le fichier existant restera intact. "
+            "Ouvrez ensuite l'Assistant HVLS pour l'examiner et confirmer "
+            "séparément sa prise en charge dans le Preview.",
+            "You can install HVLS: the existing file will remain unchanged. "
+            "Then open the HVLS Assistant to review it and separately confirm "
+            "its takeover before applying any changes.",
         ))
 
     lines.append(
@@ -489,4 +495,4 @@ def render_initial_setup_diagnostic(
         )
     )
 
-    return "\\n\\n".join(lines)
+    return "\n\n".join(lines)
