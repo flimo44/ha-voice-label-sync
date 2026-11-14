@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import json
 from copy import deepcopy
 import os
 import re
@@ -266,6 +267,18 @@ def prepare_backup_preview(
             content, output_path, registries, label, domains,
         )
 
+    label_plan = {
+        "add": additions,
+        "remove": removals,
+        "review": review_needed,
+        "current_label_count": catalog.get("labeled"),
+    }
+    # Approval evidence covers the exact proposed HA label operations and
+    # the projected generation, not only the backup and production hashes.
+    approval = preview_digest(json.dumps(
+        {"labels": label_plan, "projection": projection},
+        sort_keys=True, ensure_ascii=False,
+    ))
     return {
         **review,
         "available": True,
@@ -275,15 +288,38 @@ def prepare_backup_preview(
         "path": f"Backup: {backup_id}",
         "preview_sha256": backup_sha256,
         "production_summary": analyze_preview(production, None)["summary"],
-        "label_plan": {
-            "add": additions,
-            "remove": removals,
-            "review": review_needed,
-            "current_label_count": catalog.get("labeled"),
-        },
+        "label_plan": label_plan,
+        "label_plan_sha256": approval,
         "projection": projection,
-        "can_apply": False,  # No write or label operation allowed yet.
+        "can_apply": False,  # The write API owns the final authorization.
     }
+
+
+def complete_preview_restoration(
+    output_path: Path, ownership_registry_path: Path, *,
+    entry_id: str, backup_sha256: str,
+) -> dict:
+    """Release durable restore hold only for a verified final YAML.
+
+    The caller must first confirm regenerated live HA labels match this YAML.
+    Any failure leaves the hold intact to require explicit recovery.
+    """
+    with _operation_lock(ownership_registry_path):
+        guard = read_guard(ownership_registry_path)
+        if (
+            guard is None or guard["entry_id"] != entry_id
+            or guard["output_path"] != str(output_path)
+            or guard["restored_sha256"] != backup_sha256
+        ):
+            raise BackupRestoreError("Restore guard does not match this review")
+        validate_production_unchanged(output_path, backup_sha256)
+        ownership = evaluate_registered_output(
+            output_path, entry_id, ownership_registry_path,
+        )
+        if ownership.status != "managed" or not ownership.write_allowed:
+            raise BackupRestoreError("Restored YAML ownership is inconsistent")
+        clear_guard(ownership_registry_path, guard)
+        return {"reconciled": True, "production_sha256": backup_sha256}
 
 
 def _safety_backup(output_path: Path) -> Path:
