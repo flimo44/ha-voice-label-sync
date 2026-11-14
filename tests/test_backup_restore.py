@@ -57,6 +57,9 @@ def backup_module(monkeypatch):
         spec.loader.exec_module(module)
     module = sys.modules[f"{prefix}.backup_restore"]
     module._guard = sys.modules[f"{prefix}.restore_guard"]
+    module.build_entity_catalog = sys.modules[
+        f"{prefix}.entity_catalog"
+    ].build_entity_catalog
     return module
 
 
