@@ -472,6 +472,16 @@ def render_initial_setup_diagnostic(
             )
         )
 
+    if output == "existing":
+        lines.append(tr(
+            "Installation possible : le fichier existant reste intact. "
+            "Après installation, ouvrez l'Assistant HVLS pour vérifier "
+            "le fichier et autoriser séparément sa prise en charge.",
+            "Installation is allowed: the existing file stays untouched. "
+            "After installation, open the HVLS Assistant to review the "
+            "file and separately authorize its takeover.",
+        ))
+
     lines.append(
         tr(
             "La détection ne donne aucune autorisation de modification.",
