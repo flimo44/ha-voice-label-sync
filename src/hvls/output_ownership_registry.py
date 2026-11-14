@@ -212,6 +212,43 @@ class OwnershipRegistry:
         self._save(data)
 
     @_serialized_mutation
+    def transfer_inactive_owner(
+        self, *, previous_entry_id: str, entry_id: str,
+        output_path: str, sha256: str, expected_revision: int,
+    ) -> None:
+        """Transfer a verified managed record; authorization is EXTERNAL.
+
+        Caller must verify that previous_entry_id is not present in HA,
+        that the real YAML matches sha256, and that a mandatory safety
+        backup was completed. This method ONLY moves ownership metadata.
+        """
+        self._validate_entry(previous_entry_id, output_path)
+        self._validate_entry(entry_id, output_path)
+        self._validate_sha(sha256)
+        if previous_entry_id == entry_id:
+            raise ValueError("Transfer must change owner")
+        if type(expected_revision) is not int or expected_revision < 0:
+            raise ValueError("Invalid ownership revision")
+
+        data = self._load()
+        if data["revision"] != expected_revision:
+            raise ValueError("Ownership record changed since approval")
+        records = data["records"]
+        previous = records.get(previous_entry_id)
+        if (
+            previous is None or previous.get("state") != "managed"
+            or previous.get("output_path") != output_path
+            or previous.get("sha256") != sha256
+            or entry_id in records
+        ):
+            raise ValueError("Previous ownership state cannot be transferred")
+        self._ensure_path_not_claimed(records, previous_entry_id, output_path)
+        # No pending or duplicate ownership may be reassigned.
+        del records[previous_entry_id]
+        records[entry_id] = dict(previous)
+        self._save(data)
+
+    @_serialized_mutation
     def begin_create(
         self,
         *,
