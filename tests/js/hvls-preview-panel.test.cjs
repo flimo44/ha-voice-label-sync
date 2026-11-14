@@ -819,6 +819,7 @@ test("Restore preparation never writes production or HA labels", async () => {
         modified: [], unchanged: 1, identical_text: false,
       },
       label_plan: {add: [], remove: ["switch.b"], review: []},
+      label_plan_sha256: "c".repeat(64), projection: {ready: false},
     };
   });
   panel._backupReview = {
@@ -852,7 +853,9 @@ test("Preparing a backup is read-only and requires no write confirmation", async
     calls.push(req.type);
     return {mode: "restore_preview", available: true, can_apply: false,
       content: "switch.a: {}\\n", comparison: {status: "ok",
-      added: [], removed: [], modified: [], unchanged: 1}};
+      added: [], removed: [], modified: [], unchanged: 1},
+      label_plan: {add: [], remove: [], review: []},
+      label_plan_sha256: "c".repeat(64), projection: {ready: false}};
   }, message => {confirmations.push(message); return false;});
   panel._backupReview = {backup_id: "backup.bak",
     backup_sha256: "a".repeat(64), production_sha256: "b".repeat(64),
@@ -882,7 +885,7 @@ test("Restore Preview shows individual HA label operations and exceptional entit
   panel._renderStagedRestorePlan();
   assert.equal(notice.hidden, false);
   assert.equal(notice.children.length, 4);
-  assert.match(notice.children[0].textContent, /application.*pas encore activée/);
+  assert.match(notice.children[0].textContent, /contrôlez les changements/);
   assert.match(notice.children[1].children[0].textContent, /Étiquettes à ajouter/);
   assert.equal(notice.children[1].children[1].children[0].textContent, "switch.new");
   assert.match(notice.children[2].children[0].textContent, /Étiquettes à retirer/);
@@ -931,7 +934,8 @@ test("Restore staging leaves previous production untouched after 4 over 3", asyn
       summary: {total: 4},
       comparison: {status: "ok", added: ["switch.d"], removed: [],
         modified: [], unchanged: 3},
-      label_plan: {add: ["switch.d"], remove: [], review: []}};
+      label_plan: {add: ["switch.d"], remove: [], review: []},
+      label_plan_sha256: "c".repeat(64), projection: {ready: false}};
   });
   panel._backupReview = {backup_id: "backup-4.bak",
     backup_sha256: "b".repeat(64), production_sha256: "a".repeat(64),
