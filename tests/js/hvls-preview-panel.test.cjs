@@ -3978,7 +3978,7 @@ test("Assistant changes step text after local user choice, without writes", () =
   panel._renderMigrationGuide();
   assert.match(controls.migrationGuideStep.textContent, /Étape 1 —/);
   panel._chooseMigrationIntent("existing");
-  assert.match(controls.migrationGuideStep.textContent, /Étape 2 sur 3/);
+  assert.match(controls.migrationGuideStep.textContent, /Vérifiez le fichier YAML à reprendre/);
   assert.match(controls.migrationGuideNext.textContent, /labels à reprendre/);
   panel._chooseMigrationIntent("new");
   assert.match(controls.migrationGuideStep.textContent, /Étape 2 sur 2/);
@@ -4390,8 +4390,8 @@ test("Assistant origin guide is a local non-authorizing step with bilingual copy
   assert.match(source, /report\?\.cutover_allowed === false/);
   assert.match(source, /_assistantProvenanceChoice = null/);
   assert.match(source, /aria-pressed="false"/);
-  assert.match(source, /Étape 3 sur 3/);
-  assert.match(source, /Step 3 of 3/);
+  assert.match(source, /Origine du fichier \(facultatif\)/);
+  assert.match(source, /File origin \(optional\)/);
 });
 
 test("Assistant provenance sections have separate accessible headings and safe manual guide", () => {
