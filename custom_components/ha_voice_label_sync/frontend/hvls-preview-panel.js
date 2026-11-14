@@ -361,7 +361,9 @@ const HVLS_TRANSLATIONS = {
     excludedNote: "Diagnostic calculé sur les registres actuels. Le YAML affiché provient du dernier Preview généré.",
     unknownReason: "Motif inconnu",
     reasonCategoryFull: "Entité de configuration ou de diagnostic",
-    metricEntities: "Entités du Preview",
+    metricEntities: "Entités en production",
+    productionStatsUnavailable: "Statistiques de production indisponibles : fichier absent, illisible ou invalide.",
+    productionRemoval: "Suppression prévue dans le Preview : entité encore présente en production",
     metricRooms: "Pièces",
     byDomain: "Par domaine",
     byArea: "Par pièce",
@@ -802,7 +804,9 @@ const HVLS_TRANSLATIONS = {
     excludedNote: "Diagnostics use the current registries. The displayed YAML comes from the last generated Preview.",
     unknownReason: "Unknown reason",
     reasonCategoryFull: "Configuration or diagnostic entity",
-    metricEntities: "Preview entities",
+    metricEntities: "Production entities",
+    productionStatsUnavailable: "Production statistics unavailable: file missing, unreadable or invalid.",
+    productionRemoval: "Pending removal in Preview: entity is still present in production",
     metricRooms: "Areas",
     byDomain: "By domain",
     byArea: "By area",
@@ -1693,18 +1697,19 @@ class HVLSPreviewPanel extends HTMLElement {
     const comparison = result?.comparison;
     // A missing, invalid or unreviewable comparison is not proof of
     // production presence. Do not show a green badge in that case.
-    if (!result?.available || !this._review || comparison?.status !== "ok" ||
+    if (!result?.available || !result.production_summary || comparison?.status !== "ok" ||
         !Array.isArray(comparison.added) ||
+        !Array.isArray(comparison.removed) ||
         !Array.isArray(comparison.modified)) {
       return "unknown";
     }
     const hasEntity = (entries) => entries.some(
       (item) => (typeof item === "string" ? item : item?.entity_id) === entityId
     );
-    if (hasEntity(comparison.added)) return "pending";
+    if (hasEntity(comparison.removed)) return "removal";
     if (hasEntity(comparison.modified)) return "modified";
-    // This list is made from Preview entities. If an entity is neither
-    // added nor modified, it is already represented in production.
+    if (hasEntity(comparison.added)) return "pending";
+    // These rows are read from the actual production file.
     return "validated";
   }
 
@@ -1720,9 +1725,10 @@ class HVLSPreviewPanel extends HTMLElement {
     this._renderPreviewChanges(result);
     this._renderRestoreWarning();
     this._renderRestoreReconciliation();
-    if (!result.available || !result.summary) return;
-
-    const stats = result.summary;
+    // The dashboard describes what is on disk, not the changes proposed by
+    // Preview. A missing/unreadable production must never show Preview counts.
+    const stats = result.production_summary;
+    if (stats) {
     const productionStatuses = new Map((stats.entities || []).map(
       (entity) => [entity.entity_id, this._productionStatus(entity.entity_id, result)]
     ));
@@ -1832,22 +1838,26 @@ class HVLSPreviewPanel extends HTMLElement {
               caption.textContent = "HVLS";
               control.append(checkbox, caption);
               itemRow.appendChild(control);
-
-              const status = productionStatuses.get(entity.entity_id) || "unknown";
-              const statusKey = {
-                validated: "productionValidated",
-                pending: "productionPending",
-                modified: "productionModified",
-                unknown: "productionUnknown",
-              }[status];
-              const indicator = document.createElement("span");
-              indicator.className = `production-status production-status--${status}`;
-              indicator.textContent = status === "validated" ? "✓" : status === "unknown" ? "?" : "•";
-              indicator.title = this._t(statusKey);
-              indicator.setAttribute("role", "img");
-              indicator.setAttribute("aria-label", this._t(statusKey));
-              itemRow.appendChild(indicator);
             }
+
+            // A removal remains visible even if its HA label is already
+            // absent: the YAML production still contains this entity.
+            const status = productionStatuses.get(entity.entity_id) || "unknown";
+            const statusKey = {
+              validated: "productionValidated",
+              pending: "productionPending",
+              modified: "productionModified",
+              removal: "productionRemoval",
+              unknown: "productionUnknown",
+            }[status];
+            const indicator = document.createElement("span");
+            indicator.className = `production-status production-status--${status}`;
+            indicator.textContent = status === "validated" ? "✓" :
+              status === "removal" ? "−" : status === "unknown" ? "?" : "•";
+            indicator.title = this._t(statusKey);
+            indicator.setAttribute("role", "img");
+            indicator.setAttribute("aria-label", this._t(statusKey));
+            itemRow.appendChild(indicator);
             item.appendChild(itemRow);
             list.appendChild(item);
           }
@@ -1903,6 +1913,12 @@ class HVLSPreviewPanel extends HTMLElement {
       breakdown.appendChild(section);
     }
     panel.appendChild(breakdown);
+    } else {
+      const unavailable = document.createElement("p");
+      unavailable.className = "diagnostic-note";
+      unavailable.textContent = this._t("productionStatsUnavailable");
+      panel.appendChild(unavailable);
+    }
 
     const comparison = result.comparison || {status: "missing"};
     const heading = document.createElement("h2");
@@ -2133,6 +2149,7 @@ class HVLSPreviewPanel extends HTMLElement {
         .production-status--pending, .production-status--modified {
           color:var(--warning-color, #d89a22);
         }
+        .production-status--removal { color:var(--error-color, #d32f2f); }
         .production-status--unknown { color:var(--secondary-text-color); }
         .domain-entity-item strong {
           font-size: 13px;
