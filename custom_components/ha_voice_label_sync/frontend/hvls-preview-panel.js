@@ -298,6 +298,7 @@ const HVLS_TRANSLATIONS = {
     backupCleanupReset: "Reprendre la sélection proposée",
     backupCleanupKeepOne: "Conservez au moins une sauvegarde.",
     backupCleanupDeleteCount: "Supprimer les {count} sauvegardes sélectionnées",
+    backupCleanupDeleteOne: "Supprimer la sauvegarde sélectionnée",
     backupCleanupConfirmButton: "Confirmer le nettoyage",
     backupCleanupCancel: "Annuler le nettoyage",
     backupCleanupConfirm: "Supprimer définitivement les {count} sauvegardes affichées dans le plan ? Les {keep} plus récentes seront conservées. Cette action est irréversible.",
@@ -785,6 +786,7 @@ const HVLS_TRANSLATIONS = {
     backupCleanupReset: "Restore suggested selection",
     backupCleanupKeepOne: "Keep at least one backup.",
     backupCleanupDeleteCount: "Delete {count} selected backups",
+    backupCleanupDeleteOne: "Delete the selected backup",
     backupCleanupConfirmButton: "Confirm cleanup",
     backupCleanupCancel: "Cancel cleanup",
     backupCleanupConfirm: "Permanently delete the {count} listed backups? The {keep} newest will be kept. This cannot be undone.",
@@ -3919,7 +3921,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
       apply.hidden = !plan;
       apply.disabled = !plan || count === 0 || count >= entries.length ||
         this._backupLoading;
-      apply.textContent = this._tf("backupCleanupDeleteCount", {count});
+      apply.textContent = count === 1
+        ? this._t("backupCleanupDeleteOne")
+        : this._tf("backupCleanupDeleteCount", {count});
     }
     const cancel = this.querySelector("#backupCleanupCancel");
     if (cancel) cancel.hidden = !plan;
