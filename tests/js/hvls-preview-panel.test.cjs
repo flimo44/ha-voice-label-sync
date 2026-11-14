@@ -954,7 +954,7 @@ test("Cleanup preparation is read-only and previews exactly what would be delete
   assert.equal(panel._backupCleanupPlan.to_delete.length, 1);
   assert.equal(previewNode.children.length, 4);
   assert.match(previewNode.children[1].textContent, /1 à supprimer/);
-  const item = previewNode.children[3].children[1].children[0];
+  const item = previewNode.children[3].children[1].children[10];
   assert.equal(item.children[0].children[0].checked, true);
   assert.match(item.children[0].children[1].textContent, /Sécurité/);
   assert.equal(apply.hidden, false);
