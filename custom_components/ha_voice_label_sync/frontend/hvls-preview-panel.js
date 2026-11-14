@@ -1058,9 +1058,10 @@ class HVLSPreviewPanel extends HTMLElement {
       applyInfoSummary.title = this._t("applyInfoLabel");
     }
 
+    // Apply has three contextual labels (normal, restore, manual labels).
+    // Never overwrite that state-specific label during routine HA refresh.
     const texts = {
       copy: "copy",
-      apply: "apply",
       settings: "settings",
       refreshEntities: "refreshEntities",
       entityMore: "moreEntities"
