@@ -1602,7 +1602,7 @@ async def websocket_prepare_backup_preview(
                     output_path, msg["backup_id"],
                     msg["backup_sha256"], msg["production_sha256"],
                     catalog,
-                    ignored_entities=msg["ignored_entities"],
+                    ignored_entities=msg.get("ignored_entities", []),
                     registries=registries,
                     label=settings.get(CONF_LABEL, DEFAULT_LABEL),
                     domains=DEFAULT_DOMAINS,
@@ -1666,7 +1666,7 @@ async def websocket_apply_backup_preview(
                     prepare_backup_preview,
                     output_path, msg["backup_id"], msg["backup_sha256"],
                     msg["production_sha256"], catalog,
-                    ignored_entities=msg["ignored_entities"],
+                    ignored_entities=msg.get("ignored_entities", []),
                     registries=registries, label=configured_label,
                     domains=DEFAULT_DOMAINS,
                 )
@@ -1678,7 +1678,7 @@ async def websocket_apply_backup_preview(
                 or review["label_plan"]["review"]
                 or not review["projection"]["ready"]
                 or (
-                    review["comparison"]["identical_entities"]
+                    review["comparison"]["identical_text"]
                     and not review["label_plan"]["add"]
                     and not review["label_plan"]["remove"]
                 )
