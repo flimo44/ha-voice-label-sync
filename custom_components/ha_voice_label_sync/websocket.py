@@ -1754,7 +1754,16 @@ async def websocket_apply_backup_preview(
             LabelUpdateError, RegistryError, WorkflowError,
             OSError, ValueError, TypeError, KeyError, AttributeError,
         ) as exc:
-            if yaml_written:
+            # The filesystem writer can fail *after* its durable guard is
+            # installed but before returning a result. Never suggest that the
+            # old production is safely unchanged without inspecting the hold.
+            guarded = yaml_written
+            if not guarded and "ownership_path" in locals():
+                try:
+                    guarded = read_guard(ownership_path) is not None
+                except (FileWriterError, OSError, ValueError):
+                    guarded = True
+            if guarded:
                 connection.send_error(
                     msg["id"], "restoration_requires_reconciliation",
                     "Restoration incomplete. Production is protected by a "
