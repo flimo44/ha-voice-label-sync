@@ -4,7 +4,33 @@
     "step": {
       "user": {
         "title": "Configure HA Voice Label Sync",
-        "description": "Choose the HVLS label and output YAML file. Google Assistant can be connected later.\n\n{diagnostic}",
+        "description": "How would you like to start?\n\n{detected_file}\n\nGoogle Assistant does not need to be connected.",
+        "menu_options": {
+          "new": "Create a new configuration",
+          "existing": "Reuse an existing configuration"
+        }
+      },
+      "new": {
+        "title": "Create a new configuration",
+        "description": "Choose where HVLS will create your entity file. An existing file is never overwritten during installation.\n\n{diagnostic}",
+        "data": {
+          "backend": "Voice assistant",
+          "label": "Home Assistant label",
+          "output": "Output file",
+          "backup_retention": "Backups to retain",
+          "create_backup": "Create a backup before overwriting"
+        },
+        "data_description": {
+          "backend": "Select the voice assistant configuration to generate.",
+          "label": "Entities carrying this Home Assistant label will be included.",
+          "output": "Path of the generated YAML file inside Home Assistant.",
+          "backup_retention": "Maximum number of previous generated files to retain. Use 0 to disable retention.",
+          "create_backup": "A backup is made before any later replacement approved in Preview. Installation never overwrites the existing file."
+        }
+      },
+      "existing": {
+        "title": "Reuse an existing configuration",
+        "description": "Select the existing YAML file. HVLS will leave it unchanged; after installation, open the Assistant to review it before accepting any changes.\n\n{diagnostic}",
         "data": {
           "backend": "Voice assistant",
           "label": "Home Assistant label",
@@ -28,7 +54,9 @@
       "label_setup_failed": "Could not create or resolve the Home Assistant label. Check label names and permissions.",
       "source_output_conflict": "The output matches the Google Assistant source. Choose a separate file.",
       "existing_output_not_owned": "This output already exists. Choose another destination.",
-      "unsafe_output_path": "Unsafe output path or path outside Home Assistant."
+      "unsafe_output_path": "Unsafe output path or path outside Home Assistant.",
+      "new_output_exists": "This file already exists. Choose a new output file, or go back and choose 'Reuse an existing configuration'.",
+      "existing_source_missing": "There is no regular YAML file at this path. Select the existing file, or choose 'Create a new configuration'."
     }
   },
   "options": {
