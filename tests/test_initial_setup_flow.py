@@ -107,6 +107,9 @@ def environment(monkeypatch):
 
 def make_flow(environment, directory):
     module, labels = environment
+    # The production default is /config/google_assistant_entities.yaml.
+    # Point it to our isolated fake Home Assistant configuration root.
+    module.DEFAULT_OUTPUT = str(directory / "google_assistant_entities.yaml")
 
     class Config:
         language = "fr"
