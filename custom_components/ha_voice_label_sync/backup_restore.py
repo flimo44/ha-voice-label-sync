@@ -23,7 +23,6 @@ from hvls.owned_writer import (
     write_owned_output,
 )
 
-from .entity_catalog import build_entity_catalog
 from .label_update import ensure_entity_eligible_for_addition, resolve_unique_label_id
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_guard import (
