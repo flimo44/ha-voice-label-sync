@@ -325,6 +325,120 @@ def test_restore_projection_detects_old_name_mismatch(backup_module, tmp_path):
     }
 
 
+def test_ignore_missing_entity_produces_noop_without_touching_production(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    original = "switch.keep:\n  expose: true\n  name: Keep\n"
+    output.write_text(original)
+    backups = tmp_path / ".hvls_backups"
+    backups.mkdir()
+    backup_id = "google_entities.yaml.20261114-041000.bak"
+    (backups / backup_id).write_text(
+        original + "switch.absent:\n  expose: true\n"
+    )
+    catalog = {"labeled": 1, "entities": [
+        {"entity_id": "switch.keep", "eligible": True, "has_label": True},
+    ]}
+    tokens = backup_module.review_backup(output, backup_id)
+    result = backup_module.prepare_backup_preview(
+        output, backup_id, tokens["backup_sha256"],
+        tokens["production_sha256"], catalog,
+        ignored_entities=["switch.absent"],
+    )
+    assert "switch.absent" in result["ignore_candidates"]
+    assert result["ignored_entities"] == ["switch.absent"]
+    assert result["label_plan"]["review"] == []
+    assert result["label_plan"]["add"] == []
+    assert result["comparison"]["identical_entities"] is True
+    assert result["content"] == original
+    assert result["preview_sha256"] == tokens["production_sha256"]
+    assert output.read_text() == original
+
+
+def test_partial_restore_preserves_ignored_production_and_other_changes(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    original = (
+        "switch.keep:\n  expose: true\n  name: Production\n"
+        "switch.old:\n  expose: true\n"
+    )
+    output.write_text(original)
+    backups = tmp_path / ".hvls_backups"
+    backups.mkdir()
+    backup_id = "google_entities.yaml.20261114-041001.bak"
+    (backups / backup_id).write_text(
+        "switch.keep:\n  expose: true\n  name: Historic\n"
+        "switch.new:\n  expose: true\n"
+        "switch.absent:\n  expose: true\n"
+    )
+    catalog = {"labeled": 2, "entities": [
+        {"entity_id": "switch.keep", "eligible": True, "has_label": True},
+        {"entity_id": "switch.old", "eligible": True, "has_label": True},
+        {"entity_id": "switch.new", "eligible": True, "has_label": False},
+    ]}
+    tokens = backup_module.review_backup(output, backup_id)
+    result = backup_module.prepare_backup_preview(
+        output, backup_id, tokens["backup_sha256"],
+        tokens["production_sha256"], catalog,
+        ignored_entities=["switch.absent", "switch.keep"],
+    )
+    assert result["ignored_entities"] == ["switch.absent", "switch.keep"]
+    assert result["label_plan"]["review"] == []
+    assert result["label_plan"]["add"] == ["switch.new"]
+    assert result["label_plan"]["remove"] == ["switch.old"]
+    assert result["comparison"]["added"] == ["switch.new"]
+    assert result["comparison"]["removed"] == ["switch.old"]
+    assert result["comparison"]["modified"] == []
+    assert "switch.absent" not in result["content"]
+    assert "name: Production" in result["content"]
+    assert output.read_text() == original
+
+    make_owned(output)
+    restored = backup_module.restore_reviewed_backup(
+        output, backup_id, tokens["backup_sha256"],
+        tokens["production_sha256"], entry_id="test-installation",
+        ownership_registry_path=tmp_path / ".hvls" / "ownership.json",
+        prepared_content=result["content"],
+        prepared_sha256=result["preview_sha256"],
+    )
+    assert restored["restored"] is True
+    assert output.read_text() == result["content"]
+    assert backup_module.preview_digest(output.read_text()) == result["preview_sha256"]
+    assert backup_module.read_guard(
+        tmp_path / ".hvls" / "ownership.json"
+    )["restored_sha256"] == result["preview_sha256"]
+
+
+@pytest.mark.parametrize("ignored", [
+    ["switch.unknown"], ["switch.absent", "switch.absent"],
+    ["switch.absent", 42], "switch.absent",
+])
+def test_restore_rejects_invalid_ignored_selection(
+    backup_module, tmp_path, ignored,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.keep:\n  expose: true\n")
+    backups = tmp_path / ".hvls_backups"
+    backups.mkdir()
+    backup_id = "google_entities.yaml.20261114-041002.bak"
+    (backups / backup_id).write_text(
+        "switch.keep:\n  expose: true\n"
+        "switch.absent:\n  expose: true\n"
+    )
+    tokens = backup_module.review_backup(output, backup_id)
+    with pytest.raises(backup_module.BackupRestoreError, match="Invalid ignored"):
+        backup_module.prepare_backup_preview(
+            output, backup_id, tokens["backup_sha256"],
+            tokens["production_sha256"],
+            {"labeled": 1, "entities": [
+                {"entity_id": "switch.keep", "eligible": True, "has_label": True},
+            ]},
+            ignored_entities=ignored,
+        )
+
+
 def test_restore_creates_mandatory_safety_copy(backup_module, sample):
     output, backup_id, source = sample
     make_owned(output)

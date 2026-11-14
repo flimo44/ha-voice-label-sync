@@ -11,6 +11,8 @@ from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
+import yaml
+
 from hvls import FileWriterError, GenerationRequest, run_google_assistant_workflow
 from hvls.engine import resolve_label_ids
 from hvls.output_ownership_registry import OwnershipRegistry
@@ -134,6 +136,7 @@ def _project_restored_yaml(
     registries: dict,
     label: str,
     domains: frozenset[str],
+    ignored: frozenset[str] = frozenset(),
 ) -> dict:
     """Simulate desired labels using copies of the live HA registries.
 
@@ -162,6 +165,8 @@ def _project_restored_yaml(
         }
     label_id = next(iter(matches))
     for entity in projected["entity_registry"]["data"]["entities"]:
+        if entity["entity_id"] in ignored:
+            continue  # Ignored entities keep their current HA labels.
         labels = set(entity.get("labels") or [])
         if entity["entity_id"] in desired:
             labels.add(label_id)
@@ -185,11 +190,38 @@ def _project_restored_yaml(
     }
 
 
+def _compose_reviewed_restore(
+    backup: str, production: str, ignored: frozenset[str],
+) -> str:
+    """Merge selected backup entities while preserving ignored production states.
+
+    The untouched inputs retain their exact text. A real partial merge is
+    serialized and reviewed as a new proposal before any write.
+    """
+    if not ignored:
+        return backup
+    from .preview_compare import _entities
+
+    desired = _entities(backup).copy()
+    current = _entities(production)
+    for entity_id in ignored:
+        if entity_id in current:
+            desired[entity_id] = current[entity_id]
+        else:
+            desired.pop(entity_id, None)
+    if desired == current:
+        return production  # No-op stays byte-for-byte identical.
+    if desired == _entities(backup):
+        return backup
+    return yaml.safe_dump(desired, sort_keys=False, allow_unicode=True)
+
+
 def prepare_backup_preview(
     output_path: Path, backup_id: str,
     backup_sha256: str, production_sha256: str,
     catalog: dict,
     *,
+    ignored_entities: list[str] | None = None,
     registries: dict | None = None,
     label: str | None = None,
     domains: frozenset[str] | None = None,
@@ -213,21 +245,58 @@ def prepare_backup_preview(
     ):
         raise PreviewChangedError("Production changed; review it again.")
 
-    content = _read_yaml(_get_backup(output_path, backup_id))
+    backup_content = _read_yaml(_get_backup(output_path, backup_id))
     production = _read_yaml(output_path)
-    if preview_digest(content) != backup_sha256:
+    if preview_digest(backup_content) != backup_sha256:
         raise PreviewChangedError("Selected backup changed during preparation.")
     if preview_digest(production) != production_sha256:
         raise PreviewChangedError("Production changed during preparation.")
 
     from .preview_compare import _entities
 
-    targets = _entities(content)
+    original_targets = _entities(backup_content)
+    original_exposed = {
+        eid for eid, fields in original_targets.items()
+        if fields.get("expose") is True
+    }
     entities = {
         entity["entity_id"]: entity
         for entity in catalog.get("entities", [])
         if isinstance(entity, dict) and isinstance(entity.get("entity_id"), str)
     }
+    original_diff = review["comparison"]
+    eligible_to_ignore = (
+        set(original_diff["added"]) | set(original_diff["removed"]) |
+        {row["entity_id"] for row in original_diff["modified"]}
+    )
+    for entity_id, fields in original_targets.items():
+        item = entities.get(entity_id)
+        if (
+            fields.get("expose") is not True or item is None
+            or item.get("eligible") is not True
+            or item.get("has_label") is not True
+        ):
+            eligible_to_ignore.add(entity_id)
+    for entity_id, item in entities.items():
+        if item.get("has_label") is True and entity_id not in original_exposed:
+            eligible_to_ignore.add(entity_id)
+
+    if ignored_entities is None:
+        ignored_entities = []
+    if (
+        not isinstance(ignored_entities, list)
+        or len(ignored_entities) > 1000
+        or any(not isinstance(eid, str) for eid in ignored_entities)
+        or len(ignored_entities) != len(set(ignored_entities))
+        or not set(ignored_entities).issubset(eligible_to_ignore)
+    ):
+        raise BackupRestoreError("Invalid ignored entity selection.")
+    ignored = frozenset(ignored_entities)
+    content = _compose_reviewed_restore(backup_content, production, ignored)
+    if not _entities(content):
+        raise BackupRestoreError("Refusing to restore an empty configuration.")
+
+    targets = _entities(content)
     exposed = {
         entity_id for entity_id, fields in targets.items()
         if fields.get("expose") is True
@@ -237,6 +306,8 @@ def prepare_backup_preview(
     review_needed = []
 
     for entity_id, fields in sorted(targets.items()):
+        if entity_id in ignored:
+            continue
         if fields.get("expose") is not True:
             review_needed.append({
                 "entity_id": entity_id, "reason": "not_explicitly_exposed",
@@ -256,6 +327,8 @@ def prepare_backup_preview(
             additions.append(entity_id)
 
     for entity_id, entity in sorted(entities.items()):
+        if entity_id in ignored:
+            continue
         if entity.get("has_label") is True and entity_id not in exposed:
             removals.append(entity_id)
 
@@ -264,7 +337,7 @@ def prepare_backup_preview(
         if not isinstance(label, str) or domains is None:
             raise BackupRestoreError("Missing current HVLS generation settings")
         projection = _project_restored_yaml(
-            content, output_path, registries, label, domains,
+            content, output_path, registries, label, domains, ignored,
         )
 
     label_plan = {
@@ -282,17 +355,22 @@ def prepare_backup_preview(
             "output": str(output_path),
             "backup_sha256": backup_sha256,
             "production_sha256": production_sha256,
+            "ignored_entities": sorted(ignored),
+            "target_sha256": preview_digest(content),
         },
         sort_keys=True, ensure_ascii=False,
     ))
     return {
         **review,
+        **analyze_preview(content, production),
         "available": True,
         "mode": "restore_preview",
         "content": content,
+        "ignored_entities": sorted(ignored),
+        "ignore_candidates": sorted(eligible_to_ignore),
         "production_path": str(output_path),
         "path": f"Backup: {backup_id}",
-        "preview_sha256": backup_sha256,
+        "preview_sha256": preview_digest(content),
         "production_summary": analyze_preview(production, None)["summary"],
         "label_plan": label_plan,
         "label_plan_sha256": approval,
@@ -358,6 +436,11 @@ def _safety_backup(output_path: Path) -> Path:
     raise BackupRestoreError("Safety backup name already exists. Retry later.")
 
 
+def _entities_nonempty(content: str) -> bool:
+    from .preview_compare import _entities
+    return bool(_entities(content))
+
+
 def restore_reviewed_backup(
     output_path: Path,
     backup_id: str,
@@ -366,6 +449,8 @@ def restore_reviewed_backup(
     *,
     entry_id: str,
     ownership_registry_path: Path,
+    prepared_content: str | None = None,
+    prepared_sha256: str | None = None,
 ) -> dict:
     """Restore only an explicitly reviewed snapshot, after preserving production."""
     if not all(isinstance(value, str) and _SHA.fullmatch(value)
@@ -378,6 +463,22 @@ def restore_reviewed_backup(
     current_review = review_backup(output_path, backup_id)
     if not hmac.compare_digest(current_review["production_sha256"], production_sha256):
         raise PreviewChangedError("Production changed since the review.")
+    # The server supplies only a freshly recomputed proposal. Never accept
+    # mismatched partial content or a forged target fingerprint.
+    if prepared_content is None:
+        target = candidate
+    else:
+        if (
+            not isinstance(prepared_sha256, str)
+            or not _SHA.fullmatch(prepared_sha256)
+            or preview_digest(prepared_content) != prepared_sha256
+        ):
+            raise BackupRestoreError("Prepared restoration content changed.")
+        target = prepared_content
+    if not _entities_nonempty(target):
+        raise BackupRestoreError("Refusing an empty restored configuration.")
+    target_sha256 = preview_digest(target)
+
     # Re-check bytes on disk immediately before writing.
     validate_production_unchanged(output_path, production_sha256)
     # Recheck the selected backup before the ownership transaction.
@@ -401,7 +502,7 @@ def restore_reviewed_backup(
         ownership_registry_path,
         entry_id=entry_id, output_path=output_path,
         backup_id=backup_id, original_sha256=production_sha256,
-        restored_sha256=backup_sha256,
+        restored_sha256=target_sha256,
     )
     # The supported HA endpoints serialize restoration and generation via
     # the shared HA workflow lock. Recheck once more after installing the hold
@@ -410,7 +511,7 @@ def restore_reviewed_backup(
     try:
         result = write_owned_output(
             output_path=output_path,
-            content=candidate,
+            content=target,
             entry_id=entry_id,
             ownership_registry_path=ownership_registry_path,
             backup_directory=_backup_directory(output_path),

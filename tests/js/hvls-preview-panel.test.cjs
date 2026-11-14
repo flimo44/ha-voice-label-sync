@@ -1031,6 +1031,7 @@ test("Confirmed restoration applies reviewed YAML and labels then refreshes", as
     production_sha256: "a".repeat(64),
     label_plan_sha256: "c".repeat(64),
     label_plan: {add: [], remove: ["switch.old"], review: []},
+    comparison: {status: "ok", identical_entities: false},
     projection: {ready: true}};
   let refreshed = false, loaded = false;
   panel._loadPreview = async () => {refreshed = true;};
@@ -1076,7 +1077,8 @@ test("Failed restore Apply clears stale approval and reloads guard", async () =>
     backup_id: "backup.bak", backup_sha256: "b".repeat(64),
     production_sha256: "a".repeat(64),
     label_plan_sha256: "c".repeat(64),
-    projection: {ready: true}, label_plan: {review: []}};
+    projection: {ready: true}, label_plan: {review: [], add: ["switch.new"], remove: []},
+    comparison: {status: "ok", identical_entities: false}};
   let refreshed = false;
   panel._loadPreview = async () => {refreshed = true;};
   await panel._applyPreview();
@@ -1084,6 +1086,133 @@ test("Failed restore Apply clears stale approval and reloads guard", async () =>
   assert.equal(panel._stagedRestore, null);
   assert.equal(controls.apply.disabled, true);
   assert.match(panel.status, /Restauration refusée ou incomplète/);
+});
+
+test("Cancel discards a staged restoration without changing HA or production", async () => {
+  const calls = [];
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request.type);
+    return preview(true);
+  });
+  panel._stagedRestore = {
+    mode: "restore_preview",
+    ignored_entities: ["switch.absent"],
+    label_plan: {add: [], remove: [], review: []},
+    comparison: {status: "ok", identical_entities: true},
+    projection: {ready: true},
+  };
+  await panel._cancelPreview();
+
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_preview"]);
+  assert.equal(panel._stagedRestore, null);
+  assert.equal(panel._review, null);
+  assert.equal(controls.apply.disabled, true);
+  assert.match(panel.status, /Preview annulé/);
+  assert.match(source, /id="cancelPreview"[^>]*>.*cancelPreview/);
+});
+
+test("Ignoring missing backup entity recalculates server-side without applying", async () => {
+  const calls = [];
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request);
+    assert.equal(request.type, "ha_voice_label_sync/prepare_backup_preview");
+    return {
+      ...staged,
+      ignored_entities: ["switch.absent"],
+      comparison: {status: "ok", added: [], removed: [],
+        modified: [], identical_entities: true},
+      label_plan: {add: [], remove: [], review: []},
+      projection: {ready: true},
+    };
+  });
+  const staged = {
+    mode: "restore_preview", backup_id: "backup.bak",
+    backup_sha256: "b".repeat(64), production_sha256: "a".repeat(64),
+    label_plan_sha256: "c".repeat(64), ignored_entities: [],
+    ignore_candidates: ["switch.absent"],
+    comparison: {status: "ok", added: ["switch.absent"],
+      removed: [], modified: [], identical_entities: false},
+    label_plan: {add: [], remove: [],
+      review: [{entity_id: "switch.absent", reason: "missing_ha_entity"}]},
+    projection: {ready: false},
+  };
+  panel._stagedRestore = staged;
+  await panel._setRestoreIgnored("switch.absent", true);
+
+  assert.deepEqual([...calls[0].ignored_entities], ["switch.absent"]);
+  assert.equal(calls[0].backup_sha256, "b".repeat(64));
+  assert.equal(calls.length, 1);
+  assert.deepEqual([...panel._stagedRestore.ignored_entities], ["switch.absent"]);
+  assert.equal(panel._stagedRestore.label_plan.review.length, 0);
+  assert.equal(controls.apply.disabled, true); // All proposed changes skipped.
+  assert.equal(panel._review, null);
+});
+
+test("Ignored choice is sent unchanged during valid partial restoration Apply", async () => {
+  const calls = [];
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request);
+    if (request.type === "ha_voice_label_sync/apply_backup_preview") {
+      return {applied: true, reconciled: true, yaml_entities: 3,
+        label_additions: 1, label_removals: 0, safety_backup: "safety.bak"};
+    }
+    if (request.type === "ha_voice_label_sync/generate_preview") {
+      return {generated: true};
+    }
+    throw new Error("Unexpected request");
+  });
+  panel._stagedRestore = {
+    mode: "restore_preview", backup_id: "backup.bak",
+    backup_sha256: "b".repeat(64), production_sha256: "a".repeat(64),
+    label_plan_sha256: "c".repeat(64),
+    ignored_entities: ["switch.absent"],
+    label_plan: {add: ["switch.new"], remove: [], review: []},
+    comparison: {status: "ok", identical_entities: false,
+      added: ["switch.new"], removed: [], modified: []},
+    projection: {ready: true},
+  };
+  panel._loadPreview = async () => {};
+  panel._loadEntities = async () => {};
+  panel._updateApplyButton();
+  assert.equal(controls.apply.disabled, false);
+  await panel._applyPreview();
+  assert.deepEqual([...calls[0].ignored_entities], ["switch.absent"]);
+  assert.equal(panel._stagedRestore, null);
+});
+
+test("Cancel while a new ignore Preview is being prepared cannot revive it", async () => {
+  const pending = deferred();
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request.type);
+    if (request.type === "ha_voice_label_sync/prepare_backup_preview") {
+      return pending.promise;
+    }
+    return preview();
+  });
+  panel._stagedRestore = {
+    mode: "restore_preview", backup_id: "backup.bak",
+    backup_sha256: "b".repeat(64), production_sha256: "a".repeat(64),
+    label_plan_sha256: "c".repeat(64), ignored_entities: [],
+    ignore_candidates: ["switch.absent"],
+    label_plan: {add: [], remove: [], review: []},
+    comparison: {status: "ok", identical_entities: false},
+    projection: {ready: false},
+  };
+  const updating = panel._setRestoreIgnored("switch.absent", true);
+  assert.equal(panel._restoring, true);
+  await panel._cancelPreview(); // Busy state must prevent accidental cancel.
+  assert.equal(calls.length, 1);
+  pending.resolve({
+    ...panel._stagedRestore, mode: "restore_preview",
+    ignored_entities: ["switch.absent"],
+    label_plan: {add: [], remove: [], review: []},
+    label_plan_sha256: "c".repeat(64),
+    comparison: {status: "ok", identical_entities: true},
+    projection: {ready: true},
+  });
+  await updating;
+  assert.equal(panel._restoring, false);
 });
 
 test("Backup text-only differences are identified without direct restore", () => {

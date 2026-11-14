@@ -1571,6 +1571,7 @@ async def websocket_review_backup(
     vol.Required("backup_id"): str,
     vol.Required("backup_sha256"): str,
     vol.Required("production_sha256"): str,
+    vol.Optional("ignored_entities", default=[]): [str],
 })
 async def websocket_prepare_backup_preview(
     hass: HomeAssistant,
@@ -1601,6 +1602,7 @@ async def websocket_prepare_backup_preview(
                     output_path, msg["backup_id"],
                     msg["backup_sha256"], msg["production_sha256"],
                     catalog,
+                    ignored_entities=msg.get("ignored_entities", []),
                     registries=registries,
                     label=settings.get(CONF_LABEL, DEFAULT_LABEL),
                     domains=DEFAULT_DOMAINS,
@@ -1625,6 +1627,7 @@ async def websocket_prepare_backup_preview(
     vol.Required("backup_sha256"): str,
     vol.Required("production_sha256"): str,
     vol.Required("label_plan_sha256"): str,
+    vol.Optional("ignored_entities", default=[]): [str],
 })
 async def websocket_apply_backup_preview(
     hass: HomeAssistant,
@@ -1663,6 +1666,7 @@ async def websocket_apply_backup_preview(
                     prepare_backup_preview,
                     output_path, msg["backup_id"], msg["backup_sha256"],
                     msg["production_sha256"], catalog,
+                    ignored_entities=msg.get("ignored_entities", []),
                     registries=registries, label=configured_label,
                     domains=DEFAULT_DOMAINS,
                 )
@@ -1672,9 +1676,15 @@ async def websocket_apply_backup_preview(
                 or review["projection"] is None
                 or review["projection"]["ready"] is not True
                 or review["label_plan"]["review"]
+                or not review["projection"]["ready"]
+                or (
+                    review["comparison"]["identical_text"]
+                    and not review["label_plan"]["add"]
+                    and not review["label_plan"]["remove"]
+                )
             ):
                 raise BackupRestoreError(
-                    "Restore Preview is stale or contains unresolved entities"
+                    "Restore Preview is stale, empty or contains unresolved entities"
                 )
 
             # This writer creates an independent safety backup and a durable
@@ -1687,6 +1697,8 @@ async def websocket_apply_backup_preview(
                     msg["production_sha256"],
                     entry_id=entry.entry_id,
                     ownership_registry_path=ownership_path,
+                    prepared_content=review["content"],
+                    prepared_sha256=review["preview_sha256"],
                 )
             )
             yaml_written = True
@@ -1746,7 +1758,7 @@ async def websocket_apply_backup_preview(
                     complete_preview_restoration,
                     output_path, ownership_path,
                     entry_id=entry.entry_id,
-                    backup_sha256=msg["backup_sha256"],
+                    backup_sha256=review["preview_sha256"],
                 )
             )
         except (

@@ -410,6 +410,14 @@ const HVLS_TRANSLATIONS = {
     previewGenerated: "Preview généré : {count} entités. Vérifiez les différences avant application.",
     previewGenerateFailed: "Échec de génération du Preview : {error}",
     applyInfoLabel: "Pourquoi Apply est-il désactivé ?",
+    cancelPreview: "Annuler",
+    previewCancelled: "Preview annulé : aucune modification effectuée.",
+    backupIgnoreTitle: "Entités à ignorer pour cette restauration",
+    backupIgnoreHelp: "Une entité ignorée conserve sa configuration et ses étiquettes actuelles. Le Preview est recalculé après chaque choix.",
+    backupIgnoreEntity: "Ignorer cette entité",
+    backupIgnoreUpdating: "Recalcul du Preview après exclusion…",
+    backupIgnoreFailed: "Impossible de recalculer le Preview : {error}. Aucun fichier ni label modifié.",
+    backupIgnoreSelected: "Entités ignorées : {count}.",
     applyNoChanges: "Aucune modification à appliquer : le Preview est déjà identique à la production.",
     applyReasonMissingIdentity: "L'identité de l'installation HVLS est indisponible.",
     applyReasonUnsafePath: "Le chemin du fichier ou du registre n'est pas sûr. Vérifiez notamment les liens symboliques.",
@@ -867,6 +875,14 @@ const HVLS_TRANSLATIONS = {
     previewGenerated: "Preview generated: {count} entities. Review differences before applying.",
     previewGenerateFailed: "Failed to generate Preview: {error}",
     applyInfoLabel: "Why is Apply disabled?",
+    cancelPreview: "Cancel",
+    previewCancelled: "Preview canceled: nothing changed.",
+    backupIgnoreTitle: "Entities to ignore for this restoration",
+    backupIgnoreHelp: "Ignored entities retain their current configuration and HA labels. Preview is recalculated after each choice.",
+    backupIgnoreEntity: "Ignore this entity",
+    backupIgnoreUpdating: "Recalculating Preview with exclusions…",
+    backupIgnoreFailed: "Unable to recalculate Preview: {error}. No YAML or labels changed.",
+    backupIgnoreSelected: "Ignored entities: {count}.",
     applyNoChanges: "No changes to apply: the Preview already matches production.",
     applyReasonMissingIdentity: "The HVLS installation identity is unavailable.",
     applyReasonUnsafePath: "The output or registry path is unsafe. Check for symbolic links.",
@@ -1337,6 +1353,13 @@ class HVLSPreviewPanel extends HTMLElement {
         staged?.mode === "restore_preview" &&
         staged.projection?.ready === true &&
         staged.label_plan?.review?.length === 0 &&
+        staged.comparison?.status === "ok" &&
+        (
+          staged.comparison?.identical_entities === false ||
+          staged.comparison?.identical_text === false ||
+          (staged.label_plan?.add?.length || 0) > 0 ||
+          (staged.label_plan?.remove?.length || 0) > 0
+        ) &&
         /^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "");
       button.disabled = (!this._review && !canApplyRestoration) ||
         this._applying === true || this._restoring === true ||
@@ -1344,6 +1367,14 @@ class HVLSPreviewPanel extends HTMLElement {
         this._entityWritePending === true;
       button.textContent = staged
         ? this._t("backupPreviewApply") : this._t("apply");
+    }
+    const cancel = this.querySelector("#cancelPreview");
+    if (cancel) {
+      cancel.hidden = !this._review && !this._stagedRestore;
+      cancel.disabled = this._applying === true || this._restoring === true ||
+        this._generating === true || this._refreshing === true ||
+        this._entityWritePending === true;
+      cancel.textContent = this._t("cancelPreview");
     }
     let displayReason = this._applyBlockReason || "";
 
@@ -1449,12 +1480,91 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  async _cancelPreview() {
+    if (this._applying || this._restoring || this._refreshing ||
+        this._generating || this._entityWritePending) return;
+    // Local cancellation only. Never write YAML, labels or ownership state.
+    this._loadId = (this._loadId || 0) + 1;
+    this._stagedRestore = null;
+    this._review = null;
+    this._applyBlockReason = null;
+    this._applyBlockReasonCode = null;
+    this._updateApplyButton();
+    await this._loadPreview();
+    this._review = null;  // Cancel also discards normal Preview approval.
+    this._updateApplyButton();
+    this._setStatusKey("previewCancelled");
+  }
+
+  async _setRestoreIgnored(entityId, ignore) {
+    const staged = this._stagedRestore;
+    if (!staged || !staged.ignore_candidates?.includes(entityId) ||
+        this._restoring || this._applying || this._refreshing ||
+        this._generating || this._entityWritePending) return;
+    const ignored = new Set(staged.ignored_entities || []);
+    if (ignore) ignored.add(entityId);
+    else ignored.delete(entityId);
+    const proposed = [...ignored].sort();
+    if (proposed.join("\\u0000") ===
+        [...(staged.ignored_entities || [])].sort().join("\\u0000")) return;
+
+    const requestId = (this._loadId || 0) + 1;
+    this._loadId = requestId;
+    this._restoring = true;
+    this._stagedRestore = null;  // Existing approval is now invalid.
+    this._review = null;
+    this._updateApplyButton();
+    this._setStatusKey("backupIgnoreUpdating");
+    try {
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/prepare_backup_preview",
+        backup_id: staged.backup_id,
+        backup_sha256: staged.backup_sha256,
+        production_sha256: staged.production_sha256,
+        ignored_entities: proposed,
+      });
+      if (this._loadId !== requestId) return;
+      if (result?.mode !== "restore_preview" ||
+          result?.comparison?.status !== "ok" ||
+          !Array.isArray(result.ignored_entities) ||
+          !result.label_plan || !result.projection ||
+          !/^[0-9a-f]{64}$/.test(result.label_plan_sha256 || "")) {
+        throw new Error("Invalid restore Preview response");
+      }
+      this._stagedRestore = result;
+      this._previewContent = result.content;
+      this._previewPath = result.path;
+      this._applyBlockReason =
+        result.comparison.identical_text === true &&
+        !(result.label_plan.add?.length || result.label_plan.remove?.length)
+          ? this._t("applyNoChanges")
+          : this._t("backupPreviewNotExecutable");
+      this._applyBlockReasonCode = null;
+      this._renderAnalysis(result);
+      this._setContent(result.content);
+      this._setStatusKey("backupIgnoreSelected", {count: proposed.length});
+    } catch (error) {
+      if (this._loadId === requestId) {
+        this._stagedRestore = staged;
+        this._renderAnalysis(staged);
+        this._setStatusKey("backupIgnoreFailed", {
+          error: error.message || String(error),
+        });
+      }
+    } finally {
+      this._restoring = false;
+      this._updateApplyButton();
+    }
+  }
+
   async _applyStagedRestore() {
     const staged = this._stagedRestore;
     if (!this._hass || !staged || this._applying || this._restoring ||
         this._refreshing || this._generating || this._entityWritePending ||
         staged.projection?.ready !== true ||
         staged.label_plan?.review?.length !== 0 ||
+        (staged.comparison?.identical_text === true &&
+          !(staged.label_plan?.add?.length || staged.label_plan?.remove?.length)) ||
         !/^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "")) return;
     if (!window.confirm(this._t("backupPreviewConfirm"))) return;
 
@@ -1471,6 +1581,7 @@ class HVLSPreviewPanel extends HTMLElement {
         backup_sha256: staged.backup_sha256,
         production_sha256: staged.production_sha256,
         label_plan_sha256: staged.label_plan_sha256,
+        ignored_entities: staged.ignored_entities || [],
       });
       if (applied?.applied !== true || applied?.reconciled !== true) {
         throw new Error("Invalid restore verification response");
@@ -1882,6 +1993,37 @@ class HVLSPreviewPanel extends HTMLElement {
               previewNotice.appendChild(details);
             }
           }
+        }
+        // An ignored entity retains its production YAML and HA labels.
+        // Recalculation and all approval fingerprints are server-side.
+        if (this._stagedRestore.ignore_candidates?.length) {
+          const details = document.createElement("details");
+          details.open = true;
+          const heading = document.createElement("summary");
+          heading.textContent = this._t("backupIgnoreTitle");
+          details.appendChild(heading);
+          const note = document.createElement("p");
+          note.className = "diagnostic-note";
+          note.textContent = this._t("backupIgnoreHelp");
+          details.appendChild(note);
+          for (const entityId of this._stagedRestore.ignore_candidates) {
+            const label = document.createElement("label");
+            label.className = "entity-hvls-control";
+            label.style = "display:flex; margin:8px 0; white-space:normal;";
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.className = "entity-hvls-checkbox";
+            checkbox.checked = (this._stagedRestore.ignored_entities || []).includes(entityId);
+            checkbox.setAttribute("aria-label", this._t("backupIgnoreEntity") + ": " + entityId);
+            checkbox.addEventListener("change", () =>
+              this._setRestoreIgnored(entityId, checkbox.checked)
+            );
+            const text = document.createElement("span");
+            text.textContent = entityId + " — " + this._t("backupIgnoreEntity");
+            label.append(checkbox, text);
+            details.appendChild(label);
+          }
+          previewNotice.appendChild(details);
         }
         // The actual proposed HA-label operations must be visible individually,
         // including exceptional entities. The Preview is never an implicit write.
@@ -2790,6 +2932,7 @@ class HVLSPreviewPanel extends HTMLElement {
               ${this._t("applyUnmanagedAssistantAction")}
             </button>
           </details>
+          <button id="cancelPreview" class="secondary" type="button" hidden>${this._t("cancelPreview")}</button>
           <button id="apply" type="button" disabled>${this._t("apply")}</button>
         </div>
         </section>
@@ -3056,6 +3199,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this.querySelector("#refresh").addEventListener("click", () => this._refreshAll());
     this.querySelector("#copy").addEventListener("click", () => this._copyPreview());
     this.querySelector("#apply").addEventListener("click", () => this._applyPreview());
+    this.querySelector("#cancelPreview").addEventListener("click", () => this._cancelPreview());
     this.querySelector("#applyUnmanagedAssistant").addEventListener(
       "click", () => this._activateTab("migration")
     );
@@ -3931,6 +4075,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
         backup_id: data.backup_id,
         backup_sha256: data.backup_sha256,
         production_sha256: data.production_sha256,
+        ignored_entities: [],
       });
       if (this._loadId !== requestId) return;
       if (result?.mode !== "restore_preview" ||
@@ -3945,7 +4090,11 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._backupRestoreCompleted = false;
       this._previewContent = result.content;
       this._previewPath = result.path;
-      this._applyBlockReason = this._t("backupPreviewNotExecutable");
+      this._applyBlockReason =
+        result.comparison.identical_text === true &&
+        !(result.label_plan.add?.length || result.label_plan.remove?.length)
+          ? this._t("applyNoChanges")
+          : this._t("backupPreviewNotExecutable");
       this._applyBlockReasonCode = null;
       this._renderAnalysis(result);
       this._setContent(result.content);
