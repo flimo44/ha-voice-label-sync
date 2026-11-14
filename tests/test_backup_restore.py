@@ -242,6 +242,89 @@ def test_backup_candidate_rejects_stale_production_and_backup(
             review["production_sha256"], {"entities": []},
         )
 
+def test_restore_projection_52_to_40_matches_labels_without_writing(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    original = "switch.initial:\n  expose: true\n"
+    output.write_text(original, encoding="utf-8")
+    backups = tmp_path / ".hvls_backups"
+    backups.mkdir()
+    backup_id = "google_entities.yaml.20261114-020202.bak"
+    candidate = "".join(
+        f"switch.test_{n}:\n  expose: true\n  name: Device {n}\n\n"
+        for n in range(40)
+    )
+    (backups / backup_id).write_text(candidate)
+    entries = [
+        {"entity_id": f"switch.test_{n}", "name": f"Device {n}",
+         "labels": ["hvls"], "area_id": None, "device_id": None,
+         "disabled_by": None, "hidden_by": None, "entity_category": None}
+        for n in range(52)
+    ]
+    registries = {
+        "entity_registry": {"data": {"entities": entries}},
+        "device_registry": {"data": {"devices": []}},
+        "area_registry": {"data": {"areas": []}},
+        "label_registry": {"data": {"labels": [
+            {"label_id": "hvls", "name": "HVLS"}
+        ]}},
+    }
+    catalog = {"labeled": 52, "entities": [
+        {"entity_id": entry["entity_id"], "has_label": True, "eligible": True}
+        for entry in entries
+    ]}
+    review = backup_module.review_backup(output, backup_id)
+    result = backup_module.prepare_backup_preview(
+        output, backup_id, review["backup_sha256"],
+        review["production_sha256"], catalog,
+        registries=registries, label="HVLS", domains=frozenset({"switch"}),
+    )
+    assert result["projection"]["ready"] is True
+    assert result["projection"]["comparison"]["identical_entities"] is True
+    assert len(result["label_plan"]["remove"]) == 12
+    assert result["can_apply"] is False
+    assert output.read_text() == original
+    assert all(entry["labels"] == ["hvls"] for entry in entries)
+
+
+def test_restore_projection_detects_old_name_mismatch(backup_module, tmp_path):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.old:\n  expose: true\n")
+    backups = tmp_path / ".hvls_backups"
+    backups.mkdir()
+    backup_id = "google_entities.yaml.20261114-020203.bak"
+    (backups / backup_id).write_text(
+        "switch.old:\n  expose: true\n  name: Historic\n",
+    )
+    registry = {
+        "entity_registry": {"data": {"entities": [
+            {"entity_id": "switch.old", "name": "Current",
+             "labels": ["hvls"], "area_id": None, "device_id": None,
+             "disabled_by": None, "hidden_by": None, "entity_category": None}
+        ]}},
+        "device_registry": {"data": {"devices": []}},
+        "area_registry": {"data": {"areas": []}},
+        "label_registry": {"data": {"labels": [
+            {"label_id": "hvls", "name": "HVLS"}
+        ]}},
+    }
+    catalog = {"labeled": 1, "entities": [
+        {"entity_id": "switch.old", "has_label": True, "eligible": True}
+    ]}
+    review = backup_module.review_backup(output, backup_id)
+    result = backup_module.prepare_backup_preview(
+        output, backup_id, review["backup_sha256"],
+        review["production_sha256"], catalog,
+        registries=registry, label="HVLS", domains=frozenset({"switch"}),
+    )
+    assert result["projection"]["ready"] is False
+    modified = result["projection"]["comparison"]["modified"]
+    assert modified[0]["fields"]["name"] == {
+        "before": "Historic", "after": "Current",
+    }
+
+
 def test_restore_creates_mandatory_safety_copy(backup_module, sample):
     output, backup_id, source = sample
     make_owned(output)
