@@ -125,6 +125,96 @@ def review_backup(output_path: Path, backup_id: str) -> dict:
     }
 
 
+def prepare_backup_preview(
+    output_path: Path, backup_id: str,
+    backup_sha256: str, production_sha256: str,
+    catalog: dict,
+) -> dict:
+    """Review the selected backup as a *proposal*; never write YAML or labels.
+
+    The reviewed digests must still match when the user opens this Preview.
+    The label plan is informative and deliberately not executable yet.
+    """
+    if not all(
+        isinstance(value, str) and _SHA.fullmatch(value)
+        for value in (backup_sha256, production_sha256)
+    ):
+        raise BackupRestoreError("Invalid preview approval fingerprints.")
+    review = review_backup(output_path, backup_id)
+    if not hmac.compare_digest(review["backup_sha256"], backup_sha256):
+        raise PreviewChangedError("Selected backup changed; review it again.")
+    if not hmac.compare_digest(
+        review["production_sha256"], production_sha256
+    ):
+        raise PreviewChangedError("Production changed; review it again.")
+
+    content = _read_yaml(_get_backup(output_path, backup_id))
+    production = _read_yaml(output_path)
+    if preview_digest(content) != backup_sha256:
+        raise PreviewChangedError("Selected backup changed during preparation.")
+    if preview_digest(production) != production_sha256:
+        raise PreviewChangedError("Production changed during preparation.")
+
+    # The HA entity registry is a snapshot, not a command. Missing, hidden or
+    # ineligible entities are reported for review instead of being omitted.
+    from .preview_compare import _entities
+
+    targets = _entities(content)
+    entities = {
+        entity["entity_id"]: entity
+        for entity in catalog.get("entities", [])
+        if isinstance(entity, dict) and isinstance(entity.get("entity_id"), str)
+    }
+    exposed = {
+        entity_id for entity_id, fields in targets.items()
+        if fields.get("expose") is True
+    }
+    additions = []
+    removals = []
+    review_needed = []
+
+    for entity_id, fields in sorted(targets.items()):
+        if fields.get("expose") is not True:
+            review_needed.append({
+                "entity_id": entity_id, "reason": "not_explicitly_exposed",
+            })
+            continue
+        entity = entities.get(entity_id)
+        if entity is None:
+            review_needed.append({
+                "entity_id": entity_id, "reason": "missing_ha_entity",
+            })
+        elif entity.get("eligible") is not True:
+            review_needed.append({
+                "entity_id": entity_id,
+                "reason": entity.get("exclusion_reason") or "ineligible",
+            })
+        elif entity.get("has_label") is not True:
+            additions.append(entity_id)
+
+    for entity_id, entity in sorted(entities.items()):
+        if entity.get("has_label") is True and entity_id not in exposed:
+            removals.append(entity_id)
+
+    return {
+        **review,
+        "available": True,
+        "mode": "restore_preview",
+        "content": content,
+        "production_path": str(output_path),
+        "path": f"Backup: {backup_id}",
+        "preview_sha256": backup_sha256,
+        "production_summary": analyze_preview(production, None)["summary"],
+        "label_plan": {
+            "add": additions,
+            "remove": removals,
+            "review": review_needed,
+            "current_label_count": catalog.get("labeled"),
+        },
+        "can_apply": False,  # Stage 1: transaction apply is not implemented.
+    }
+
+
 def _safety_backup(output_path: Path) -> Path:
     """Create an independent, unique safety backup before replacing production."""
     directory = _backup_directory(output_path)
