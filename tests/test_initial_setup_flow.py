@@ -161,12 +161,12 @@ def test_initial_form_detects_existing_manual_yaml(
     assert labels == []
 
 
-def test_manual_source_as_output_is_refused(
+def test_existing_google_source_can_be_selected_without_any_file_write(
     tmp_path, environment
 ):
     source = tmp_path / "manual.yaml"
-    source.write_bytes(b"configuration utilisateur\n")
-
+    original = b"switch.pump:\n  expose: true\n  name: Manual\n"
+    source.write_bytes(original)
     (tmp_path / "configuration.yaml").write_text(
         "google_assistant:\n"
         "  entity_config: !include manual.yaml\n",
@@ -176,28 +176,33 @@ def test_manual_source_as_output_is_refused(
     flow, labels = make_flow(environment, tmp_path)
     result = run(flow, values(source))
 
-    assert result["type"] == "form"
-    assert result["errors"]["base"] == "source_output_conflict"
-    assert source.read_bytes() == b"configuration utilisateur\n"
-    assert labels == []
+    assert result["type"] == "create_entry"
+    assert result["data"]["output"] == str(source)
+    assert source.read_bytes() == original
+    assert labels == ["google_assistant"]
+    assert not (tmp_path / ".hvls").exists()
+    assert not (tmp_path / ".hvls_backups").exists()
 
 
-def test_existing_unrelated_output_is_refused(
+def test_existing_unreferenced_output_can_be_configured_but_not_modified(
     tmp_path, environment
 ):
     (tmp_path / "configuration.yaml").write_text(
         "default_config:\n", encoding="utf-8"
     )
-
-    output = tmp_path / "existing.yaml"
-    output.write_bytes(b"do not overwrite\n")
+    output = tmp_path / "google_assistant_entities.yaml"
+    original = b"do not overwrite\n"
+    output.write_bytes(original)
 
     flow, labels = make_flow(environment, tmp_path)
     result = run(flow, values(output))
 
-    assert result["errors"]["base"] == "existing_output_not_owned"
-    assert output.read_bytes() == b"do not overwrite\n"
-    assert labels == []
+    assert result["type"] == "create_entry"
+    assert result["data"]["output"] == str(output)
+    assert output.read_bytes() == original
+    assert labels == ["google_assistant"]
+    assert not (tmp_path / ".hvls").exists()
+    assert not (tmp_path / ".hvls_backups").exists()
 
 
 def test_changing_to_safe_output_allows_configuration(
@@ -215,14 +220,16 @@ def test_changing_to_safe_output_allows_configuration(
     flow, labels = make_flow(environment, tmp_path)
 
     first = run(flow, values(source))
-    assert first["errors"]["base"] == "source_output_conflict"
+    assert first["type"] == "create_entry"
+    assert first["data"]["output"] == str(source)
+    assert source.read_bytes() == b"manual\n"
 
     output = tmp_path / "generated.yaml"
     second = run(flow, values(output))
 
     assert second["type"] == "create_entry"
     assert second["data"]["output"] == str(output)
-    assert labels == ["google_assistant"]
+    assert labels == ["google_assistant", "google_assistant"]
     assert source.read_bytes() == b"manual\n"
     assert not output.exists()
 
