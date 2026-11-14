@@ -93,7 +93,7 @@ const HVLS_TRANSLATIONS = {
     assistantReinstallTitle: "Récupérer le fichier après réinstallation",
     assistantReinstallIntro: "Ce fichier appartient à une précédente installation HVLS. Si elle n’existe plus, HVLS peut vérifier son empreinte, effectuer une sauvegarde de sécurité, puis transférer sa gestion à cette installation. Ni le YAML ni les étiquettes ne seront modifiés.",
     assistantReinstallAction: "Vérifier et récupérer la gestion",
-    assistantReinstallConfirm: "Transférer la gestion de {path} vers cette installation HVLS ?\\n\\nLa précédente installation doit être absente de Home Assistant et le SHA-256 doit correspondre. Une sauvegarde vérifiée sera créée.\\n\\nLe YAML et les étiquettes resteront INCHANGÉS. Le Preview et ses différences sont distincts.",
+    assistantReinstallConfirm: "Transférer la gestion de {path} vers cette installation HVLS ?\n\nLa précédente installation doit être absente de Home Assistant et le SHA-256 doit correspondre. Une sauvegarde vérifiée sera créée.\n\nLe YAML et les étiquettes resteront INCHANGÉS. Le Preview et ses différences sont distincts.",
 
     assistantTakeoverIntro: "Si ce fichier est le fichier de production configuré, HVLS peut le sauvegarder puis enregistrer sa prise en charge, sans réécrire son contenu. Les différences avec le Preview restent soumises à un Apply distinct.",
     assistantTakeoverAction: "Vérifier et reprendre ce fichier",
@@ -595,7 +595,7 @@ const HVLS_TRANSLATIONS = {
     assistantReinstallTitle: "Recover YAML management after reinstalling",
     assistantReinstallIntro: "This YAML belongs to a previous HVLS installation. If it no longer exists, HVLS can verify its digest, create a safety backup and transfer management to this installation. YAML and HA labels stay unchanged.",
     assistantReinstallAction: "Verify and recover management",
-    assistantReinstallConfirm: "Transfer management of {path} to this HVLS installation?\\n\\nThe old installation must be absent from Home Assistant and the SHA-256 must match. A verified backup will be made.\\n\\nYAML and labels will NOT be changed. Preview differences are separate.",
+    assistantReinstallConfirm: "Transfer management of {path} to this HVLS installation?\n\nThe old installation must be absent from Home Assistant and the SHA-256 must match. A verified backup will be made.\n\nYAML and labels will NOT be changed. Preview differences are separate.",
 
     assistantTakeoverIntro: "If this is the configured production YAML, HVLS can back it up and register its ownership without rewriting its contents. Preview differences still require a separate Apply.",
     assistantTakeoverAction: "Review and take over this file",
