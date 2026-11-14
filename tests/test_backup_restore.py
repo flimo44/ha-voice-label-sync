@@ -141,6 +141,45 @@ def test_backup_candidate_prepares_preview_and_labels_without_mutating_files(
     assert not (tmp_path / ".hvls").exists()
 
 
+
+def test_restore_preview_52_to_40_proposes_12_yaml_and_label_removals(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    before = "".join(
+        f"switch.test_{n}:\n  expose: true\n" for n in range(52)
+    )
+    candidate = "".join(
+        f"switch.test_{n}:\n  expose: true\n" for n in range(40)
+    )
+    output.write_text(before, encoding="utf-8")
+    backups = tmp_path / ".hvls_backups"
+    backups.mkdir()
+    backup_id = "google_entities.yaml.20261114-015959.bak"
+    (backups / backup_id).write_text(candidate, encoding="utf-8")
+    catalog = {
+        "labeled": 52,
+        "entities": [
+            {"entity_id": f"switch.test_{n}", "eligible": True, "has_label": True}
+            for n in range(52)
+        ],
+    }
+    review = backup_module.review_backup(output, backup_id)
+    result = backup_module.prepare_backup_preview(
+        output, backup_id, review["backup_sha256"],
+        review["production_sha256"], catalog,
+    )
+    removed = {f"switch.test_{n}" for n in range(40, 52)}
+    assert result["comparison"]["added"] == []
+    assert set(result["comparison"]["removed"]) == removed
+    assert set(result["label_plan"]["remove"]) == removed
+    assert result["label_plan"]["add"] == []
+    assert result["production_summary"]["total"] == 52
+    assert result["summary"]["total"] == 40
+    assert output.read_text(encoding="utf-8") == before
+
+
+
 def test_backup_candidate_lists_missing_or_ineligible_entities_for_review(
     backup_module, tmp_path,
 ):
