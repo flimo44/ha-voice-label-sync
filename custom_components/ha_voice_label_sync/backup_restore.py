@@ -78,6 +78,14 @@ def _read_yaml(path: Path) -> str:
         raise BackupRestoreError("Cannot read the YAML file.") from exc
 
 
+def _backup_kind(backup_id: str) -> str:
+    if backup_id.endswith(".auto.bak"):
+        return "auto"
+    if backup_id.endswith(".safety.bak"):
+        return "safety"
+    return "legacy"
+
+
 def list_backups(output_path: Path) -> dict:
     """List only backups belonging to the configured production filename."""
     result = []
@@ -93,6 +101,7 @@ def list_backups(output_path: Path) -> dict:
             continue
         result.append({
             "id": backup_id,
+            "kind": _backup_kind(backup_id),
             "timestamp": datetime.fromtimestamp(stat.st_mtime).isoformat(
                 timespec="seconds"
             ),
@@ -101,6 +110,76 @@ def list_backups(output_path: Path) -> dict:
             "sha256": preview_digest(content),
         })
     return {"backups": result}
+
+
+def preview_backup_cleanup(
+    output_path: Path, ownership_registry_path: Path, *, keep: int = 10,
+) -> dict:
+    """Preview explicit deletion of older, readable backups of one output.
+
+    Safety and legacy backups are NEVER pruned automatically. A currently
+    unresolved restore guard prohibits cleanup altogether.
+    """
+    if type(keep) is not int or not (1 <= keep <= 100):
+        raise BackupRestoreError("Invalid backup history limit.")
+    if read_guard(ownership_registry_path) is not None:
+        raise BackupRestoreError(
+            "A restoration needs reconciliation; backup cleanup is disabled."
+        )
+    backups = list_backups(output_path)["backups"]
+    # Bind ALL accepted names and hashes, not just proposed deletions.
+    evidence = preview_digest(json.dumps({
+        "output": str(output_path),
+        "keep": keep,
+        "files": [[entry["id"], entry["sha256"]] for entry in backups],
+    }, sort_keys=True, ensure_ascii=False))
+    return {
+        "keep": keep,
+        "total": len(backups),
+        "kept": backups[:keep],
+        "to_delete": backups[keep:],
+        "evidence_sha256": evidence,
+    }
+
+
+def apply_backup_cleanup(
+    output_path: Path, ownership_registry_path: Path, *,
+    keep: int, evidence_sha256: str, confirmed: bool,
+) -> dict:
+    """Delete only the explicitly reviewed older snapshots.
+
+    Must be called inside the shared Home Assistant workflow lock.
+    Never cleans when a durable restore is pending, or when list contents
+    differ from what the administrator reviewed.
+    """
+    if (
+        confirmed is not True
+        or not isinstance(evidence_sha256, str)
+        or not _SHA.fullmatch(evidence_sha256)
+    ):
+        raise BackupRestoreError("Explicit valid cleanup approval required.")
+    plan = preview_backup_cleanup(
+        output_path, ownership_registry_path, keep=keep
+    )
+    if not hmac.compare_digest(plan["evidence_sha256"], evidence_sha256):
+        raise BackupRestoreError(
+            "Backup history changed since preview; review again."
+        )
+    # Verify each candidate's bytes once more BEFORE deleting anything.
+    for entry in plan["to_delete"]:
+        candidate = _get_backup(output_path, entry["id"])
+        if not hmac.compare_digest(
+            preview_digest(_read_yaml(candidate)), entry["sha256"]
+        ):
+            raise BackupRestoreError(
+                "A backup changed during cleanup; nothing deleted."
+            )
+    deleted = []
+    for entry in plan["to_delete"]:
+        candidate = _get_backup(output_path, entry["id"])
+        candidate.unlink()
+        deleted.append(entry["id"])
+    return {"deleted_count": len(deleted), "kept_count": len(plan["kept"])}
 
 
 def review_backup(output_path: Path, backup_id: str) -> dict:
