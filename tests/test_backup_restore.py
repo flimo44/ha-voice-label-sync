@@ -98,6 +98,109 @@ def test_review_direction_is_restoration(backup_module, sample):
     assert diff["identical_text"] is False
 
 
+
+def test_backup_candidate_prepares_preview_and_labels_without_mutating_files(
+    backup_module, tmp_path,
+):
+    """52→40-equivalent removal and 40→52 addition use the same direction."""
+    output = tmp_path / "google_entities.yaml"
+    output.write_text(
+        "switch.a:\n  expose: true\nswitch.b:\n  expose: true\n",
+        encoding="utf-8",
+    )
+    backup_dir = tmp_path / ".hvls_backups"
+    backup_dir.mkdir()
+    backup_id = "google_entities.yaml.20261114-010000.bak"
+    backup = backup_dir / backup_id
+    backup.write_text(
+        "switch.a:\n  expose: true\nswitch.c:\n  expose: true\n",
+        encoding="utf-8",
+    )
+    catalog = {"labeled": 2, "entities": [
+        {"entity_id": "switch.a", "eligible": True, "has_label": True},
+        {"entity_id": "switch.b", "eligible": True, "has_label": True},
+        {"entity_id": "switch.c", "eligible": True, "has_label": False},
+    ]}
+    review = backup_module.review_backup(output, backup_id)
+    before = output.read_bytes()
+    result = backup_module.prepare_backup_preview(
+        output, backup_id, review["backup_sha256"],
+        review["production_sha256"], catalog,
+    )
+    assert result["mode"] == "restore_preview"
+    assert result["can_apply"] is False
+    assert result["production_summary"]["total"] == 2
+    assert result["summary"]["total"] == 2
+    assert result["comparison"]["added"] == ["switch.c"]
+    assert result["comparison"]["removed"] == ["switch.b"]
+    assert result["label_plan"]["add"] == ["switch.c"]
+    assert result["label_plan"]["remove"] == ["switch.b"]
+    assert result["label_plan"]["review"] == []
+    assert output.read_bytes() == before
+    assert backup.read_bytes() == result["content"].encode()
+    assert not (tmp_path / ".hvls").exists()
+
+
+def test_backup_candidate_lists_missing_or_ineligible_entities_for_review(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.a:\n  expose: true\n", encoding="utf-8")
+    backups = tmp_path / ".hvls_backups"
+    backups.mkdir()
+    backup_id = "google_entities.yaml.20261114-010001.bak"
+    (backups / backup_id).write_text(
+        "switch.a:\n  expose: true\n"
+        "switch.disabled:\n  expose: true\n"
+        "switch.missing:\n  expose: true\n"
+        "switch.no_expose:\n  name: Old\n",
+        encoding="utf-8",
+    )
+    catalog = {"labeled": 1, "entities": [
+        {"entity_id": "switch.a", "eligible": True, "has_label": True},
+        {"entity_id": "switch.disabled", "eligible": False, "has_label": False,
+         "exclusion_reason": "disabled"},
+    ]}
+    review = backup_module.review_backup(output, backup_id)
+    result = backup_module.prepare_backup_preview(
+        output, backup_id, review["backup_sha256"],
+        review["production_sha256"], catalog,
+    )
+    reasons = {entry["entity_id"]: entry["reason"]
+               for entry in result["label_plan"]["review"]}
+    assert reasons == {
+        "switch.disabled": "disabled",
+        "switch.missing": "missing_ha_entity",
+        "switch.no_expose": "not_explicitly_exposed",
+    }
+    assert result["label_plan"]["add"] == []
+
+
+def test_backup_candidate_rejects_stale_production_and_backup(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.a:\n  expose: true\n", encoding="utf-8")
+    backups = tmp_path / ".hvls_backups"
+    backups.mkdir()
+    backup_id = "google_entities.yaml.20261114-010002.bak"
+    backup = backups / backup_id
+    backup.write_text("switch.b:\n  expose: true\n", encoding="utf-8")
+    review = backup_module.review_backup(output, backup_id)
+    output.write_text("switch.changed:\n  expose: true\n", encoding="utf-8")
+    with pytest.raises(backup_module.PreviewChangedError, match="Production changed"):
+        backup_module.prepare_backup_preview(
+            output, backup_id, review["backup_sha256"],
+            review["production_sha256"], {"entities": []},
+        )
+    output.write_text("switch.a:\n  expose: true\n", encoding="utf-8")
+    backup.write_text("switch.changed:\n  expose: true\n", encoding="utf-8")
+    with pytest.raises(backup_module.PreviewChangedError, match="backup changed|Selected backup changed"):
+        backup_module.prepare_backup_preview(
+            output, backup_id, review["backup_sha256"],
+            review["production_sha256"], {"entities": []},
+        )
+
 def test_restore_creates_mandatory_safety_copy(backup_module, sample):
     output, backup_id, source = sample
     make_owned(output)
