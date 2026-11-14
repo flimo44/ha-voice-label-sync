@@ -21,9 +21,11 @@ from hvls.owned_writer import evaluate_registered_output
 
 from .backup_restore import (
     BackupRestoreError,
+    apply_backup_cleanup,
     complete_preview_restoration,
     list_backups,
     prepare_backup_preview,
+    preview_backup_cleanup,
     resolve_restored_output,
     restore_reviewed_backup,
     review_backup,
@@ -1497,6 +1499,8 @@ async def websocket_set_entity_label(
 
 
 WS_TYPE_LIST_BACKUPS = f"{DOMAIN}/list_backups"
+WS_TYPE_PREVIEW_BACKUP_CLEANUP = f"{DOMAIN}/preview_backup_cleanup"
+WS_TYPE_APPLY_BACKUP_CLEANUP = f"{DOMAIN}/apply_backup_cleanup"
 WS_TYPE_REVIEW_BACKUP = f"{DOMAIN}/review_backup"
 WS_TYPE_RESTORE_BACKUP = f"{DOMAIN}/restore_backup"
 WS_TYPE_PREPARE_BACKUP_PREVIEW = f"{DOMAIN}/prepare_backup_preview"
@@ -1538,6 +1542,89 @@ async def websocket_list_backups(
     except (BackupRestoreError, OSError, ValueError) as exc:
         connection.send_error(msg["id"], "backup_list_failed", str(exc))
         return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_PREVIEW_BACKUP_CLEANUP,
+})
+async def websocket_preview_backup_cleanup(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Read-only list of old snapshots proposed for explicit cleanup."""
+    async with get_workflow_lock(hass):
+        try:
+            path = _configured_output(hass)
+            entries = hass.config_entries.async_entries(DOMAIN)
+            if len(entries) != 1:
+                raise BackupRestoreError("HVLS installation unavailable")
+            settings = {**entries[0].data, **entries[0].options}
+            keep = int(settings.get(
+                CONF_BACKUP_RETENTION, DEFAULT_BACKUP_RETENTION
+            ))
+            keep = max(1, keep)
+            result = await hass.async_add_executor_job(
+                partial(
+                    preview_backup_cleanup, path,
+                    Path(hass.config.path(".hvls", "ownership.json")),
+                    keep=keep,
+                )
+            )
+        except (BackupRestoreError, OSError, ValueError, TypeError) as exc:
+            connection.send_error(
+                msg["id"], "backup_cleanup_preview_refused", str(exc)
+            )
+            return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_APPLY_BACKUP_CLEANUP,
+    vol.Required("keep"): int,
+    vol.Required("evidence_sha256"): str,
+    vol.Required("confirmed"): bool,
+})
+async def websocket_apply_backup_cleanup(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Delete a reviewed set of backups, never implicitly on upgrade."""
+    async with get_workflow_lock(hass):
+        try:
+            path = _configured_output(hass)
+            entries = hass.config_entries.async_entries(DOMAIN)
+            if len(entries) != 1:
+                raise BackupRestoreError("HVLS installation unavailable")
+            settings = {**entries[0].data, **entries[0].options}
+            expected = max(1, int(settings.get(
+                CONF_BACKUP_RETENTION, DEFAULT_BACKUP_RETENTION
+            )))
+            if msg["keep"] != expected:
+                raise BackupRestoreError(
+                    "Backup retention setting changed; review again."
+                )
+            result = await hass.async_add_executor_job(
+                partial(
+                    apply_backup_cleanup, path,
+                    Path(hass.config.path(".hvls", "ownership.json")),
+                    keep=msg["keep"],
+                    evidence_sha256=msg["evidence_sha256"],
+                    confirmed=msg["confirmed"],
+                )
+            )
+        except (BackupRestoreError, FileWriterError, OSError, ValueError,
+                TypeError) as exc:
+            connection.send_error(
+                msg["id"], "backup_cleanup_apply_refused", str(exc)
+            )
+            return
     connection.send_result(msg["id"], result)
 
 
@@ -1960,6 +2047,8 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_apply_preview)
     websocket_api.async_register_command(hass, websocket_generate_preview)
     websocket_api.async_register_command(hass, websocket_list_backups)
+    websocket_api.async_register_command(hass, websocket_preview_backup_cleanup)
+    websocket_api.async_register_command(hass, websocket_apply_backup_cleanup)
     websocket_api.async_register_command(hass, websocket_review_backup)
     websocket_api.async_register_command(hass, websocket_prepare_backup_preview)
     websocket_api.async_register_command(hass, websocket_apply_backup_preview)
