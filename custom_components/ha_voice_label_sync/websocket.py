@@ -24,7 +24,6 @@ from .backup_restore import (
     list_backups,
     prepare_backup_preview,
     resolve_restored_output,
-    restore_reviewed_backup,
     review_backup,
 )
 from .const import (
