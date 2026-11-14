@@ -992,7 +992,8 @@ test("Backup text-only differences are identified without direct restore", () =>
   assert.equal(nodes.backupDiff.children.length, 3);
   panel._backupReview.comparison.identical_text = true;
   panel._renderBackupDiff();
-  assert.equal(nodes.restoreBackup.disabled, true);
+  // Identical YAML can still require HA-label reconciliation.
+  assert.equal(nodes.restoreBackup.disabled, false);
   assert.equal(nodes.restoreBackup.textContent,
     "Préparer cette sauvegarde dans le Preview");
 });
@@ -1239,14 +1240,31 @@ test("Choosing current labels only unlocks a future separate Apply", async () =>
   assert.equal(panel._restoreReconcilePending, false);
 });
 
-test("Identical backup is never restored even with confirmation", async () => {
+test("Identical backup still prepares Preview when HA labels may differ", async () => {
   const calls = [];
-  const { panel } = makePanel(async message => { calls.push(message); });
-  panel._backupReview = {
-    backup_id: "foo", comparison: {identical_text: true}
-  };
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request.type);
+    return {mode: "restore_preview", available: true, can_apply: false,
+      backup_id: "same.bak", backup_sha256: "a".repeat(64),
+      production_sha256: "b".repeat(64),
+      label_plan_sha256: "c".repeat(64),
+      content: "switch.kept:\\n  expose: true\\n",
+      summary: {total: 40}, production_summary: {total: 40},
+      comparison: {status: "ok", identical_text: true, added: [],
+        removed: [], modified: [], unchanged: 40},
+      label_plan: {add: [], remove: ["switch.extra"], review: []},
+      projection: {ready: true, comparison: {
+        status: "ok", identical_entities: true}}};
+  });
+  panel._backupReview = {backup_id: "same.bak",
+    backup_sha256: "a".repeat(64), production_sha256: "b".repeat(64),
+    comparison: {identical_text: true, status: "ok"}};
+  panel._activateTab = () => {};
   await panel._restoreBackup();
-  assert.equal(calls.length, 0);
+  assert.deepEqual(calls, ["ha_voice_label_sync/prepare_backup_preview"]);
+  assert.equal(panel._stagedRestore.label_plan.remove.length, 1);
+  assert.equal(panel._stagedRestore.production_summary.total, 40);
+  assert.equal(controls.apply.disabled, false);
 });
 
 
