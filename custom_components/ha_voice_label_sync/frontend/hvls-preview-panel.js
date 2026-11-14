@@ -2604,7 +2604,7 @@ class HVLSPreviewPanel extends HTMLElement {
         </section>
         <section id="tab-preview" class="hvls-tab-panel"
           role="tabpanel" hidden>
-        <p id="backupPreviewNotice" class="diagnostic-note" role="status" hidden></p>
+        <div id="backupPreviewNotice" class="diagnostic-note" role="status" hidden></div>
         <div id="restoreReconcilePanel" class="migration-review-note"
           role="status" hidden>
           <h3 id="restoreReconcileTitle"></h3>
