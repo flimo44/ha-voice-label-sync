@@ -749,6 +749,98 @@ def test_preview_disables_apply_for_unmanaged_yaml(
 
 
 
+@pytest.mark.parametrize(
+    ("production_count", "preview_count", "expected_added", "expected_removed"),
+    [(40, 52, 12, 0), (52, 40, 0, 12)],
+)
+def test_readonly_preview_keeps_production_statistics_separate_from_proposal(
+    websocket_module, tmp_path, production_count, preview_count,
+    expected_added, expected_removed,
+):
+    """The stats never switch to Preview counts when restore changes direction."""
+    ws = websocket_module.websocket
+    real_spec = importlib.util.spec_from_file_location(
+        "_test_hvls_real_compare",
+        Path(__file__).resolve().parents[1]
+        / "custom_components/ha_voice_label_sync/preview_compare.py",
+    )
+    real_compare = importlib.util.module_from_spec(real_spec)
+    real_spec.loader.exec_module(real_compare)
+    ws.analyze_preview = real_compare.analyze_preview
+    ws.PreviewFormatError = real_compare.PreviewFormatError
+
+    output = tmp_path / "google_assistant_entities.yaml"
+    preview = tmp_path / "preview.yaml"
+    def yaml_entities(count):
+        return "".join(
+            f"switch.test_{index}:\n  expose: true\n" for index in range(count)
+        )
+    output.write_text(yaml_entities(production_count), encoding="utf-8")
+    preview.write_text(yaml_entities(preview_count), encoding="utf-8")
+
+    before = output.read_bytes()
+    result = ws._read_and_compare_real(preview, output)
+    assert result["production_summary"]["total"] == production_count
+    assert result["summary"]["total"] == preview_count
+    assert len(result["comparison"]["added"]) == expected_added
+    assert len(result["comparison"]["removed"]) == expected_removed
+    assert result["production_sha256"] is not None
+    assert output.read_bytes() == before
+
+
+def test_production_statistics_survive_missing_or_invalid_preview(
+    websocket_module, tmp_path,
+):
+    """Stats describe production even if no Preview can be displayed."""
+    ws = websocket_module.websocket
+    real_spec = importlib.util.spec_from_file_location(
+        "_test_hvls_real_compare_missing_preview",
+        Path(__file__).resolve().parents[1]
+        / "custom_components/ha_voice_label_sync/preview_compare.py",
+    )
+    real_compare = importlib.util.module_from_spec(real_spec)
+    real_spec.loader.exec_module(real_compare)
+    ws.analyze_preview = real_compare.analyze_preview
+    ws.PreviewFormatError = real_compare.PreviewFormatError
+    output = tmp_path / "google_assistant_entities.yaml"
+    preview = tmp_path / "preview.yaml"
+    output.write_text("switch.real:\n  expose: true\n", encoding="utf-8")
+    first = ws._read_and_compare_real(preview, output)
+    assert first["available"] is False
+    assert first["production_summary"]["total"] == 1
+    preview.write_text("broken: [", encoding="utf-8")
+    second = ws._read_and_compare_real(preview, output)
+    assert second["available"] is True
+    assert second["error"]
+    assert second["production_summary"]["total"] == 1
+
+
+def test_invalid_or_missing_production_never_uses_preview_as_statistics(
+    websocket_module, tmp_path,
+):
+    """If the real production is unavailable, dashboard totals stay unknown."""
+    ws = websocket_module.websocket
+    real_spec = importlib.util.spec_from_file_location(
+        "_test_hvls_real_compare_invalid_production",
+        Path(__file__).resolve().parents[1]
+        / "custom_components/ha_voice_label_sync/preview_compare.py",
+    )
+    real_compare = importlib.util.module_from_spec(real_spec)
+    real_spec.loader.exec_module(real_compare)
+    ws.analyze_preview = real_compare.analyze_preview
+    ws.PreviewFormatError = real_compare.PreviewFormatError
+    output = tmp_path / "google_assistant_entities.yaml"
+    preview = tmp_path / "preview.yaml"
+    preview.write_text("switch.preview:\n  expose: true\n", encoding="utf-8")
+    absent = ws._read_and_compare_real(preview, output)
+    assert absent["summary"]["total"] == 1
+    assert absent["production_summary"] is None
+    output.write_text("broken: [", encoding="utf-8")
+    invalid = ws._read_and_compare_real(preview, output)
+    assert invalid["production_summary"] is None
+    assert invalid["production_summary_error"] is not None
+
+
 def test_server_apply_is_blocked_while_restore_is_unresolved(websocket_module):
     ws = websocket_module.websocket
     ws.assert_not_guarded.side_effect = ws.FileWriterError(

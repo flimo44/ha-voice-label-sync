@@ -1033,9 +1033,12 @@ test("Restore warnings reflect fresh Preview comparison, including uncertainty",
   assert.equal(nodes.backupRestoreNotice.textContent, "");
 });
 
-test("Statistics identify Preview entities rather than restored production", () => {
-  assert.match(source, /metricEntities: "Entités du Preview"/);
-  assert.match(source, /metricEntities: "Preview entities"/);
+test("Statistics explicitly use the real production baseline, not proposed Preview", () => {
+  assert.match(source, /metricEntities: "Entités en production"/);
+  assert.match(source, /metricEntities: "Production entities"/);
+  assert.match(source, /const stats = result\.production_summary/);
+  assert.doesNotMatch(source, /const stats = result\.summary/);
+  assert.match(source, /productionStatsUnavailable/);
   assert.match(source, /id="backupRestoreNotice"/);
   assert.match(source, /id="restoreSummaryNotice"/);
 });
@@ -1340,6 +1343,7 @@ test("Production status distinguishes reviewed additions, modifications and unch
   panel._review = {preview_sha256: "a".repeat(64), production_sha256: "b".repeat(64)};
   const result = {
     available: true,
+    production_summary: {total: 3},
     comparison: {
       status: "ok",
       added: ["switch.pending"],
@@ -1350,6 +1354,7 @@ test("Production status distinguishes reviewed additions, modifications and unch
   };
   assert.equal(panel._productionStatus("switch.pending", result), "pending");
   assert.equal(panel._productionStatus("switch.changed", result), "modified");
+  assert.equal(panel._productionStatus("switch.removed", result), "removal");
   assert.equal(panel._productionStatus("switch.saved", result), "validated");
 });
 
@@ -1357,10 +1362,12 @@ test("Production status never implies validation without a current actionable co
   const {panel} = makePanel(async () => ({}));
   const result = {
     available: true,
-    comparison: {status: "ok", added: [], modified: []},
+    production_summary: {total: 1},
+    comparison: {status: "ok", added: [], removed: [], modified: []},
   };
-  assert.equal(panel._productionStatus("switch.saved", result), "unknown");
-  panel._review = {preview_sha256: "a".repeat(64), production_sha256: null};
+  assert.equal(panel._productionStatus("switch.saved", result), "validated");
+  assert.equal(panel._productionStatus("switch.saved",
+    {...result, production_summary: null}), "unknown");
   assert.equal(panel._productionStatus("switch.saved", {...result, available: false}), "unknown");
   assert.equal(panel._productionStatus("switch.saved", {...result, comparison: {status: "missing"}}), "unknown");
   assert.equal(panel._productionStatus("switch.saved", {...result, comparison: {status: "invalid"}}), "unknown");
@@ -1378,6 +1385,11 @@ test("Statistics production indicators are informational and do not apply or cha
   assert.doesNotMatch(block, /addEventListener|apply_preview|_setEntityLabel/);
   assert.match(source, /\.production-status--validated/);
   assert.match(source, /\.production-status--pending/);
+  assert.match(source, /\.production-status--removal/);
+  assert.match(block, /removal: "productionRemoval"/);
+  assert.match(block, /indicator\.textContent = status === "validated"/);
+  assert.match(block, /status === "removal" \? "−"/);
+  assert.match(source, /productionRemoval: "Suppression prévue/);
 });
 
 

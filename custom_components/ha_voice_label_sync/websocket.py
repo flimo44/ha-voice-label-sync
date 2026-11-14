@@ -1082,36 +1082,53 @@ def _read_file(path: Path) -> tuple[str | None, str | None]:
 
 
 def _read_and_compare(preview_path: Path, output_path: Path) -> dict[str, Any]:
-    """Read and compare Preview and production off the HA event loop."""
+    """Compare proposed Preview to production and report production statistics."""
     preview, preview_error = _read_file(preview_path)
+    production, prod_error = _read_file(output_path)
+    production_readable = prod_error is None or prod_error == "missing"
+
+    # Dashboard statistics are sourced solely from production, even when
+    # Preview is missing or malformed. Never substitute a proposed state.
+    production_summary = None
+    production_summary_error = None
+    if production is not None and production_readable:
+        try:
+            production_summary = analyze_preview(production, None)["summary"]
+        except PreviewFormatError as exc:
+            production_summary_error = str(exc)
+
+    baseline = {
+        "production_summary": production_summary,
+        "production_summary_error": production_summary_error,
+        "production_path": str(output_path),
+        "production_sha256": (
+            preview_digest(production) if production is not None else None
+        ),
+    }
 
     if preview is None:
         return {
+            **baseline,
             "available": False,
             "content": "",
             "path": str(preview_path),
             "error": preview_error if preview_error != "missing" else None,
             "can_apply": False,
             "preview_sha256": None,
-            "production_sha256": None,
         }
-
-    production, prod_error = _read_file(output_path)
 
     try:
         analysis = analyze_preview(preview, production)
     except PreviewFormatError as exc:
         return {
+            **baseline,
             "available": True,
             "content": preview,
             "path": str(preview_path),
             "error": f"Preview cannot be analyzed: {exc}",
             "can_apply": False,
             "preview_sha256": None,
-            "production_sha256": None,
         }
-
-    production_readable = prod_error is None or prod_error == "missing"
 
     if not production_readable:
         analysis["comparison"] = {
@@ -1120,18 +1137,14 @@ def _read_and_compare(preview_path: Path, output_path: Path) -> dict[str, Any]:
         }
 
     return {
+        **baseline,
         "available": True,
         "content": preview,
         "path": str(preview_path),
-        "production_path": str(output_path),
         **analysis,
         "can_apply": production_readable,
         "preview_sha256": preview_digest(preview),
-        "production_sha256": (
-            preview_digest(production) if production is not None else None
-        ),
     }
-
 
 @websocket_api.require_admin
 @websocket_api.async_response
