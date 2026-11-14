@@ -863,6 +863,39 @@ test("Preparing a backup is read-only and requires no write confirmation", async
   assert.equal(confirmations.length, 0);
 });
 
+test("Restore Preview shows individual HA label operations and exceptional entities", () => {
+  const {panel} = makePanel(async () => ({}));
+  const notice = {hidden: true, children: [],
+    replaceChildren(...items) {this.children = items;},
+    appendChild(item) {this.children.push(item);},
+  };
+  const originalQuery = panel.querySelector.bind(panel);
+  panel.querySelector = selector => selector === "#backupPreviewNotice"
+    ? notice : originalQuery(selector);
+  panel._stagedRestore = {
+    label_plan: {
+      add: ["switch.new"],
+      remove: ["switch.old"],
+      review: [{entity_id: "switch.missing", reason: "missing_ha_entity"}],
+    },
+  };
+  panel._renderStagedRestorePlan();
+  assert.equal(notice.hidden, false);
+  assert.equal(notice.children.length, 4);
+  assert.match(notice.children[0].textContent, /application.*pas encore activée/);
+  assert.match(notice.children[1].children[0].textContent, /Étiquettes à ajouter/);
+  assert.equal(notice.children[1].children[1].children[0].textContent, "switch.new");
+  assert.match(notice.children[2].children[0].textContent, /Étiquettes à retirer/);
+  assert.equal(notice.children[2].children[1].children[0].textContent, "switch.old");
+  assert.match(notice.children[3].children[0].textContent, /Entités à examiner/);
+  assert.match(notice.children[3].children[1].children[0].textContent,
+    /switch.missing.*missing_ha_entity/);
+  panel._stagedRestore = null;
+  panel._renderStagedRestorePlan();
+  assert.equal(notice.hidden, true);
+  assert.deepEqual(notice.children, []);
+});
+
 test("Backup text-only differences are identified without direct restore", () => {
   const {panel} = makePanel(async () => ({}));
   const nodes = {
