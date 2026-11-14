@@ -1598,6 +1598,9 @@ async def websocket_prepare_backup_preview(
                     output_path, msg["backup_id"],
                     msg["backup_sha256"], msg["production_sha256"],
                     catalog,
+                    registries=registries,
+                    label=settings.get(CONF_LABEL, DEFAULT_LABEL),
+                    domains=DEFAULT_DOMAINS,
                 )
             )
         except (
