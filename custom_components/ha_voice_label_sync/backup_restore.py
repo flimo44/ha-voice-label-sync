@@ -276,7 +276,13 @@ def prepare_backup_preview(
     # Approval evidence covers the exact proposed HA label operations and
     # the projected generation, not only the backup and production hashes.
     approval = preview_digest(json.dumps(
-        {"labels": label_plan, "projection": projection},
+        {
+            "labels": label_plan, "projection": projection,
+            "label": label, "domains": sorted(domains) if domains else None,
+            "output": str(output_path),
+            "backup_sha256": backup_sha256,
+            "production_sha256": production_sha256,
+        },
         sort_keys=True, ensure_ascii=False,
     ))
     return {
