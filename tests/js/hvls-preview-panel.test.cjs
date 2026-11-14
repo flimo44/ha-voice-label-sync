@@ -1910,13 +1910,13 @@ test("Statistics signals only actionable pending Preview changes", () => {
   assert.match(source, /prefers-reduced-motion:reduce/);
 });
 
-test("Statistics quick removal uses current HA labels and the confirmed existing workflow", () => {
+test("Statistics quick removal stages a review instead of direct HA writes", () => {
   const start = source.indexOf("const catalogEntity = (this._entityCatalog?.entities || []).find(");
   const end = source.indexOf("item.appendChild(itemRow);", start);
   const block = source.slice(start, end);
   assert.ok(start >= 0 && end > start);
   assert.match(block, /catalogEntity\?\.has_label === true/);
-  assert.match(block, /checkbox\.checked = true/);
+  assert.match(block, /this\._manualLabelChanges\?\.has\(entity\.entity_id\)/);
   assert.match(block, /checkbox\.dataset\.ineligible = "false"/);
   assert.match(block, /checkbox\.disabled = Boolean\(this\._entityWritePending\)/);
   assert.match(block, /checkbox\.addEventListener\("change"/);
