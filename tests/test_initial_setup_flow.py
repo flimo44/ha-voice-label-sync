@@ -29,6 +29,9 @@ def environment(monkeypatch):
         def async_show_form(self, **kwargs):
             return {"type": "form", **kwargs}
 
+        def async_show_menu(self, **kwargs):
+            return {"type": "menu", **kwargs}
+
         def async_create_entry(self, **kwargs):
             return {"type": "create_entry", **kwargs}
 
@@ -132,8 +135,8 @@ def values(output, label="google_assistant"):
     }
 
 
-def run(flow, data=None):
-    return asyncio.run(flow.async_step_user(data))
+def run(flow, data=None, *, step="user"):
+    return asyncio.run(getattr(flow, "async_step_" + step)(data))
 
 
 def test_initial_form_detects_existing_manual_yaml(
@@ -150,10 +153,15 @@ def test_initial_form_detects_existing_manual_yaml(
     )
 
     flow, labels = make_flow(environment, tmp_path)
-    result = run(flow)
+    menu = run(flow)
+    assert menu["type"] == "menu"
+    assert menu["step_id"] == "user"
+    assert menu["menu_options"] == ["new", "existing"]
+    assert labels == []
+    result = run(flow, step="existing")
 
     assert result["type"] == "form"
-    assert result["step_id"] == "user"
+    assert result["step_id"] == "existing"
     diagnostic = result["description_placeholders"]["diagnostic"]
     assert "manual.yaml" in diagnostic
     assert "Aucune adoption automatique" in diagnostic
@@ -174,7 +182,7 @@ def test_existing_google_source_can_be_selected_without_any_file_write(
     )
 
     flow, labels = make_flow(environment, tmp_path)
-    result = run(flow, values(source))
+    result = run(flow, values(source), step="existing")
 
     assert result["type"] == "create_entry"
     assert result["data"]["output"] == str(source)
@@ -195,7 +203,7 @@ def test_existing_unreferenced_output_can_be_configured_but_not_modified(
     output.write_bytes(original)
 
     flow, labels = make_flow(environment, tmp_path)
-    result = run(flow, values(output))
+    result = run(flow, values(output), step="existing")
 
     assert result["type"] == "create_entry"
     assert result["data"]["output"] == str(output)
@@ -219,13 +227,13 @@ def test_changing_to_safe_output_allows_configuration(
 
     flow, labels = make_flow(environment, tmp_path)
 
-    first = run(flow, values(source))
+    first = run(flow, values(source), step="existing")
     assert first["type"] == "create_entry"
     assert first["data"]["output"] == str(source)
     assert source.read_bytes() == b"manual\n"
 
     output = tmp_path / "generated.yaml"
-    second = run(flow, values(output))
+    second = run(flow, values(output), step="new")
 
     assert second["type"] == "create_entry"
     assert second["data"]["output"] == str(output)
@@ -246,6 +254,7 @@ def test_label_failure_keeps_diagnostic(
     result = run(
         flow,
         values(tmp_path / "generated.yaml", "invalid_label"),
+        step="new",
     )
 
     assert result["type"] == "form"
@@ -264,7 +273,12 @@ def test_initial_form_translations_are_complete():
         path = COMPONENT / filename
         data = json.loads(path.read_text(encoding="utf-8"))
 
-        assert "{diagnostic}" in data["config"]["step"]["user"]["description"]
+        assert "{detected_file}" in data["config"]["step"]["user"]["description"]
+        assert set(data["config"]["step"]["user"]["menu_options"]) == {
+            "new", "existing"
+        }
+        for step in ("new", "existing"):
+            assert "{diagnostic}" in data["config"]["step"][step]["description"]
 
         for error in (
             "source_output_conflict",
@@ -272,3 +286,61 @@ def test_initial_form_translations_are_complete():
             "unsafe_output_path",
         ):
             assert error in data["config"]["error"]
+
+
+
+def test_new_installation_defaults_to_unused_output_without_file_writes(
+    tmp_path, environment,
+):
+    old = tmp_path / "google_assistant_entities.yaml"
+    old.write_bytes(b"switch.original:\n  expose: true\n")
+    flow, labels = make_flow(environment, tmp_path)
+    menu = run(flow)
+    assert menu["type"] == "menu"
+    result = run(flow, step="new")
+    assert result["step_id"] == "new"
+    # A new selection must never default to the existing production file.
+    schema_keys = list(result["data_schema"].schema)
+    output_key = next(k for k in schema_keys if str(k) == "output")
+    proposed = output_key.default()
+    assert proposed.endswith("google_assistant_entities_hvls.yaml")
+    assert old.read_bytes() == b"switch.original:\n  expose: true\n"
+    assert labels == []
+
+
+def test_new_installation_refuses_reusing_existing_output(
+    tmp_path, environment,
+):
+    output = tmp_path / "google_assistant_entities.yaml"
+    original = b"switch.original:\n  expose: true\n"
+    output.write_bytes(original)
+    flow, labels = make_flow(environment, tmp_path)
+    result = run(flow, values(output), step="new")
+    assert result["errors"]["base"] == "new_output_exists"
+    assert output.read_bytes() == original
+    assert labels == []
+
+
+def test_existing_choice_requires_actual_file(
+    tmp_path, environment,
+):
+    flow, labels = make_flow(environment, tmp_path)
+    result = run(flow, values(tmp_path / "missing.yaml"), step="existing")
+    assert result["errors"]["base"] == "existing_source_missing"
+    assert labels == []
+
+
+def test_entry_remembers_choice_only_as_navigation_hint(
+    tmp_path, environment,
+):
+    output = tmp_path / "legacy.yaml"
+    original = b"switch.original:\n  expose: true\n"
+    output.write_bytes(original)
+    flow, labels = make_flow(environment, tmp_path)
+    existing = run(flow, values(output), step="existing")
+    assert existing["data"]["onboarding_mode"] == "existing"
+    assert output.read_bytes() == original
+    new_output = tmp_path / "new.yaml"
+    new = run(flow, values(new_output), step="new")
+    assert new["data"]["onboarding_mode"] == "new"
+    assert not new_output.exists()
