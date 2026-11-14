@@ -724,7 +724,7 @@ const HVLS_TRANSLATIONS = {
     migrationStagingImpact: "Projected label impact on manual Google Assistant: {status}. Other label consumers and Google Home remain unverified. Staging is forbidden.",
     migrationConsumerAudit: "Limited indirect audit: {files} YAML files inspected, {writers} HVLS generation references, {events} entity-registry event references, {labels} label-function references. External effects remain unverified; staging forbidden.",
     migrationConsumerOverlap: "Warning: the HVLS output file overlaps a protected manual Google Assistant source. Any V1 generation may change that source.",
-    backupIntro: "Select a backup to compare it with current production. Only the Google Assistant YAML file is restored, never Home Assistant labels.",
+    backupIntro: "Select a backup to prepare changes in Preview. No YAML or labels will be changed.",
     backupLoading: "Loading backups…",
     backupEmpty: "No backups available.",
     backupReviewing: "Comparing with production…",
