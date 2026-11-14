@@ -826,7 +826,7 @@ test("Restore preparation never writes production or HA labels", async () => {
     backup_id: "backup.bak",
     backup_sha256: "b".repeat(64),
     production_sha256: "a".repeat(64),
-    comparison: {identical_text: false},
+    comparison: {status: "ok", identical_text: false},
   };
   let openedTab = null;
   panel._activateTab = tab => {openedTab = tab;};
@@ -859,7 +859,7 @@ test("Preparing a backup is read-only and requires no write confirmation", async
   }, message => {confirmations.push(message); return false;});
   panel._backupReview = {backup_id: "backup.bak",
     backup_sha256: "a".repeat(64), production_sha256: "b".repeat(64),
-    comparison: {identical_text: false}};
+    comparison: {status: "ok", identical_text: false}};
   panel._activateTab = () => {};
   await panel._restoreBackup();
   assert.deepEqual(calls, ["ha_voice_label_sync/prepare_backup_preview"]);
@@ -1013,7 +1013,7 @@ test("Restore staging leaves previous production untouched after 4 over 3", asyn
   });
   panel._backupReview = {backup_id: "backup-4.bak",
     backup_sha256: "b".repeat(64), production_sha256: "a".repeat(64),
-    comparison: {identical_text: false}};
+    comparison: {status: "ok", identical_text: false}};
   panel._activateTab = () => {};
   await panel._restoreBackup();
   assert.deepEqual(calls, ["ha_voice_label_sync/prepare_backup_preview"]);
