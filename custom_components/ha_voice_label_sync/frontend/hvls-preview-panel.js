@@ -90,6 +90,7 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptAction: "Ajouter {count} label(s) HVLS",
     assistantAdoptNone: "Aucun ajout automatique proposé. Vous pouvez toujours gérer les entités individuellement dans l'onglet Gestion des entités HVLS.",
     assistantTakeoverTitle: "Confier le fichier existant à HVLS",
+    migrationChangeChoice: "Changer de méthode (facultatif)",
     assistantReinstallTitle: "Récupérer le fichier après réinstallation",
     assistantReinstallIntro: "Ce fichier appartient à une précédente installation HVLS. Si elle n’existe plus, HVLS peut vérifier son empreinte, effectuer une sauvegarde de sécurité, puis transférer sa gestion à cette installation. Ni le YAML ni les étiquettes ne seront modifiés.",
     assistantReinstallAction: "Vérifier et récupérer la gestion",
@@ -594,6 +595,7 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptAction: "Add {count} HVLS label(s)",
     assistantAdoptNone: "No automatic additions suggested. You can still manage each entity in the HVLS Entity management tab.",
     assistantTakeoverTitle: "Let HVLS manage the existing YAML",
+    migrationChangeChoice: "Change setup method (optional)",
     assistantReinstallTitle: "Recover YAML management after reinstalling",
     assistantReinstallIntro: "This YAML belongs to a previous HVLS installation. If it no longer exists, HVLS can verify its digest, create a safety backup and transfer management to this installation. YAML and HA labels stay unchanged.",
     assistantReinstallAction: "Verify and recover management",
@@ -1411,6 +1413,22 @@ class HVLSPreviewPanel extends HTMLElement {
       this._renderAssistantAdoption();
       this._setContent(result.content || "");
       this._renderAnalysis(result);
+      // Guide only the initial panel opening. Do not override a user-selected tab.
+      if (!this._onboardingAutoNavigated && this._initialized &&
+          this.querySelector('.hvls-tab[data-tab="summary"]')?.getAttribute(
+            "aria-selected"
+          ) === "true") {
+        const reason = result.ownership?.reason_code;
+        const target = this._onboardingMode === "existing" &&
+          ["unmanaged_output", "owned_by_other_installation"].includes(reason)
+            ? "migration"
+            : this._onboardingMode === "new" && reason === "new_output"
+              ? "entities" : null;
+        if (target) {
+          this._onboardingAutoNavigated = true;
+          this._activateTab(target);
+        }
+      }
       if (!result.available) {
         this._setStatus(result.error || this._t("previewMissing"));
       } else if (result.error) {
@@ -3060,14 +3078,17 @@ class HVLSPreviewPanel extends HTMLElement {
             <p id="migrationGuideDetected"></p>
             <p id="migrationGuideCandidate"></p>
             <p id="migrationGuideQuestion">${this._t("migrationGuideQuestion")}</p>
-            <div class="migration-controls">
-              <button id="migrationIntentNew" type="button" class="secondary"
-                aria-pressed="false">${this._t("migrationGuideNew")}</button>
-              <button id="migrationIntentExisting" type="button" class="secondary"
-                aria-pressed="false">${this._t("migrationGuideExisting")}</button>
-              <button id="migrationIntentUnsure" type="button" class="secondary"
-                aria-pressed="false">${this._t("migrationGuideUnsure")}</button>
-            </div>
+            <details id="migrationChoiceDetails">
+              <summary id="migrationChoiceTitle">${this._t("migrationChangeChoice")}</summary>
+              <div class="migration-controls">
+                <button id="migrationIntentNew" type="button" class="secondary"
+                  aria-pressed="false">${this._t("migrationGuideNew")}</button>
+                <button id="migrationIntentExisting" type="button" class="secondary"
+                  aria-pressed="false">${this._t("migrationGuideExisting")}</button>
+                <button id="migrationIntentUnsure" type="button" class="secondary"
+                  aria-pressed="false">${this._t("migrationGuideUnsure")}</button>
+              </div>
+            </details>
             <p id="migrationGuideNext" role="status"></p>
             <div id="assistantFileSection" hidden>
               <details id="assistantFileExamples">
@@ -3125,6 +3146,14 @@ entity_config: !include google_assistant_entities.yaml</pre>
               <p id="assistantFileSafety" class="diagnostic-note">
                 ${this._t("assistantFileSafety")}
               </p>
+                <section id="assistantTakeoverSection" hidden
+                  aria-labelledby="assistantTakeoverTitle">
+                  <h4 id="assistantTakeoverTitle"></h4>
+                  <p id="assistantTakeoverIntro" class="diagnostic-note"></p>
+                  <button id="assistantTakeoverButton" type="button"
+                    class="secondary"></button>
+                  <p id="assistantTakeoverResult" role="status"></p>
+                </section>
               <section id="assistantAdoption" hidden aria-labelledby="assistantAdoptTitle">
                 <h4 id="assistantAdoptTitle"></h4>
                 <p id="assistantAdoptIntro"></p>
@@ -3138,14 +3167,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
                 <p id="assistantAdoptNeedsReview" class="diagnostic-note"></p>
                 <button id="assistantAdoptApply" type="button" disabled></button>
                 <p id="assistantAdoptResult" role="status"></p>
-                <section id="assistantTakeoverSection" hidden
-                  aria-labelledby="assistantTakeoverTitle">
-                  <h4 id="assistantTakeoverTitle"></h4>
-                  <p id="assistantTakeoverIntro" class="diagnostic-note"></p>
-                  <button id="assistantTakeoverButton" type="button"
-                    class="secondary"></button>
-                  <p id="assistantTakeoverResult" role="status"></p>
-                </section>
+
               </section>
               <details id="assistantProvenanceAdvanced">
                 <summary id="assistantProvenanceAdvancedTitle">${this._t("assistantProvenanceAdvanced")}</summary>
@@ -4876,7 +4898,11 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const section = this.querySelector("#assistantAdoption");
     if (!section) return;
     section.hidden = !this._assistantAdoptionAvailable();
-    if (section.hidden) return;
+    if (section.hidden) {
+      const takeover = this.querySelector("#assistantTakeoverSection");
+      if (takeover) takeover.hidden = true;
+      return;
+    }
     for (const id of ["assistantAdoptTitle", "assistantAdoptIntro",
                       "assistantAdoptLimits", "assistantAdoptRefresh",
                       "assistantAdoptReview"]) {
@@ -5447,6 +5473,16 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._migrationIntent === "unsure" ? "migrationGuideSelectedUnsure" :
       "migrationGuideQuestion";
     if (question) question.textContent = this._t(questionKey);
+    const choiceDetails = this.querySelector("#migrationChoiceDetails");
+    if (choiceDetails) {
+      choiceDetails.hidden = packages;
+      if (!this._onboardingChoiceDisplaySet) {
+        choiceDetails.open = !["existing", "new"].includes(this._onboardingMode);
+        this._onboardingChoiceDisplaySet = true;
+      }
+    }
+    const choiceTitle = this.querySelector("#migrationChoiceTitle");
+    if (choiceTitle) choiceTitle.textContent = this._t("migrationChangeChoice");
     const intentControls = ["migrationIntentNew", "migrationIntentExisting", "migrationIntentUnsure"];
     for (const id of intentControls) {
       const element = this.querySelector("#" + id);
