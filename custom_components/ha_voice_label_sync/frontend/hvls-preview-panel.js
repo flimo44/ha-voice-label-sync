@@ -410,6 +410,7 @@ const HVLS_TRANSLATIONS = {
     previewGenerated: "Preview généré : {count} entités. Vérifiez les différences avant application.",
     previewGenerateFailed: "Échec de génération du Preview : {error}",
     applyInfoLabel: "Pourquoi Apply est-il désactivé ?",
+    applyNoChanges: "Aucune modification à appliquer : le Preview est déjà identique à la production.",
     applyReasonMissingIdentity: "L'identité de l'installation HVLS est indisponible.",
     applyReasonUnsafePath: "Le chemin du fichier ou du registre n'est pas sûr. Vérifiez notamment les liens symboliques.",
     applyReasonReservedPath: "Le fichier de sortie utilise un emplacement réservé aux métadonnées HVLS.",
@@ -866,6 +867,7 @@ const HVLS_TRANSLATIONS = {
     previewGenerated: "Preview generated: {count} entities. Review differences before applying.",
     previewGenerateFailed: "Failed to generate Preview: {error}",
     applyInfoLabel: "Why is Apply disabled?",
+    applyNoChanges: "No changes to apply: the Preview already matches production.",
     applyReasonMissingIdentity: "The HVLS installation identity is unavailable.",
     applyReasonUnsafePath: "The output or registry path is unsafe. Check for symbolic links.",
     applyReasonReservedPath: "The output path conflicts with reserved HVLS metadata.",
@@ -928,6 +930,7 @@ const HVLS_APPLY_REASON_KEYS = Object.freeze({
   "managed_output_missing": "applyReasonManagedOutputMissing",
   "output_changed": "applyReasonOutputChanged",
   "not_configured": "applyReasonNotConfigured",
+  "no_changes": "applyNoChanges",
 });
 
 class HVLSPreviewPanel extends HTMLElement {
@@ -1252,12 +1255,22 @@ class HVLSPreviewPanel extends HTMLElement {
              preview_sha256: result.preview_sha256}
           : null;
 
-      const canReview =
+      // A verified, unchanged production file needs no normal Apply.
+      // A staged restoration must stay independent: identical YAML can still
+      // require label reconciliation.
+      const hasNoChanges =
+        result.comparison?.status === "ok" &&
+        ["added", "removed", "modified"].every(key =>
+          Array.isArray(result.comparison[key]) &&
+          result.comparison[key].length === 0
+        );
+      const allowedBySafety =
         result.available === true &&
         result.error == null &&
         result.can_apply === true &&
         ownershipConsistent &&
         validHash(result.preview_sha256);
+      const canReview = allowedBySafety && !hasNoChanges;
 
       this._review = canReview
         ? {
@@ -1283,13 +1296,15 @@ class HVLSPreviewPanel extends HTMLElement {
 
       this._applyBlockReason = shouldExplain
         ? (
-            serverReason ||
-            this._t("applyVerificationUnavailable")
+            allowedBySafety && hasNoChanges
+              ? this._t("applyNoChanges")
+              : serverReason || this._t("applyVerificationUnavailable")
           )
         : null;
 
-      this._applyBlockReasonCode = shouldExplain &&
-        typeof ownership?.reason_code === "string"
+      this._applyBlockReasonCode = shouldExplain && allowedBySafety && hasNoChanges
+        ? "no_changes"
+        : shouldExplain && typeof ownership?.reason_code === "string"
           ? ownership.reason_code
           : null;
 
