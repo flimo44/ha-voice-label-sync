@@ -278,13 +278,16 @@ const HVLS_TRANSLATIONS = {
     migrationStagingImpact: "Impact prévisionnel des labels sur Google Assistant manuel : {status}. Les autres consommateurs de labels et Google Home restent non vérifiés. Staging interdit.",
     migrationConsumerAudit: "Audit indirect limité : {files} fichiers YAML inspectés, {writers} références à la génération HVLS, {events} références à un événement du registre, {labels} références à des fonctions de label. Effets externes non certifiés ; staging interdit.",
     migrationConsumerOverlap: "Attention : le fichier de sortie HVLS correspond à une source Google manuelle protégée. Toute génération V1 pourrait modifier cette source.",
-    backupIntro: "Choisissez une sauvegarde pour voir ses différences avec la production. Seul le YAML Google Assistant sera restauré, jamais les étiquettes Home Assistant.",
+    backupIntro: "Choisissez une sauvegarde pour préparer ses modifications dans le Preview. Aucune restauration directe ni modification d'étiquette.",
     backupLoading: "Chargement des sauvegardes…",
     backupEmpty: "Aucune sauvegarde disponible.",
     backupReviewing: "Comparaison avec la production…",
     backupReviewFailed: "Comparaison impossible : {error}",
     backupLoadFailed: "Chargement impossible : {error}",
-    backupRestore: "Restaurer cette sauvegarde",
+    backupRestore: "Préparer cette sauvegarde dans le Preview",
+    backupPreviewPrepared: "Restauration préparée : {added} ajout(s), {removed} suppression(s), {modified} modification(s). Aucun fichier ni label modifié.",
+    backupPreviewNotExecutable: "Preview de restauration : contrôlez les changements. L'application de cette restauration n'est pas encore activée dans cette version.",
+    backupPreviewLabels: "Étiquettes envisagées : {added} ajout(s), {removed} retrait(s), {review} entité(s) à examiner.",
     backupConfirm: "Restaurer ce YAML en production ? Une copie de sécurité de la production actuelle sera créée obligatoirement. Les étiquettes HA ne seront pas modifiées.",
     backupRestoreFailed: "Restauration refusée : {error}",
     backupRestored: "Restauration terminée. Copie de sécurité : {backup}",
@@ -312,7 +315,7 @@ const HVLS_TRANSLATIONS = {
     restoreReconcileUncertain: "État du YAML non vérifié après interruption. Aucun déblocage automatique : contrôlez les sauvegardes et l'état de propriété.",
     backupNoDiff: "YAML identique à la production.",
     backupTextOnlyDiff: "Aucune différence entre les entités. Seul le texte YAML diffère (par exemple, commentaires, ordre ou mise en forme). Restaurer remplacerait le texte du fichier de production, après sauvegarde de sécurité.",
-    backupRestoreTextOnly: "Restaurer le texte YAML",
+    backupRestoreTextOnly: "Préparer la comparaison du texte YAML",
     backupConfirmTextOnly: "Les entités sont identiques mais le texte YAML diffère. Restaurer exactement le texte de la sauvegarde en production ? Une copie de sécurité de la production actuelle sera créée obligatoirement. Les étiquettes HA ne seront pas modifiées.",
     backupDiffTitle: "Changements si cette sauvegarde est restaurée",
     backupSize: "{size} octets",
@@ -727,7 +730,10 @@ const HVLS_TRANSLATIONS = {
     backupReviewing: "Comparing with production…",
     backupReviewFailed: "Cannot compare: {error}",
     backupLoadFailed: "Cannot load backups: {error}",
-    backupRestore: "Restore this backup",
+    backupRestore: "Prepare this backup in Preview",
+    backupPreviewPrepared: "Restore staged: {added} added, {removed} removed, {modified} modified. No YAML or labels changed.",
+    backupPreviewNotExecutable: "Restore Preview: review the changes. Applying this restoration is not enabled in this version yet.",
+    backupPreviewLabels: "Planned HA labels: {added} add, {removed} remove, {review} need review.",
     backupConfirm: "Restore this YAML to production? A safety copy of the current production file will always be created. HA labels will not be changed.",
     backupRestoreFailed: "Restore refused: {error}",
     backupRestored: "Restore completed. Safety backup: {backup}",
@@ -755,7 +761,7 @@ const HVLS_TRANSLATIONS = {
     restoreReconcileUncertain: "YAML state could not be verified after interruption. No automatic unlock; inspect backups and ownership.",
     backupNoDiff: "YAML matches production.",
     backupTextOnlyDiff: "No per-entity differences. Only the YAML text differs (for example, comments, ordering or formatting). Restoring would replace the production file text, after a safety backup.",
-    backupRestoreTextOnly: "Restore YAML text",
+    backupRestoreTextOnly: "Preview YAML text differences",
     backupConfirmTextOnly: "Entity configurations are identical but YAML text differs. Restore the backup's exact text to production? A safety copy of current production will always be created. HA labels will not be modified.",
     backupDiffTitle: "Changes if this backup is restored",
     backupSize: "{size} bytes",
@@ -1183,6 +1189,7 @@ class HVLSPreviewPanel extends HTMLElement {
     if (!this._hass || (this._applying && !afterApply)) return;
     const loadId = (this._loadId || 0) + 1;
     this._loadId = loadId;
+    this._stagedRestore = null; // Normal Preview replaces a staged backup only by user action.
     this._review = null;
     this._applyBlockReason = null;
     this._applyBlockReasonCode = null;
@@ -1725,6 +1732,19 @@ class HVLSPreviewPanel extends HTMLElement {
     this._renderPreviewChanges(result);
     this._renderRestoreWarning();
     this._renderRestoreReconciliation();
+    const previewNotice = this.querySelector("#backupPreviewNotice");
+    if (previewNotice) {
+      previewNotice.hidden = !this._stagedRestore;
+      if (this._stagedRestore) {
+        const plan = this._stagedRestore.label_plan || {};
+        previewNotice.textContent = this._t("backupPreviewNotExecutable") +
+          " " + this._tf("backupPreviewLabels", {
+            added: plan.add?.length || 0,
+            removed: plan.remove?.length || 0,
+            review: plan.review?.length || 0,
+          });
+      }
+    }
     // The dashboard describes what is on disk, not the changes proposed by
     // Preview. A missing/unreadable production must never show Preview counts.
     const stats = result.production_summary;
@@ -2550,6 +2570,7 @@ class HVLSPreviewPanel extends HTMLElement {
         </section>
         <section id="tab-preview" class="hvls-tab-panel"
           role="tabpanel" hidden>
+        <p id="backupPreviewNotice" class="diagnostic-note" role="status" hidden></p>
         <div id="restoreReconcilePanel" class="migration-review-note"
           role="status" hidden>
           <h3 id="restoreReconcileTitle"></h3>
@@ -3709,55 +3730,59 @@ entity_config: !include google_assistant_entities.yaml</pre>
   }
 
   async _restoreBackup() {
+    // A backup is only a proposed configuration at this point. Do not write
+    // google_assistant_entities.yaml or modify native HA labels here.
     const data = this._backupReview;
     if (!data || this._restoring || this._applying ||
         this._refreshing || this._generating || this._entityWritePending ||
-        data.comparison?.identical_text) return;
-    const textOnly = data.comparison?.identical_entities === true &&
-      data.comparison?.identical_text === false;
-    if (!window.confirm(this._t(textOnly
-      ? "backupConfirmTextOnly" : "backupConfirm"))) return;
+        data.comparison?.identical_text === true) return;
+
     this._restoring = true;
-    this._backupReviewNumber = (this._backupReviewNumber || 0) + 1;
-    this._backupReview = null;
-    this._selectedBackup = null;
-    this._review = null; // An earlier Preview is never approved after a restore.
-    this._renderBackupDiff();
-    this._renderBackups();
+    const requestId = (this._loadId || 0) + 1;
+    this._loadId = requestId;
+    this._review = null; // Never allow normal Apply for a staged restoration.
     this._updateApplyButton();
     const status = this.querySelector("#backupStatus");
+    if (status) status.textContent = this._t("backupReviewing");
+
     try {
       const result = await this._hass.callWS({
-        type: "ha_voice_label_sync/restore_backup",
+        type: "ha_voice_label_sync/prepare_backup_preview",
         backup_id: data.backup_id,
         backup_sha256: data.backup_sha256,
         production_sha256: data.production_sha256,
       });
-      this._restoreResult = result.safety_backup;
-      // A successful restore only changes YAML, never Home Assistant labels.
-      this._backupRestoreCompleted = true;
-      await this._loadPreview(true);
-      this._renderRestoreWarning();
-      this._backupList = null;
-      this._selectedBackup = null;
+      if (this._loadId !== requestId) return;
+      if (result?.mode !== "restore_preview" ||
+          result?.available !== true || result?.can_apply !== false ||
+          result?.comparison?.status !== "ok" ||
+          typeof result?.content !== "string") {
+        throw new Error("Invalid restore Preview response");
+      }
+      this._stagedRestore = result;
+      this._backupRestoreCompleted = false;
+      this._previewContent = result.content;
+      this._previewPath = result.path;
+      this._applyBlockReason = this._t("backupPreviewNotExecutable");
+      this._applyBlockReasonCode = null;
+      this._renderAnalysis(result);
+      this._setContent(result.content);
+      this._updateApplyButton();
+      this._activateTab("preview");
+      const diff = result.comparison;
+      const counts = {
+        added: diff.added.length, removed: diff.removed.length,
+        modified: diff.modified.length,
+      };
+      this._setStatusKey("backupPreviewPrepared", counts);
+      if (status) status.textContent = this._tf("backupPreviewPrepared", counts);
     } catch (error) {
-      this._restoreError = error.message || String(error);
+      if (status) status.textContent = this._tf("backupReviewFailed", {
+        error: error.message || String(error),
+      });
     } finally {
       this._restoring = false;
       this._updateApplyButton();
-      // Preview was rendered while _restoring was true: recompute the
-      // reconciliation actions now that the restore transaction is finished.
-      // This only updates the UI and never writes labels or production YAML.
-      this._renderRestoreReconciliation();
-      await this._loadBackups();
-      if (this._restoreResult && status) {
-        status.textContent = this._tf("backupRestored", {backup: this._restoreResult})
-          + " " + this._t("backupRestartHint");
-        this._restoreResult = null;
-      } else if (this._restoreError && status) {
-        status.textContent = this._tf("backupRestoreFailed", {error: this._restoreError});
-        this._restoreError = null;
-      }
     }
   }
 
