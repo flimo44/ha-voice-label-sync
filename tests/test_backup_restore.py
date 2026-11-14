@@ -1173,3 +1173,147 @@ def test_backup_cleanup_stale_selection_never_deletes_anything(
             delete_ids=[files[0].name, files[10].name],
         )
     assert all(path.exists() for path in files)
+
+
+def _manual_label_state():
+    entries = [
+        {"entity_id": "switch.one", "name": "One", "labels": ["hvls", "other"],
+         "area_id": None, "device_id": None, "disabled_by": None,
+         "hidden_by": None, "entity_category": None},
+        {"entity_id": "switch.two", "name": "Two", "labels": ["other"],
+         "area_id": None, "device_id": None, "disabled_by": None,
+         "hidden_by": None, "entity_category": None},
+        {"entity_id": "switch.three", "name": "Three", "labels": [],
+         "area_id": None, "device_id": None, "disabled_by": None,
+         "hidden_by": None, "entity_category": None},
+    ]
+    return {
+        "entity_registry": {"data": {"entities": entries}},
+        "device_registry": {"data": {"devices": []}},
+        "area_registry": {"data": {"areas": []}},
+        "label_registry": {"data": {"labels": [
+            {"label_id": "hvls", "name": "HVLS"},
+            {"label_id": "other", "name": "Other"},
+        ]}},
+    }
+
+
+def test_manual_label_preview_is_read_only_and_shows_addition(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    original = "switch.one:\n  expose: true\n  name: One\n"
+    output.write_text(original)
+    registries = _manual_label_state()
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch"})
+    )
+    result = backup_module.prepare_manual_label_preview(
+        output, catalog, registries, "HVLS", frozenset({"switch"}),
+        [{"entity_id": "switch.two", "enabled": True}],
+    )
+    assert result["mode"] == "label_preview"
+    assert result["projection"]["ready"] is True
+    assert result["label_plan"]["add"] == ["switch.two"]
+    assert result["label_plan"]["remove"] == []
+    assert result["comparison"]["added"] == ["switch.two"]
+    assert result["production_sha256"] == backup_module.preview_digest(original)
+    assert result["summary"]["total"] == 2
+    assert len(result["label_plan_sha256"]) == 64
+    assert output.read_text() == original
+    assert registries["entity_registry"]["data"]["entities"][1]["labels"] == [
+        "other"
+    ]
+    assert not (tmp_path / ".hvls").exists()
+
+
+def test_manual_label_preview_simulates_multiple_choices_without_writing(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.one:\n  expose: true\n  name: One\n")
+    registries = _manual_label_state()
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch"})
+    )
+    choices = [
+        {"entity_id": "switch.one", "enabled": False},
+        {"entity_id": "switch.two", "enabled": True},
+        {"entity_id": "switch.three", "enabled": True},
+    ]
+    plan = backup_module.prepare_manual_label_preview(
+        output, catalog, registries, "HVLS", frozenset({"switch"}),
+        choices,
+    )
+    assert plan["label_plan"]["add"] == ["switch.three", "switch.two"]
+    assert plan["label_plan"]["remove"] == ["switch.one"]
+    assert plan["comparison"]["removed"] == ["switch.one"]
+    assert set(plan["comparison"]["added"]) == {
+        "switch.two", "switch.three",
+    }
+    assert all(
+        not any(item["entity_id"] == eid and "hvls" in item["labels"]
+                for item in registries["entity_registry"]["data"]["entities"])
+        for eid in ("switch.two", "switch.three")
+    )
+
+
+@pytest.mark.parametrize("changes", [
+    [],
+    [{"entity_id": "switch.missing", "enabled": True}],
+    [{"entity_id": "switch.one", "enabled": True}],
+    [{"entity_id": "switch.two", "enabled": "true"}],
+    [{"entity_id": "switch.two", "enabled": True}] * 2,
+])
+def test_manual_label_preview_refuses_invalid_or_stale_selections(
+    backup_module, tmp_path, changes,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.one:\n  expose: true\n")
+    registries = _manual_label_state()
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch"})
+    )
+    with pytest.raises((ValueError, backup_module.BackupRestoreError)):
+        backup_module.prepare_manual_label_preview(
+            output, catalog, registries, "HVLS",
+            frozenset({"switch"}), changes,
+        )
+    assert output.read_text() == "switch.one:\n  expose: true\n"
+
+
+def test_manual_label_preview_refuses_to_remove_last_exposure(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.one:\n  expose: true\n")
+    registries = _manual_label_state()
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch"})
+    )
+    with pytest.raises(backup_module.BackupRestoreError, match="No selected"):
+        backup_module.prepare_manual_label_preview(
+            output, catalog, registries, "HVLS", frozenset({"switch"}),
+            [{"entity_id": "switch.one", "enabled": False}],
+        )
+
+
+def test_manual_label_preview_changes_fingerprint_when_ha_changes(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.one:\n  expose: true\n")
+    registries = _manual_label_state()
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch"})
+    )
+    changes = [{"entity_id": "switch.two", "enabled": True}]
+    before = backup_module.prepare_manual_label_preview(
+        output, catalog, registries, "HVLS", frozenset({"switch"}), changes,
+    )
+    registries["entity_registry"]["data"]["entities"][2]["name"] = "Renamed"
+    after = backup_module.prepare_manual_label_preview(
+        output, catalog, registries, "HVLS", frozenset({"switch"}), changes,
+    )
+    assert before["label_plan_sha256"] != after["label_plan_sha256"]
+    assert output.read_text() == "switch.one:\n  expose: true\n"
