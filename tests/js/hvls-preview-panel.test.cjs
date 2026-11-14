@@ -657,6 +657,7 @@ test("Two checkbox choices are both included in the staged Preview, no HA writes
 
 test("HA refresh translation preserves contextual Apply label for staged changes", () => {
   const {panel, controls} = makePanel(async () => preview());
+  controls.refresh.setAttribute = () => {};
   panel._renderMigrationGuide = () => {};
   panel._renderAssistantFileStatus = () => {};
 
