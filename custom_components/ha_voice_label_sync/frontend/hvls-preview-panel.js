@@ -286,7 +286,12 @@ const HVLS_TRANSLATIONS = {
     backupLoadFailed: "Chargement impossible : {error}",
     backupRestore: "Préparer cette sauvegarde dans le Preview",
     backupPreviewPrepared: "Restauration préparée : {added} ajout(s), {removed} suppression(s), {modified} modification(s). Aucun fichier ni label modifié.",
-    backupPreviewNotExecutable: "Preview de restauration : contrôlez les changements. L'application de cette restauration n'est pas encore activée dans cette version.",
+    backupPreviewNotExecutable: "Preview de restauration : contrôlez les changements et les étiquettes avant validation.",
+    backupPreviewApply: "Appliquer cette restauration",
+    backupPreviewConfirm: "Appliquer la sauvegarde après contrôle ? Le YAML de production et les étiquettes HA seront mis à jour. Une sauvegarde de sécurité sera créée.",
+    backupPreviewApplying: "Application de la restauration contrôlée…",
+    backupPreviewApplied: "Restauration validée : {entities} entité(s), {added} étiquette(s) ajoutée(s), {removed} retirée(s). Sauvegarde de sécurité : {backup}.",
+    backupPreviewApplyFailed: "Restauration refusée ou incomplète : {error}. Vérifiez la production et les éventuels contrôles de réconciliation.",
     backupPreviewLabels: "Étiquettes envisagées : {added} ajout(s), {removed} retrait(s), {review} entité(s) à examiner.",
     backupLabelAdd: "Étiquettes à ajouter",
     backupLabelRemove: "Étiquettes à retirer",
@@ -737,7 +742,12 @@ const HVLS_TRANSLATIONS = {
     backupLoadFailed: "Cannot load backups: {error}",
     backupRestore: "Prepare this backup in Preview",
     backupPreviewPrepared: "Restore staged: {added} added, {removed} removed, {modified} modified. No YAML or labels changed.",
-    backupPreviewNotExecutable: "Restore Preview: review the changes. Applying this restoration is not enabled in this version yet.",
+    backupPreviewNotExecutable: "Restore Preview: review the changes and HA labels before validation.",
+    backupPreviewApply: "Apply this restoration",
+    backupPreviewConfirm: "Apply the reviewed backup? Production YAML and HA labels will be updated. A safety backup will be created.",
+    backupPreviewApplying: "Applying reviewed restoration…",
+    backupPreviewApplied: "Restore completed: {entities} entities, {added} labels added, {removed} removed. Safety backup: {backup}.",
+    backupPreviewApplyFailed: "Restoration refused or incomplete: {error}. Check production and any reconciliation notice.",
     backupPreviewLabels: "Planned HA labels: {added} add, {removed} remove, {review} need review.",
     backupLabelAdd: "Labels to add",
     backupLabelRemove: "Labels to remove",
@@ -1307,9 +1317,18 @@ class HVLSPreviewPanel extends HTMLElement {
   _updateApplyButton() {
     const button = this.querySelector("#apply");
     if (button) {
-      button.disabled = !this._review || this._applying === true || this._restoring === true ||
+      const staged = this._stagedRestore;
+      const canApplyRestoration =
+        staged?.mode === "restore_preview" &&
+        staged.projection?.ready === true &&
+        staged.label_plan?.review?.length === 0 &&
+        /^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "");
+      button.disabled = (!this._review && !canApplyRestoration) ||
+        this._applying === true || this._restoring === true ||
         this._generating === true || this._refreshing === true ||
         this._entityWritePending === true;
+      button.textContent = staged
+        ? this._t("backupPreviewApply") : this._t("apply");
     }
     let displayReason = this._applyBlockReason || "";
 
@@ -1415,7 +1434,73 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  async _applyStagedRestore() {
+    const staged = this._stagedRestore;
+    if (!this._hass || !staged || this._applying || this._restoring ||
+        this._refreshing || this._generating || this._entityWritePending ||
+        staged.projection?.ready !== true ||
+        staged.label_plan?.review?.length !== 0 ||
+        !/^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "")) return;
+    if (!window.confirm(this._t("backupPreviewConfirm"))) return;
+
+    this._applying = true;
+    this._loadId = (this._loadId || 0) + 1;
+    this._review = null;
+    this._updateApplyButton();
+    this._setStatusKey("backupPreviewApplying");
+    let applied = null;
+    try {
+      applied = await this._hass.callWS({
+        type: "ha_voice_label_sync/apply_backup_preview",
+        backup_id: staged.backup_id,
+        backup_sha256: staged.backup_sha256,
+        production_sha256: staged.production_sha256,
+        label_plan_sha256: staged.label_plan_sha256,
+      });
+      if (applied?.applied !== true || applied?.reconciled !== true) {
+        throw new Error("Invalid restore verification response");
+      }
+      this._stagedRestore = null;
+      this._backupList = null;
+      this._backupReview = null;
+      this._selectedBackup = null;
+      this._backupReviewNumber = (this._backupReviewNumber || 0) + 1;
+      // The normal Preview must be regenerated from the actual post-restore
+      // HA registry; do not keep an obsolete Preview from before restoration.
+      await this._hass.callWS({type: "ha_voice_label_sync/generate_preview"});
+      await this._loadPreview(true);
+      await this._loadEntities();
+      this._setStatusKey("backupPreviewApplied", {
+        entities: applied.yaml_entities,
+        added: applied.label_additions,
+        removed: applied.label_removals,
+        backup: applied.safety_backup,
+      });
+    } catch (error) {
+      // The server may have changed production before a partial failure:
+      // discard the old approval and load any durable reconciliation guard.
+      this._stagedRestore = null;
+      await this._loadPreview(true);
+      if (applied?.applied === true) {
+        this._setStatusKey("backupPreviewApplied", {
+          entities: applied.yaml_entities,
+          added: applied.label_additions,
+          removed: applied.label_removals,
+          backup: applied.safety_backup,
+        });
+      } else {
+        this._setStatusKey("backupPreviewApplyFailed", {
+          error: error.message || String(error),
+        });
+      }
+    } finally {
+      this._applying = false;
+      this._updateApplyButton();
+    }
+  }
+
   async _applyPreview() {
+    if (this._stagedRestore) return this._applyStagedRestore();
     if (!this._hass || !this._review || this._applying || this._restoring || this._refreshing || this._generating || this._entityWritePending) return;
 
     const review = {...this._review};
@@ -3836,7 +3921,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
       if (result?.mode !== "restore_preview" ||
           result?.available !== true || result?.can_apply !== false ||
           result?.comparison?.status !== "ok" ||
-          typeof result?.content !== "string") {
+          typeof result?.content !== "string" ||
+          !/^[0-9a-f]{64}$/.test(result.label_plan_sha256 || "") ||
+          !result.label_plan || !result.projection) {
         throw new Error("Invalid restore Preview response");
       }
       this._stagedRestore = result;
