@@ -102,6 +102,49 @@ function preview(canApply = true) {
   };
 }
 
+test("Onboarding setup choice is read-only guidance in preview response", async () => {
+  const {panel} = makePanel(async () => ({
+    ...preview(false),
+    onboarding_mode: "existing",
+  }));
+  await panel._loadPreview();
+  assert.equal(panel._onboardingMode, "existing");
+  assert.equal(panel._migrationIntent, undefined);
+});
+
+test("Assistant honors installer's initial existing-file choice without asking again", () => {
+  const {panel} = makePanel(async () => preview(false));
+  panel._migrationReport = {
+    diagnostic: {
+      mode: "new_configuration",
+      source: {status: "resolved", unreferenced_google_entity_file_present: true},
+    },
+  };
+  panel._onboardingMode = "existing";
+  panel._assistantPackagesDetected = () => false;
+  panel._renderAssistantFileStatus = () => {};
+  const nodes = new Map();
+  panel.querySelector = selector => {
+    if (!nodes.has(selector)) {
+      nodes.set(selector, {
+        hidden: false, textContent: "", value: "",
+        setAttribute(name, value) {this[name] = value;},
+      });
+    }
+    return nodes.get(selector);
+  };
+  panel._renderMigrationGuide();
+  assert.equal(panel._migrationIntent, "existing");
+  assert.equal(nodes.get("#assistantFileSection").hidden, false);
+  assert.equal(nodes.get("#migrationIntentExisting")["aria-pressed"], "true");
+
+  // User deliberately changes the choice; a refresh must not undo it.
+  panel._migrationIntent = "new";
+  panel._renderMigrationGuide();
+  assert.equal(panel._migrationIntent, "new");
+  assert.equal(nodes.get("#assistantFileSection").hidden, true);
+});
+
 test("Apply disabled without an approved Preview", async () => {
   const { panel, controls } = makePanel(async () => preview(false));
 
