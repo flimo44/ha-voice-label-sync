@@ -776,7 +776,7 @@ test("Backup tab is present and uses admin-only WS actions", () => {
   assert.match(source, /id="tab-backups"/);
   assert.match(source, /ha_voice_label_sync\/list_backups/);
   assert.match(source, /ha_voice_label_sync\/review_backup/);
-  assert.match(source, /ha_voice_label_sync\/restore_backup/);
+  assert.match(source, /ha_voice_label_sync\/prepare_backup_preview/);
 });
 
 test("Backup review is invalidated when a different snapshot is selected", async () => {
