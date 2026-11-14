@@ -399,16 +399,17 @@ def inspect_initial_setup(
 
 
 def initial_setup_output_error(report: dict[str, Any]) -> str | None:
-    """Validate a new installation's output destination, not ownership."""
-    if report.get("source_matches_output"):
-        return "source_output_conflict"
+    """Refuse unsafe paths, not the presence of an existing YAML file.
 
-    status = report.get("output_status")
-    if status == "existing":
-        return "existing_output_not_owned"
-    if status != "absent":
+    Initial configuration creates an HVLS entry, NOT a claim on the output
+    file. Ownership and any later YAML writes are checked separately by the
+    managed writer / Assistant takeover flow, with explicit user approval.
+    """
+    # The user can configure HVLS while an existing/manual entity file is
+    # present, including when it is referenced by Google Assistant.
+    # A regular existing file MUST NOT be overwritten or adopted here.
+    if report.get("output_status") not in {"absent", "existing"}:
         return "unsafe_output_path"
-
     return None
 
 
@@ -470,6 +471,16 @@ def render_initial_setup_diagnostic(
                 "Review required. No automatic adoption.",
             )
         )
+
+    if output == "existing":
+        lines.append(tr(
+            "Installation possible : le fichier existant reste intact. "
+            "Après installation, ouvrez l'Assistant HVLS pour vérifier "
+            "le fichier et autoriser séparément sa prise en charge.",
+            "Installation is allowed: the existing file stays untouched. "
+            "After installation, open the HVLS Assistant to review the "
+            "file and separately authorize its takeover.",
+        ))
 
     lines.append(
         tr(

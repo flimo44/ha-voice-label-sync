@@ -28,16 +28,22 @@ def test_clean_destination_accepted():
     assert module.initial_setup_output_error(report()) is None
 
 
-def test_existing_destination_refused():
+def test_existing_destination_is_accepted_for_read_only_onboarding():
     assert module.initial_setup_output_error(
         report(output="existing")
-    ) == "existing_output_not_owned"
+    ) is None
 
 
-def test_source_destination_collision_refused():
+def test_source_destination_match_is_not_a_write_authorization():
     assert module.initial_setup_output_error(
-        report(source_match=True)
-    ) == "source_output_conflict"
+        report(output="existing", source_match=True)
+    ) is None
+
+
+def test_missing_declared_source_can_be_configured_without_claiming_it():
+    assert module.initial_setup_output_error(
+        report(output="absent", source_match=True)
+    ) is None
 
 
 def test_unsafe_destination_refused():
