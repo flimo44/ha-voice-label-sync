@@ -91,6 +91,8 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptNone: "Aucun ajout automatique proposé. Vous pouvez toujours gérer les entités individuellement dans l'onglet Gestion des entités HVLS.",
     assistantTakeoverTitle: "Confier le fichier existant à HVLS",
     migrationChangeChoice: "Changer de méthode (facultatif)",
+    importPreviewDanger: "ATTENTION : ce Preview ordinaire est généré à partir des étiquettes HA actuelles, ce n'est PAS une reprise du fichier existant. {count} entités sur {total} seraient supprimées du YAML. Ne l'appliquez pas avant d'avoir terminé la reprise dans l'Assistant.",
+    importPreviewReturn: "Retourner à l'Assistant",
     assistantReinstallTitle: "Récupérer le fichier après réinstallation",
     assistantReinstallIntro: "Ce fichier appartient à une précédente installation HVLS. Si elle n’existe plus, HVLS peut vérifier son empreinte, effectuer une sauvegarde de sécurité, puis transférer sa gestion à cette installation. Ni le YAML ni les étiquettes ne seront modifiés.",
     assistantReinstallAction: "Vérifier et récupérer la gestion",
@@ -596,6 +598,8 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptNone: "No automatic additions suggested. You can still manage each entity in the HVLS Entity management tab.",
     assistantTakeoverTitle: "Let HVLS manage the existing YAML",
     migrationChangeChoice: "Change setup method (optional)",
+    importPreviewDanger: "WARNING: this ordinary Preview uses the current HA labels; it is NOT an import of the existing YAML. {count} of {total} entities would be removed from YAML. Do not Apply until you have completed the Assistant recovery.",
+    importPreviewReturn: "Return to Assistant",
     assistantReinstallTitle: "Recover YAML management after reinstalling",
     assistantReinstallIntro: "This YAML belongs to a previous HVLS installation. If it no longer exists, HVLS can verify its digest, create a safety backup and transfer management to this installation. YAML and HA labels stay unchanged.",
     assistantReinstallAction: "Verify and recover management",
@@ -1943,6 +1947,26 @@ class HVLSPreviewPanel extends HTMLElement {
     const added = Array.isArray(comparison.added) ? comparison.added : [];
     const removed = Array.isArray(comparison.removed) ? comparison.removed : [];
     const modified = Array.isArray(comparison.modified) ? comparison.modified : [];
+    const total = result.production_summary?.total;
+    // Prevent an ordinary label-generated Preview from looking like a
+    // successful legacy YAML import. This is only a UI warning: all
+    // existing ownership and Apply guards remain in force.
+    if (this._onboardingMode === "existing" &&
+        Number.isSafeInteger(total) && total > 0 &&
+        removed.length >= 10 && removed.length * 2 >= total) {
+      const caution = document.createElement("p");
+      caution.className = "diagnostic-note";
+      caution.setAttribute("role", "alert");
+      caution.textContent = this._tf("importPreviewDanger", {
+        count: removed.length, total,
+      });
+      const back = document.createElement("button");
+      back.type = "button";
+      back.className = "secondary";
+      back.textContent = this._t("importPreviewReturn");
+      back.addEventListener("click", () => this._activateTab("migration"));
+      panel.append(caution, back);
+    }
     const counters = document.createElement("div");
     counters.className = "metrics";
     for (const [key, count] of [
