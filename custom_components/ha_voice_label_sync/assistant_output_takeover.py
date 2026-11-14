@@ -116,12 +116,10 @@ def _review(
     old_text, old_sha = _read_verified_text(output)
     if report["file_sha256"] != old_sha:
         raise ExistingOutputTakeoverError("YAML changed during inspection")
-    if previous_id is not None and not hmac.compare_digest(
-        record["sha256"], old_sha
-    ):
-        raise ExistingOutputTakeoverError(
-            "Old ownership SHA does not match actual YAML"
-        )
+    previous_sha = record["sha256"] if previous_id is not None else None
+    recorded_sha_mismatch = previous_sha is not None and (
+        not hmac.compare_digest(previous_sha, old_sha)
+    )
     preview_text, preview_sha = _read_verified_text(preview)
     try:
         analysis = analyze_preview(preview_text, old_text)
@@ -134,6 +132,8 @@ def _review(
         "eligible": True, "selected_path": relative,
         "production_sha256": old_sha, "preview_sha256": preview_sha,
         "previous_entry_id": previous_id,
+        "previous_sha256": previous_sha,
+        "recorded_sha_mismatch": recorded_sha_mismatch,
         "ownership_revision": registry_data["revision"],
         "entities": report["counts"]["entries"],
         "issues": report["counts"]["entries_with_anomalies"],
@@ -169,7 +169,9 @@ def confirm_existing_output_takeover(
     entry_id: str, selected_relative_path: str,
     production_sha256: str, preview_sha256: str,
     confirmed: bool, previous_entry_id: str | None = None,
+    previous_sha256: str | None = None,
     ownership_revision: int | None = None,
+    acknowledge_changed_output: bool = False,
     active_entry_ids: frozenset[str] | None = None,
 ) -> dict:
     """Preserve original bytes and then register ownership under writer lock."""
@@ -189,8 +191,10 @@ def confirm_existing_output_takeover(
         )
         if (
             report["previous_entry_id"] != previous_entry_id
-            or (previous_entry_id is not None
-                and report["ownership_revision"] != ownership_revision)
+            or (previous_entry_id is not None and (
+                report["ownership_revision"] != ownership_revision
+                or report["previous_sha256"] != previous_sha256
+            ))
         ):
             raise ExistingOutputTakeoverError(
                 "Ownership changed since Preview; refresh required"
@@ -200,6 +204,12 @@ def confirm_existing_output_takeover(
         ):
             raise ExistingOutputTakeoverError(
                 "File or Preview changed; review again"
+            )
+        if (report["recorded_sha_mismatch"] and
+                acknowledge_changed_output is not True):
+            raise ExistingOutputTakeoverError(
+                "Previous owner managed a DIFFERENT YAML. "
+                "Explicit changed-file approval is required"
             )
         output = report["output"]
         backups = _safe_path(output.parent / ".hvls_backups")
@@ -225,6 +235,7 @@ def confirm_existing_output_takeover(
                 entry_id=entry_id,
                 output_path=str(output),
                 sha256=production_sha256,
+                previous_sha256=previous_sha256,
                 expected_revision=ownership_revision,
             )
         else:
@@ -241,4 +252,5 @@ def confirm_existing_output_takeover(
             "taken_over": True, "backup_name": safety_copy.name,
             "production_unchanged": True, "apply_performed": False,
             "reinstalled": previous_entry_id is not None,
+            "replaced_file_recovered": report["recorded_sha_mismatch"],
         }
