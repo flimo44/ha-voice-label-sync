@@ -65,8 +65,8 @@ def test_diagnostic_is_localized_and_escapes_markdown():
     french = module.render_initial_setup_diagnostic(item, "fr")
     english = module.render_initial_setup_diagnostic(item, "en")
 
-    assert "Fichier source" in french
-    assert "Source file" in english
+    assert "Source Google Assistant" in french
+    assert "Google Assistant source" in english
     assert r"test\*file.yaml" in french
     assert "Aucune adoption automatique" in french
 
