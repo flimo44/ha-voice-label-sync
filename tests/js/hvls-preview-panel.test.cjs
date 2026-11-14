@@ -655,6 +655,30 @@ test("Two checkbox choices are both included in the staged Preview, no HA writes
     "ha_voice_label_sync/prepare_manual_label_preview"));
 });
 
+test("HA refresh translation preserves contextual Apply label for staged changes", () => {
+  const {panel, controls} = makePanel(async () => preview());
+  panel._renderMigrationGuide = () => {};
+  panel._renderAssistantFileStatus = () => {};
+
+  const changes = [{entity_id: "switch.two", enabled: false}];
+  panel._stagedRestore = manualStage(changes);
+  panel._updateApplyButton();
+  assert.equal(controls.apply.textContent, "Appliquer les changements d'étiquettes");
+  panel._translateStatic(); // Called at every Home Assistant hass setter update.
+  assert.equal(controls.apply.textContent, "Appliquer les changements d'étiquettes");
+
+  panel._stagedRestore = {
+    mode: "restore_preview",
+    projection: {ready: true}, label_plan: {review: [], remove: ["switch.two"]},
+    comparison: {status: "ok", identical_entities: false},
+    label_plan_sha256: "c".repeat(64),
+  };
+  panel._updateApplyButton();
+  assert.equal(controls.apply.textContent, "Appliquer cette restauration");
+  panel._translateStatic();
+  assert.equal(controls.apply.textContent, "Appliquer cette restauration");
+});
+
 test("Cancelling a staged manual-label Preview discards pending choices without write", async () => {
   const calls = [];
   const {panel, controls} = makePanel(async request => {
