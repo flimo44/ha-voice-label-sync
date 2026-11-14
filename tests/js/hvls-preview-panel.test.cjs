@@ -899,6 +899,79 @@ test("Restore Preview shows individual HA label operations and exceptional entit
   assert.deepEqual(notice.children, []);
 });
 
+test("Confirmed restoration applies reviewed YAML and labels then refreshes", async () => {
+  const calls = [];
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request);
+    if (request.type === "ha_voice_label_sync/apply_backup_preview") {
+      return {applied: true, reconciled: true, yaml_entities: 40,
+        label_additions: 0, label_removals: 12, safety_backup: "safety.bak"};
+    }
+    if (request.type === "ha_voice_label_sync/generate_preview") {
+      return {entity_count: 40};
+    }
+    throw new Error("Unexpected request");
+  });
+  panel._stagedRestore = {mode: "restore_preview",
+    backup_id: "backup.bak", backup_sha256: "b".repeat(64),
+    production_sha256: "a".repeat(64),
+    label_plan_sha256: "c".repeat(64),
+    label_plan: {add: [], remove: ["switch.old"], review: []},
+    projection: {ready: true}};
+  let refreshed = false, loaded = false;
+  panel._loadPreview = async () => {refreshed = true;};
+  panel._loadEntities = async () => {loaded = true;};
+  panel._updateApplyButton();
+  assert.equal(controls.apply.disabled, false);
+  await panel._applyPreview();
+  assert.deepEqual(calls.map(x => x.type), [
+    "ha_voice_label_sync/apply_backup_preview",
+    "ha_voice_label_sync/generate_preview",
+  ]);
+  assert.equal(calls[0].backup_id, "backup.bak");
+  assert.equal(calls[0].backup_sha256, "b".repeat(64));
+  assert.equal(calls[0].production_sha256, "a".repeat(64));
+  assert.equal(calls[0].label_plan_sha256, "c".repeat(64));
+  assert.equal(refreshed, true);
+  assert.equal(loaded, true);
+  assert.equal(panel._stagedRestore, null);
+  assert.equal(controls.apply.disabled, true);
+  assert.match(panel.status, /Restauration validée/);
+});
+
+test("Restore with mismatched HA generation cannot be applied", async () => {
+  const calls = [];
+  const {panel, controls} = makePanel(async request => {calls.push(request);});
+  panel._stagedRestore = {mode: "restore_preview",
+    label_plan_sha256: "c".repeat(64),
+    projection: {ready: false}, label_plan: {review: []}};
+  panel._updateApplyButton();
+  assert.equal(controls.apply.disabled, true);
+  await panel._applyPreview();
+  assert.deepEqual(calls, []);
+});
+
+test("Failed restore Apply clears stale approval and reloads guard", async () => {
+  const {panel, controls} = makePanel(async request => {
+    if (request.type === "ha_voice_label_sync/apply_backup_preview") {
+      throw new Error("Incomplete restoration");
+    }
+    throw new Error("Unexpected request");
+  });
+  panel._stagedRestore = {mode: "restore_preview",
+    backup_id: "backup.bak", backup_sha256: "b".repeat(64),
+    production_sha256: "a".repeat(64),
+    label_plan_sha256: "c".repeat(64),
+    projection: {ready: true}, label_plan: {review: []}};
+  let refreshed = false;
+  panel._loadPreview = async () => {refreshed = true;};
+  await panel._applyPreview();
+  assert.equal(refreshed, true);
+  assert.equal(panel._stagedRestore, null);
+  assert.equal(controls.apply.disabled, true);
+  assert.match(panel.status, /Restauration refusée ou incomplète/);
+});
+
 test("Backup text-only differences are identified without direct restore", () => {
   const {panel} = makePanel(async () => ({}));
   const nodes = {
