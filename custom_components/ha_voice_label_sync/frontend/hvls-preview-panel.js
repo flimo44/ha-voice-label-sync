@@ -1292,7 +1292,8 @@ class HVLSPreviewPanel extends HTMLElement {
     if (!this._hass || (this._applying && !afterApply)) return;
     const loadId = (this._loadId || 0) + 1;
     this._loadId = loadId;
-    this._stagedRestore = null; // Normal Preview replaces a staged backup only by user action.
+    this._stagedRestore = null; // Normal Preview replaces an obsolete staging plan.
+    this._manualLabelChanges = null;
     this._review = null;
     this._applyBlockReason = null;
     this._applyBlockReasonCode = null;
@@ -3437,75 +3438,128 @@ entity_config: !include google_assistant_entities.yaml</pre>
   }
 
   async _setEntityLabel(entity, checkbox) {
+    // A checkbox change is ONLY a proposal. The existing HA entity label
+    // remains unchanged until the user approves the Preview.
     const current = entity.has_label === true;
-    const enabled = !current;
-    const action = this._t(enabled ? "actionAdd" : "actionRemove");
+    const wanted = checkbox.checked === true;
+    if (!this._hass || this._entityWritePending ||
+        this._applying || this._restoring || this._generating ||
+        this._refreshing ||
+        (this._stagedRestore && this._stagedRestore.mode !== "label_preview")) {
+      checkbox.checked = this._manualLabelChanges?.get(entity.entity_id) ?? current;
+      return;
+    }
+    if (wanted && !current && entity.eligible !== true) {
+      checkbox.checked = current;
+      return;
+    }
 
-    // Ne jamais considérer la case comme modifiée avant confirmation.
-    checkbox.checked = current;
-
-    if (this._entityWritePending) return;
-
-    // A stale UI or a programmatic call cannot add an ineligible entity.
-    if (enabled && entity.eligible !== true) return;
-
-    const confirmed = window.confirm(
-      this._tf("confirmLabel", {action}) + "\n\n" +
-      `${entity.name || entity.entity_id}\n` +
-      `${entity.entity_id}\n\n` +
-      this._t("otherLabelsPreserved")
-    );
-
-    if (!confirmed) return;
+    const choices = new Map(this._manualLabelChanges || []);
+    if (wanted === current) choices.delete(entity.entity_id);
+    else choices.set(entity.entity_id, wanted);
 
     this._entityWritePending = true;
-    // The previous Preview approval predates this label change.
+    this._loadId = (this._loadId || 0) + 1;
+    this._stagedRestore = null;
+    this._review = null;
+    this._updateApplyButton();
+    this._setStatusKey("manualLabelPreparing");
+    try {
+      if (!choices.size) {
+        this._manualLabelChanges = null;
+        await this._loadPreview();
+        this._activateTab("preview");
+        return;
+      }
+      const changes = [...choices.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([entity_id, enabled]) => ({entity_id, enabled}));
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/prepare_manual_label_preview",
+        changes,
+      });
+      if (result?.mode !== "label_preview" ||
+          result.projection?.ready !== true ||
+          !Array.isArray(result.changes) ||
+          !/^[0-9a-f]{64}$/.test(result.label_plan_sha256 || "")) {
+        throw new Error("Invalid manual-label Preview");
+      }
+      this._manualLabelChanges = choices;
+      this._stagedRestore = result;
+      this._previewContent = result.content;
+      this._previewPath = result.path;
+      this._applyBlockReason = this._t("manualLabelHelp");
+      this._applyBlockReasonCode = null;
+      this._renderAnalysis(result);
+      this._setContent(result.content);
+      this._setStatusKey("manualLabelPrepared", {count: choices.size});
+      this._activateTab("preview");
+    } catch (error) {
+      this._manualLabelChanges = null;
+      this._stagedRestore = null;
+      checkbox.checked = current;
+      await this._loadPreview();
+      this._setStatusKey("manualLabelFailed", {
+        error: error.message || String(error),
+      });
+    } finally {
+      this._entityWritePending = false;
+      if (this._entityCatalog) this._renderEntities();
+      if (this._lastAnalysis) this._renderAnalysis(this._lastAnalysis);
+      this._updateApplyButton();
+    }
+  }
+
+  async _applyManualLabelPreview() {
+    const stage = this._stagedRestore;
+    if (!this._hass || stage?.mode !== "label_preview" ||
+        stage.projection?.ready !== true || !stage.changes?.length ||
+        !/^[0-9a-f]{64}$/.test(stage.label_plan_sha256 || "") ||
+        this._entityWritePending || this._restoring || this._applying ||
+        this._generating || this._refreshing) return;
+    if (!window.confirm(this._t("manualLabelConfirm"))) return;
+
+    this._applying = true;
     this._loadId = (this._loadId || 0) + 1;
     this._review = null;
     this._updateApplyButton();
-    let reloadSucceeded = false;
-
-    const controls = Array.from(
-      this.querySelectorAll(".entity-hvls-checkbox")
-    );
-    controls.forEach((control) => { control.disabled = true; });
-
+    let applied = null;
     try {
-      const result = await this._hass.callWS({
-        type: "ha_voice_label_sync/set_entity_label",
-        entity_id: entity.entity_id,
-        enabled,
-        expected_enabled: current,
+      applied = await this._hass.callWS({
+        type: "ha_voice_label_sync/apply_manual_label_preview",
+        changes: stage.changes,
+        preview_sha256: stage.preview_sha256,
+        production_sha256: stage.production_sha256,
+        label_plan_sha256: stage.label_plan_sha256,
       });
-
-      if (result.entity_id !== entity.entity_id ||
-          result.has_label !== enabled) {
-        throw new Error(this._t("inconsistentRegistry"));
+      if (applied?.applied !== true || applied?.reconciled !== true) {
+        throw new Error("Unverified label-Preview Apply response");
       }
-
-      // Le catalogue est relu depuis les registres réels de HA.
-      const reloaded = await this._loadEntities();
-      reloadSucceeded = reloaded;
-      if (!reloaded) {
-        window.alert(
-          this._t("reloadFailed")
-        );
-      }
+      this._manualLabelChanges = null;
+      this._stagedRestore = null;
+      this._backupList = null;
+      await this._hass.callWS({
+        type: "ha_voice_label_sync/generate_preview",
+      });
+      await this._loadPreview(true);
+      await this._loadEntities();
+      this._setStatusKey("manualLabelApplied", {
+        added: applied.label_additions, removed: applied.label_removals,
+      });
     } catch (error) {
-      checkbox.checked = current;
-      window.alert(
-        this._tf("updateFailed", {entity: entity.entity_id}) + "\n" +
-        (error.message || String(error))
-      );
+      // A partial server failure may have installed the durable guard.
+      // Always discard the old approval and show the current HA state.
+      this._stagedRestore = null;
+      this._manualLabelChanges = null;
+      await this._loadPreview(true);
+      await this._loadEntities();
+      this._setStatusKey("manualLabelApplyFailed", {
+        error: error.message || String(error),
+      });
     } finally {
-      this._entityWritePending = false;
-      this.querySelectorAll(".entity-hvls-checkbox").forEach(
-        (control) => { control.disabled = control.dataset.ineligible === "true"; }
-      );
+      this._applying = false;
+      this._updateApplyButton();
     }
-    // Regenerate only after successful label update + catalog reload.
-    // This writes the Preview file, never the Google Assistant production file.
-    if (reloadSucceeded) await this._generatePreview();
   }
 
   _openEntityDetails(entityId) {
