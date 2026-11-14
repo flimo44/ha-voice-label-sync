@@ -1032,7 +1032,7 @@ test("Backup cleanup checkboxes let users keep old or delete recent snapshots", 
   assert.equal(recent.checked, false);
   assert.equal(old.checked, true);
   assert.equal(apply.disabled, false);
-  assert.match(apply.textContent, /1 sauvegarde/);
+  assert.match(apply.textContent, /Supprimer la sauvegarde/);
 
   // Keep the older backup and choose the more recent one for deletion.
   old.checked = false;
