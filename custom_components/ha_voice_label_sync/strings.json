@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Configure HA Voice Label Sync",
-        "description": "Configure HVLS and review Google Assistant settings.\n\n{diagnostic}",
+        "description": "Choose the HVLS label and output YAML file. Google Assistant can be connected later.\n\n{diagnostic}",
         "data": {
           "backend": "Voice assistant",
           "label": "Home Assistant label",
@@ -17,7 +17,7 @@
           "label": "Entities carrying this Home Assistant label will be included.",
           "output": "Path of the generated YAML file inside Home Assistant.",
           "backup_retention": "Maximum number of previous generated files to retain. Use 0 to disable retention.",
-          "create_backup": "Create a backup of the current output file before replacing it."
+          "create_backup": "A backup is made before any later replacement approved in Preview. Installation never overwrites the existing file."
         }
       }
     },
