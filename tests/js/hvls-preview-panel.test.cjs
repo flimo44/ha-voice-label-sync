@@ -110,6 +110,120 @@ test("Apply disabled without an approved Preview", async () => {
   assert.equal(controls.apply.disabled, true);
 });
 
+function managedPreviewWithComparison(overrides = {}) {
+  return {
+    ...preview(true),
+    ownership: {status: "managed", write_allowed: true},
+    production_sha256: "b".repeat(64),
+    comparison: {
+      status: "ok",
+      added: [], removed: [], modified: [],
+      unchanged: 4,
+      identical_entities: true,
+      identical_text: true,
+      ...overrides,
+    },
+  };
+}
+
+test("Identical managed Preview disables normal Apply with a clear reason", async () => {
+  for (const identicalText of [true, false]) {
+    const calls = [];
+    const {panel, controls} = makePanel(async request => {
+      calls.push(request.type);
+      return managedPreviewWithComparison({identical_text: identicalText});
+    });
+    const info = {hidden: true, open: false, title: ""};
+    const explanation = {textContent: ""};
+    const originalQuery = panel.querySelector.bind(panel);
+    panel.querySelector = selector => {
+      if (selector === "#applyInfo") return info;
+      if (selector === "#applyBlockReason") return explanation;
+      return originalQuery(selector);
+    };
+
+    await panel._loadPreview();
+
+    assert.equal(controls.apply.disabled, true);
+    assert.equal(panel._review, null);
+    assert.equal(info.hidden, false);
+    assert.match(explanation.textContent, /Aucune modification à appliquer/);
+    await panel._applyPreview();
+    assert.deepEqual(calls, ["ha_voice_label_sync/get_preview"]);
+
+    // Reason uses the active locale, even after a UI language change.
+    panel._language = "en";
+    panel._updateApplyButton();
+    assert.match(explanation.textContent, /No changes to apply/);
+  }
+});
+
+test("A subsequent Preview with an added entity enables normal Apply again", async () => {
+  let hasChanges = false;
+  const {panel, controls} = makePanel(async () =>
+    managedPreviewWithComparison(hasChanges
+      ? {added: ["switch.new"], identical_entities: false, identical_text: false}
+      : {}
+    )
+  );
+  const info = {hidden: true, open: false};
+  const explanation = {textContent: ""};
+  const originalQuery = panel.querySelector.bind(panel);
+  panel.querySelector = selector => {
+    if (selector === "#applyInfo") return info;
+    if (selector === "#applyBlockReason") return explanation;
+    return originalQuery(selector);
+  };
+
+  await panel._loadPreview();
+  assert.equal(controls.apply.disabled, true);
+  assert.equal(info.hidden, false);
+  hasChanges = true;
+  await panel._loadPreview();
+
+  assert.equal(controls.apply.disabled, false);
+  assert.equal(info.hidden, true);
+  assert.equal(explanation.textContent, "");
+  assert.equal(panel._review.production_sha256, "b".repeat(64));
+});
+
+test("A missing production file can still be created with normal Apply", async () => {
+  const {panel, controls} = makePanel(async () => ({
+    ...preview(true),
+    comparison: {status: "missing"},
+  }));
+
+  await panel._loadPreview();
+
+  assert.equal(controls.apply.disabled, false);
+  assert.ok(panel._review);
+});
+
+test("A protected existing file keeps its ownership warning even with no changes", async () => {
+  const response = managedPreviewWithComparison();
+  response.ownership = {
+    status: "unmanaged",
+    write_allowed: false,
+    reason_code: "unmanaged_output",
+    reason: "Existing manual YAML is protected.",
+  };
+  const {panel, controls} = makePanel(async () => response);
+  const info = {hidden: true, title: ""};
+  const explanation = {textContent: ""};
+  const originalQuery = panel.querySelector.bind(panel);
+  panel.querySelector = selector => {
+    if (selector === "#applyInfo") return info;
+    if (selector === "#applyBlockReason") return explanation;
+    return originalQuery(selector);
+  };
+
+  await panel._loadPreview();
+
+  assert.equal(controls.apply.disabled, true);
+  assert.match(explanation.textContent, /propriété n'est pas vérifiée/);
+  assert.doesNotMatch(explanation.textContent, /Aucune modification/);
+});
+
 test("Cancelled confirmation sends no apply command", async () => {
   const calls = [];
   const { panel } = makePanel(
