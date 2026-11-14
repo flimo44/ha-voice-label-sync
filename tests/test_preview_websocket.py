@@ -42,6 +42,7 @@ def websocket_module(monkeypatch):
 
     voluptuous = ModuleType("voluptuous")
     voluptuous.Required = lambda value: value
+    voluptuous.Optional = lambda value, default=None: value
     voluptuous.Any = lambda *validators: validators
     voluptuous.Any = lambda *validators: validators
 
