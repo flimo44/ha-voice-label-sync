@@ -25,6 +25,7 @@ from hvls.owned_writer import (
 
 from .assistant_entity_file import inspect_google_entity_file
 from .preview_compare import PreviewFormatError, analyze_preview
+from .restore_guard import read_guard
 
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
 _MAX_BYTES = 2 * 1024 * 1024
@@ -56,6 +57,7 @@ def _review(
     *, config_dir: str | Path, output_path: str | Path,
     preview_path: str | Path, registry_path: str | Path,
     entry_id: str, selected_relative_path: str,
+    active_entry_ids: frozenset[str] | None = None,
 ) -> dict:
     if not isinstance(entry_id, str) or not entry_id.strip():
         raise ExistingOutputTakeoverError("HVLS identity unavailable")
@@ -73,8 +75,38 @@ def _review(
         raise ExistingOutputTakeoverError("Selected file is not the configured output")
 
     ownership = evaluate_registered_output(output, entry_id, registry_file)
-    if ownership.reason_code != "unmanaged_output":
-        raise ExistingOutputTakeoverError("Output is not an unmanaged regular file")
+    previous_id = None
+    registry = OwnershipRegistry(registry_file)
+    registry_data = registry._load()
+    if ownership.reason_code == "owned_by_other_installation":
+        # Do NOT reclaim an installation Home Assistant still knows.
+        if not active_entry_ids or entry_id not in active_entry_ids:
+            raise ExistingOutputTakeoverError(
+                "Active Home Assistant installation cannot be verified"
+            )
+        matched = [
+            (owner_id, record)
+            for owner_id, record in registry_data["records"].items()
+            if record.get("output_path") == str(output)
+        ]
+        if len(matched) != 1:
+            raise ExistingOutputTakeoverError("Ambiguous previous owner")
+        previous_id, record = matched[0]
+        if (
+            previous_id in active_entry_ids or previous_id == entry_id
+            or record["state"] != "managed"
+        ):
+            raise ExistingOutputTakeoverError(
+                "Existing ownership is still active or incomplete"
+            )
+        if read_guard(registry_file) is not None:
+            raise ExistingOutputTakeoverError(
+                "Previous recovery must be completed before reassignment"
+            )
+    elif ownership.reason_code != "unmanaged_output":
+        raise ExistingOutputTakeoverError(
+            "Output is neither unmanaged nor owned by an inactive installation"
+        )
     report = inspect_google_entity_file(root, relative)
     if report["status"] not in {"parsed", "review_required"} or (
         report["adoption_entries_complete"] is not True
@@ -84,6 +116,12 @@ def _review(
     old_text, old_sha = _read_verified_text(output)
     if report["file_sha256"] != old_sha:
         raise ExistingOutputTakeoverError("YAML changed during inspection")
+    if previous_id is not None and not hmac.compare_digest(
+        record["sha256"], old_sha
+    ):
+        raise ExistingOutputTakeoverError(
+            "Old ownership SHA does not match actual YAML"
+        )
     preview_text, preview_sha = _read_verified_text(preview)
     try:
         analysis = analyze_preview(preview_text, old_text)
@@ -95,6 +133,8 @@ def _review(
     return {
         "eligible": True, "selected_path": relative,
         "production_sha256": old_sha, "preview_sha256": preview_sha,
+        "previous_entry_id": previous_id,
+        "ownership_revision": registry_data["revision"],
         "entities": report["counts"]["entries"],
         "issues": report["counts"]["entries_with_anomalies"],
         "changes": {
@@ -110,12 +150,14 @@ def prepare_existing_output_takeover(
     *, config_dir: str | Path, output_path: str | Path,
     preview_path: str | Path, registry_path: str | Path,
     entry_id: str, selected_relative_path: str,
+    active_entry_ids: frozenset[str] | None = None,
 ) -> dict:
     """Prepare a display-only digest-locked report, never write anything."""
     result = _review(
         config_dir=config_dir, output_path=output_path,
         preview_path=preview_path, registry_path=registry_path,
         entry_id=entry_id, selected_relative_path=selected_relative_path,
+        active_entry_ids=active_entry_ids,
     )
     return {key: value for key, value in result.items()
             if key not in {"output", "registry"}}
@@ -126,7 +168,9 @@ def confirm_existing_output_takeover(
     preview_path: str | Path, registry_path: str | Path,
     entry_id: str, selected_relative_path: str,
     production_sha256: str, preview_sha256: str,
-    confirmed: bool,
+    confirmed: bool, previous_entry_id: str | None = None,
+    ownership_revision: int | None = None,
+    active_entry_ids: frozenset[str] | None = None,
 ) -> dict:
     """Preserve original bytes and then register ownership under writer lock."""
     if confirmed is not True or not all(
@@ -141,7 +185,16 @@ def confirm_existing_output_takeover(
             config_dir=config_dir, output_path=output_path,
             preview_path=preview_path, registry_path=registry_path,
             entry_id=entry_id, selected_relative_path=selected_relative_path,
+            active_entry_ids=active_entry_ids,
         )
+        if (
+            report["previous_entry_id"] != previous_entry_id
+            or (previous_entry_id is not None
+                and report["ownership_revision"] != ownership_revision)
+        ):
+            raise ExistingOutputTakeoverError(
+                "Ownership changed since Preview; refresh required"
+            )
         if not hmac.compare_digest(report["production_sha256"], production_sha256) or (
             not hmac.compare_digest(report["preview_sha256"], preview_sha256)
         ):
@@ -166,10 +219,19 @@ def confirm_existing_output_takeover(
         # server-verified unmanaged status, the common writer lock and mandatory
         # verified safety backup. No production write is performed.
         registry = OwnershipRegistry(registry_file)
-        registry.record_generation(
-            entry_id=entry_id, output_path=str(output),
-            sha256=production_sha256,
-        )
+        if previous_entry_id is not None:
+            registry.transfer_inactive_owner(
+                previous_entry_id=previous_entry_id,
+                entry_id=entry_id,
+                output_path=str(output),
+                sha256=production_sha256,
+                expected_revision=ownership_revision,
+            )
+        else:
+            registry.record_generation(
+                entry_id=entry_id, output_path=str(output),
+                sha256=production_sha256,
+            )
         ownership = evaluate_registered_output(output, entry_id, registry_file)
         if not ownership.write_allowed or ownership.status != "managed":
             raise ExistingOutputTakeoverError(
@@ -178,4 +240,5 @@ def confirm_existing_output_takeover(
         return {
             "taken_over": True, "backup_name": safety_copy.name,
             "production_unchanged": True, "apply_performed": False,
+            "reinstalled": previous_entry_id is not None,
         }
