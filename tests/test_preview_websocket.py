@@ -164,6 +164,8 @@ def websocket_module(monkeypatch):
     backup_module.BackupRestoreError = type("BackupRestoreError", (ValueError,), {})
     backup_module.list_backups = Mock(return_value={"backups": []})
     backup_module.review_backup = Mock()
+    backup_module.prepare_backup_preview = Mock()
+    backup_module.complete_preview_restoration = Mock()
     backup_module.restore_reviewed_backup = Mock()
     backup_module.resolve_restored_output = Mock()
     monkeypatch.setitem(sys.modules, f"{prefix}.backup_restore", backup_module)
@@ -630,49 +632,215 @@ def test_set_entity_label_websocket_refuses_missing_entity(websocket_module):
     ws.update_entity_label.assert_not_called()
 
 
-def test_restore_websocket_passes_ownership_identity(websocket_module):
-    """Restore must use HA's installation identity, not client input."""
+def _setup_reviewed_restore(websocket_module, *, remove_ids=()):
+    """Fixture for a reproducible, previously reviewed restore proposal."""
     ws = websocket_module.websocket
-
+    ws.prepare_backup_preview.reset_mock()
     ws.restore_reviewed_backup.reset_mock()
+    ws.complete_preview_restoration.reset_mock()
+    ws.update_entity_label.reset_mock()
     ws.restore_reviewed_backup.return_value = {
-        "restored": True,
-        "backup_id": "test.bak",
-        "safety_backup": "safety.bak",
-        "bytes_written": 42,
+        "restored": True, "safety_backup": "safety.bak",
     }
+    ws.complete_preview_restoration.return_value = {"reconciled": True}
+    ws.prepare_backup_preview.return_value = {
+        "label_plan_sha256": "c" * 64,
+        "projection": {"ready": True},
+        "label_plan": {
+            "add": [],
+            "remove": list(remove_ids),
+            "review": [], "current_label_count": len(remove_ids),
+        },
+        "content": "switch.kept:\\n  expose: true\\n",
+        "summary": {"total": 40},
+    }
+    ws.build_entity_catalog = Mock(return_value={
+        "entities": [
+            {"entity_id": item, "has_label": True, "eligible": True}
+            for item in remove_ids
+        ],
+    })
+    ws.run_google_assistant_workflow = Mock(return_value=SimpleNamespace(
+        generation=SimpleNamespace(
+            content="switch.kept:\\n  expose: true\\n",
+        ),
+    ))
+    ws.analyze_preview = Mock(return_value={"comparison": {
+        "status": "ok", "identical_entities": True,
+    }})
+    return ws
 
-    connection = SimpleNamespace(
-        send_result=Mock(),
-        send_error=Mock(),
+
+def test_reviewed_restore_applies_yaml_then_labels_and_verifies(
+    websocket_module,
+):
+    ws = _setup_reviewed_restore(
+        websocket_module, remove_ids=("switch.b", "switch.c"),
     )
-
-    asyncio.run(
-        ws.websocket_restore_backup(
-            make_hass(),
-            connection,
-            {
-                "id": 301,
-                "backup_id": "test.bak",
-                "backup_sha256": "a" * 64,
-                "production_sha256": "b" * 64,
-                "entry_id": "forged-client-identity",
-            },
-        )
-    )
-
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_backup_preview(
+        make_hass(), connection, {
+            "id": 801, "backup_id": "backup.bak",
+            "backup_sha256": "a" * 64,
+            "production_sha256": "b" * 64,
+            "label_plan_sha256": "c" * 64,
+        },
+    ))
     connection.send_error.assert_not_called()
-    connection.send_result.assert_called_once()
-
-    call = ws.restore_reviewed_backup.call_args
-
-    assert call is not None
-    assert call.kwargs["entry_id"] == "test-installation"
-    assert call.kwargs["ownership_registry_path"] == Path(
-        "/config/.hvls/ownership.json"
+    result = connection.send_result.call_args.args[1]
+    assert result["applied"] is True
+    assert result["reconciled"] is True
+    assert result["yaml_entities"] == 40
+    assert result["label_removals"] == 2
+    assert ws.restore_reviewed_backup.call_count == 1
+    assert ws.update_entity_label.call_count == 2
+    assert all(
+        call.args[3:] == (False, True)
+        for call in ws.update_entity_label.call_args_list
     )
+    assert ws.complete_preview_restoration.call_count == 1
 
-    assert call.kwargs["entry_id"] != "forged-client-identity"
+
+def test_changed_restore_label_plan_refuses_all_writes(websocket_module):
+    ws = _setup_reviewed_restore(websocket_module)
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_backup_preview(
+        make_hass(), connection, {
+            "id": 802, "backup_id": "backup.bak",
+            "backup_sha256": "a" * 64,
+            "production_sha256": "b" * 64,
+            "label_plan_sha256": "d" * 64,
+        },
+    ))
+    connection.send_result.assert_not_called()
+    assert connection.send_error.call_args.args[1] == (
+        "backup_preview_apply_refused"
+    )
+    ws.restore_reviewed_backup.assert_not_called()
+    ws.update_entity_label.assert_not_called()
+    ws.complete_preview_restoration.assert_not_called()
+
+
+def test_partial_restore_never_claims_success_or_clears_guard(websocket_module):
+    ws = _setup_reviewed_restore(
+        websocket_module, remove_ids=("switch.b",),
+    )
+    ws.update_entity_label.side_effect = ws.LabelUpdateError("HA rejected label")
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_backup_preview(
+        make_hass(), connection, {
+            "id": 803, "backup_id": "backup.bak",
+            "backup_sha256": "a" * 64,
+            "production_sha256": "b" * 64,
+            "label_plan_sha256": "c" * 64,
+        },
+    ))
+    connection.send_result.assert_not_called()
+    assert connection.send_error.call_args.args[1] == (
+        "restoration_requires_reconciliation"
+    )
+    ws.restore_reviewed_backup.assert_called_once()
+    ws.complete_preview_restoration.assert_not_called()
+
+
+def test_writer_failure_after_guard_creation_reports_recovery(
+    websocket_module,
+):
+    ws = _setup_reviewed_restore(websocket_module)
+    ws.restore_reviewed_backup.side_effect = ws.FileWriterError(
+        "simulated interruption after guard installation"
+    )
+    ws.read_guard.return_value = {
+        "entry_id": "test-installation", "output_path": "/config/output.yaml",
+    }
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_backup_preview(
+        make_hass(), connection, {
+            "id": 805, "backup_id": "backup.bak",
+            "backup_sha256": "a" * 64,
+            "production_sha256": "b" * 64,
+            "label_plan_sha256": "c" * 64,
+        },
+    ))
+    assert connection.send_error.call_args.args[1] == (
+        "restoration_requires_reconciliation"
+    )
+    ws.update_entity_label.assert_not_called()
+    ws.complete_preview_restoration.assert_not_called()
+
+
+def test_final_yaml_drift_leaves_restoration_protected(websocket_module):
+    ws = _setup_reviewed_restore(websocket_module)
+    ws.analyze_preview.return_value = {"comparison": {
+        "status": "ok", "identical_entities": False,
+    }}
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_backup_preview(
+        make_hass(), connection, {
+            "id": 804, "backup_id": "backup.bak",
+            "backup_sha256": "a" * 64,
+            "production_sha256": "b" * 64,
+            "label_plan_sha256": "c" * 64,
+        },
+    ))
+    assert connection.send_error.call_args.args[1] == (
+        "restoration_requires_reconciliation"
+    )
+    ws.complete_preview_restoration.assert_not_called()
+
+
+def test_legacy_direct_restore_endpoint_refuses_write(websocket_module):
+    """Even an old client cannot restore production before Preview validation."""
+    ws = websocket_module.websocket
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_restore_backup(
+        make_hass(), connection, {
+            "id": 301,
+            "backup_id": "test.bak",
+            "backup_sha256": "a" * 64,
+            "production_sha256": "b" * 64,
+        },
+    ))
+    connection.send_result.assert_not_called()
+    assert connection.send_error.call_args.args[1] == "restore_requires_preview"
+
+
+def test_backup_preview_endpoint_is_read_only_and_preserves_identity(
+    websocket_module,
+):
+    """The staged restore reads HA labels but does not write anything."""
+    ws = websocket_module.websocket
+    ws.prepare_backup_preview.return_value = {
+        "available": True,
+        "mode": "restore_preview",
+        "can_apply": False,
+        "content": "switch.pompe:\\n  expose: true\\n",
+        "production_summary": {"total": 40},
+        "summary": {"total": 52},
+        "comparison": {"status": "ok", "added": ["switch.new"],
+                       "removed": [], "modified": [], "unchanged": 40},
+    }
+    ws.update_entity_label.reset_mock()
+    ws.apply_reviewed_preview.reset_mock()
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_prepare_backup_preview(
+        make_hass(), connection, {
+            "id": 302,
+            "backup_id": "test.bak",
+            "backup_sha256": "a" * 64,
+            "production_sha256": "b" * 64,
+            "entry_id": "forged-id",
+        },
+    ))
+    connection.send_error.assert_not_called()
+    assert connection.send_result.call_args.args[1]["can_apply"] is False
+    call = ws.prepare_backup_preview.call_args
+    assert call.args[0] == Path("/config/google_assistant_entities.yaml")
+    assert call.args[1:4] == ("test.bak", "a" * 64, "b" * 64)
+    assert isinstance(call.args[4], dict)
+    ws.update_entity_label.assert_not_called()
+    ws.apply_reviewed_preview.assert_not_called()
+
 
 
 def test_preview_disables_apply_for_unmanaged_yaml(

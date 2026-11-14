@@ -21,7 +21,9 @@ from hvls.owned_writer import evaluate_registered_output
 
 from .backup_restore import (
     BackupRestoreError,
+    complete_preview_restoration,
     list_backups,
+    prepare_backup_preview,
     resolve_restored_output,
     restore_reviewed_backup,
     review_backup,
@@ -1497,6 +1499,8 @@ async def websocket_set_entity_label(
 WS_TYPE_LIST_BACKUPS = f"{DOMAIN}/list_backups"
 WS_TYPE_REVIEW_BACKUP = f"{DOMAIN}/review_backup"
 WS_TYPE_RESTORE_BACKUP = f"{DOMAIN}/restore_backup"
+WS_TYPE_PREPARE_BACKUP_PREVIEW = f"{DOMAIN}/prepare_backup_preview"
+WS_TYPE_APPLY_BACKUP_PREVIEW = f"{DOMAIN}/apply_backup_preview"
 WS_TYPE_RESOLVE_RESTORE = f"{DOMAIN}/resolve_restored_output"
 
 
@@ -1563,6 +1567,229 @@ async def websocket_review_backup(
 @websocket_api.require_admin
 @websocket_api.async_response
 @websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_PREPARE_BACKUP_PREVIEW,
+    vol.Required("backup_id"): str,
+    vol.Required("backup_sha256"): str,
+    vol.Required("production_sha256"): str,
+})
+async def websocket_prepare_backup_preview(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Stage the chosen backup as a Preview, without touching production or HA."""
+    async with get_workflow_lock(hass):
+        try:
+            entries = hass.config_entries.async_entries(DOMAIN)
+            if len(entries) != 1:
+                raise BackupRestoreError("HVLS installation unavailable or ambiguous")
+            output_path = _configured_output(hass)
+            registry_path = Path(hass.config.path(".hvls", "ownership.json"))
+            # Legacy restores must be reconciled before starting another plan.
+            assert_not_guarded(registry_path, entries[0].entry_id, output_path)
+            settings = {**entries[0].data, **entries[0].options}
+            registries = get_live_registries(hass)
+            catalog = await hass.async_add_executor_job(
+                build_entity_catalog,
+                registries,
+                settings.get(CONF_LABEL, DEFAULT_LABEL),
+                DEFAULT_DOMAINS,
+            )
+            result = await hass.async_add_executor_job(
+                partial(
+                    prepare_backup_preview,
+                    output_path, msg["backup_id"],
+                    msg["backup_sha256"], msg["production_sha256"],
+                    catalog,
+                    registries=registries,
+                    label=settings.get(CONF_LABEL, DEFAULT_LABEL),
+                    domains=DEFAULT_DOMAINS,
+                )
+            )
+        except (
+            BackupRestoreError, PreviewChangedError, FileWriterError,
+            OSError, ValueError, TypeError, KeyError, AttributeError,
+        ) as exc:
+            connection.send_error(
+                msg["id"], "backup_preview_failed", str(exc)
+            )
+            return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_APPLY_BACKUP_PREVIEW,
+    vol.Required("backup_id"): str,
+    vol.Required("backup_sha256"): str,
+    vol.Required("production_sha256"): str,
+    vol.Required("label_plan_sha256"): str,
+})
+async def websocket_apply_backup_preview(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Apply a reviewed restoration: protected YAML, labels, final verification.
+
+    The existing durable restore guard is installed before the YAML write.
+    On any incomplete operation, the guard remains to block future Apply
+    until the discrepancy is explicitly reconciled.
+    """
+    yaml_written = False
+    async with get_workflow_lock(hass):
+        try:
+            entries = hass.config_entries.async_entries(DOMAIN)
+            if len(entries) != 1:
+                raise BackupRestoreError("HVLS installation unavailable")
+            entry = entries[0]
+            settings = {**entry.data, **entry.options}
+            configured_label = settings.get(CONF_LABEL, DEFAULT_LABEL)
+            output_path = _configured_output(hass)
+            ownership_path = Path(
+                hass.config.path(".hvls", "ownership.json")
+            )
+            assert_not_guarded(ownership_path, entry.entry_id, output_path)
+
+            # A fresh HA snapshot and file digest must reproduce the exact
+            # labels and YAML which the administrator reviewed.
+            registries = get_live_registries(hass)
+            catalog = build_entity_catalog(
+                registries, configured_label, DEFAULT_DOMAINS,
+            )
+            review = await hass.async_add_executor_job(
+                partial(
+                    prepare_backup_preview,
+                    output_path, msg["backup_id"], msg["backup_sha256"],
+                    msg["production_sha256"], catalog,
+                    registries=registries, label=configured_label,
+                    domains=DEFAULT_DOMAINS,
+                )
+            )
+            if (
+                review["label_plan_sha256"] != msg["label_plan_sha256"]
+                or review["projection"] is None
+                or review["projection"]["ready"] is not True
+                or review["label_plan"]["review"]
+            ):
+                raise BackupRestoreError(
+                    "Restore Preview is stale or contains unresolved entities"
+                )
+
+            # This writer creates an independent safety backup and a durable
+            # restore guard before touching production. The guard must not be
+            # released until the actual HA labels regenerate identical entities.
+            write_result = await hass.async_add_executor_job(
+                partial(
+                    restore_reviewed_backup,
+                    output_path, msg["backup_id"], msg["backup_sha256"],
+                    msg["production_sha256"],
+                    entry_id=entry.entry_id,
+                    ownership_registry_path=ownership_path,
+                )
+            )
+            yaml_written = True
+
+            # Check every pre-apply label state before the first HA mutation.
+            fresh_catalog = build_entity_catalog(
+                get_live_registries(hass), configured_label, DEFAULT_DOMAINS,
+            )
+            catalog_by_id = {
+                item["entity_id"]: item
+                for item in fresh_catalog["entities"]
+            }
+            plan = review["label_plan"]
+            for entity_id in plan["add"]:
+                item = catalog_by_id.get(entity_id)
+                if item is None or item.get("has_label") is not False:
+                    raise BackupRestoreError("HA labels changed since Preview")
+                ensure_entity_eligible_for_addition(item, True)
+            for entity_id in plan["remove"]:
+                item = catalog_by_id.get(entity_id)
+                if item is None or item.get("has_label") is not True:
+                    raise BackupRestoreError("HA labels changed since Preview")
+
+            # All label changes are consecutive synchronous calls on HA's event
+            # loop. Unrelated HA labels are preserved by entity_label_writer.
+            for entity_id in plan["add"]:
+                update_entity_label(
+                    hass, entity_id, configured_label, True, False,
+                )
+            for entity_id in plan["remove"]:
+                update_entity_label(
+                    hass, entity_id, configured_label, False, True,
+                )
+
+            actual_registries = get_live_registries(hass)
+            request = GenerationRequest(
+                label=configured_label, domains=DEFAULT_DOMAINS,
+                output_path=output_path, dry_run=True,
+            )
+            generated = await hass.async_add_executor_job(
+                partial(
+                    run_google_assistant_workflow,
+                    request=request, registries=actual_registries,
+                )
+            )
+            comparison = analyze_preview(
+                generated.generation.content, review["content"],
+            )["comparison"]
+            if comparison.get("status") != "ok" or (
+                comparison.get("identical_entities") is not True
+            ):
+                raise BackupRestoreError(
+                    "Restored HA labels do not reproduce the reviewed YAML"
+                )
+            result = await hass.async_add_executor_job(
+                partial(
+                    complete_preview_restoration,
+                    output_path, ownership_path,
+                    entry_id=entry.entry_id,
+                    backup_sha256=msg["backup_sha256"],
+                )
+            )
+        except (
+            BackupRestoreError, PreviewChangedError, FileWriterError,
+            LabelUpdateError, RegistryError, WorkflowError,
+            OSError, ValueError, TypeError, KeyError, AttributeError,
+        ) as exc:
+            # The filesystem writer can fail *after* its durable guard is
+            # installed but before returning a result. Never suggest that the
+            # old production is safely unchanged without inspecting the hold.
+            guarded = yaml_written
+            if not guarded and "ownership_path" in locals():
+                try:
+                    guarded = read_guard(ownership_path) is not None
+                except (FileWriterError, OSError, ValueError):
+                    guarded = True
+            if guarded:
+                connection.send_error(
+                    msg["id"], "restoration_requires_reconciliation",
+                    "Restoration incomplete. Production is protected by a "
+                    "durable guard; review the reconciliation before any "
+                    f"future Apply. Cause: {exc}",
+                )
+            else:
+                connection.send_error(
+                    msg["id"], "backup_preview_apply_refused", str(exc),
+                )
+            return
+
+    connection.send_result(msg["id"], {
+        "applied": True,
+        "output_path": str(output_path),
+        "safety_backup": write_result["safety_backup"],
+        "yaml_entities": review["summary"]["total"],
+        "label_additions": len(review["label_plan"]["add"]),
+        "label_removals": len(review["label_plan"]["remove"]),
+        "reconciled": result["reconciled"],
+    })
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
     vol.Required("type"): WS_TYPE_RESTORE_BACKUP,
     vol.Required("backup_id"): str,
     vol.Required("backup_sha256"): str,
@@ -1574,34 +1801,13 @@ async def websocket_restore_backup(
     msg: dict[str, Any],
 ) -> None:
     """Only restore a backup confirmed against current production."""
-    async with get_workflow_lock(hass):
-        try:
-            path = _configured_output(hass)
-            entries = hass.config_entries.async_entries(DOMAIN)
-            result = await hass.async_add_executor_job(
-                partial(
-                    restore_reviewed_backup,
-                    path,
-                    msg["backup_id"],
-                    msg["backup_sha256"],
-                    msg["production_sha256"],
-                    entry_id=entries[0].entry_id,
-                    ownership_registry_path=Path(
-                        hass.config.path(".hvls", "ownership.json")
-                    ),
-                )
-            )
-        except (
-            BackupRestoreError,
-            PreviewChangedError,
-            FileWriterError,
-            OSError,
-            ValueError,
-        ) as exc:
-            connection.send_error(msg["id"], "backup_restore_failed", str(exc))
-            return
-        connection.send_result(msg["id"], result)
-
+    # Legacy direct restoration is forbidden: every change must be reviewed
+    # through the same Preview workflow before any write. Keep the command
+    # registered for old clients, but refuse it without touching disk/labels.
+    connection.send_error(
+        msg["id"], "restore_requires_preview",
+        "Direct restore disabled. Prepare the backup in Preview first.",
+    )
 
 @websocket_api.require_admin
 @websocket_api.async_response
@@ -1743,6 +1949,8 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_generate_preview)
     websocket_api.async_register_command(hass, websocket_list_backups)
     websocket_api.async_register_command(hass, websocket_review_backup)
+    websocket_api.async_register_command(hass, websocket_prepare_backup_preview)
+    websocket_api.async_register_command(hass, websocket_apply_backup_preview)
     websocket_api.async_register_command(hass, websocket_restore_backup)
     websocket_api.async_register_command(
         hass, websocket_resolve_restored_output

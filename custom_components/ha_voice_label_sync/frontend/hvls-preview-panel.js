@@ -278,13 +278,26 @@ const HVLS_TRANSLATIONS = {
     migrationStagingImpact: "Impact prévisionnel des labels sur Google Assistant manuel : {status}. Les autres consommateurs de labels et Google Home restent non vérifiés. Staging interdit.",
     migrationConsumerAudit: "Audit indirect limité : {files} fichiers YAML inspectés, {writers} références à la génération HVLS, {events} références à un événement du registre, {labels} références à des fonctions de label. Effets externes non certifiés ; staging interdit.",
     migrationConsumerOverlap: "Attention : le fichier de sortie HVLS correspond à une source Google manuelle protégée. Toute génération V1 pourrait modifier cette source.",
-    backupIntro: "Choisissez une sauvegarde pour voir ses différences avec la production. Seul le YAML Google Assistant sera restauré, jamais les étiquettes Home Assistant.",
+    backupIntro: "Choisissez une sauvegarde pour préparer ses modifications dans le Preview. Aucune restauration directe ni modification d'étiquette.",
     backupLoading: "Chargement des sauvegardes…",
     backupEmpty: "Aucune sauvegarde disponible.",
     backupReviewing: "Comparaison avec la production…",
     backupReviewFailed: "Comparaison impossible : {error}",
     backupLoadFailed: "Chargement impossible : {error}",
-    backupRestore: "Restaurer cette sauvegarde",
+    backupRestore: "Préparer cette sauvegarde dans le Preview",
+    backupPreviewPrepared: "Restauration préparée : {added} ajout(s), {removed} suppression(s), {modified} modification(s). Aucun fichier ni label modifié.",
+    backupPreviewNotExecutable: "Preview de restauration : contrôlez les changements et les étiquettes avant validation.",
+    backupPreviewApply: "Appliquer cette restauration",
+    backupPreviewConfirm: "Appliquer la sauvegarde après contrôle ? Le YAML de production et les étiquettes HA seront mis à jour. Une sauvegarde de sécurité sera créée.",
+    backupPreviewApplying: "Application de la restauration contrôlée…",
+    backupPreviewApplied: "Restauration validée : {entities} entité(s), {added} étiquette(s) ajoutée(s), {removed} retirée(s). Sauvegarde de sécurité : {backup}.",
+    backupPreviewApplyFailed: "Restauration refusée ou incomplète : {error}. Vérifiez la production et les éventuels contrôles de réconciliation.",
+    backupPreviewLabels: "Étiquettes envisagées : {added} ajout(s), {removed} retrait(s), {review} entité(s) à examiner.",
+    backupLabelAdd: "Étiquettes à ajouter",
+    backupLabelRemove: "Étiquettes à retirer",
+    backupLabelReview: "Entités à examiner",
+    backupProjectionAligned: "Simulation des étiquettes : le YAML généré correspond à la sauvegarde.",
+    backupProjectionMismatch: "Attention : les étiquettes seules ne reproduiront pas exactement cette sauvegarde. Vérifiez les différences ci-dessous.",
     backupConfirm: "Restaurer ce YAML en production ? Une copie de sécurité de la production actuelle sera créée obligatoirement. Les étiquettes HA ne seront pas modifiées.",
     backupRestoreFailed: "Restauration refusée : {error}",
     backupRestored: "Restauration terminée. Copie de sécurité : {backup}",
@@ -312,7 +325,7 @@ const HVLS_TRANSLATIONS = {
     restoreReconcileUncertain: "État du YAML non vérifié après interruption. Aucun déblocage automatique : contrôlez les sauvegardes et l'état de propriété.",
     backupNoDiff: "YAML identique à la production.",
     backupTextOnlyDiff: "Aucune différence entre les entités. Seul le texte YAML diffère (par exemple, commentaires, ordre ou mise en forme). Restaurer remplacerait le texte du fichier de production, après sauvegarde de sécurité.",
-    backupRestoreTextOnly: "Restaurer le texte YAML",
+    backupRestoreTextOnly: "Préparer la comparaison du texte YAML",
     backupConfirmTextOnly: "Les entités sont identiques mais le texte YAML diffère. Restaurer exactement le texte de la sauvegarde en production ? Une copie de sécurité de la production actuelle sera créée obligatoirement. Les étiquettes HA ne seront pas modifiées.",
     backupDiffTitle: "Changements si cette sauvegarde est restaurée",
     backupSize: "{size} octets",
@@ -721,13 +734,26 @@ const HVLS_TRANSLATIONS = {
     migrationStagingImpact: "Projected label impact on manual Google Assistant: {status}. Other label consumers and Google Home remain unverified. Staging is forbidden.",
     migrationConsumerAudit: "Limited indirect audit: {files} YAML files inspected, {writers} HVLS generation references, {events} entity-registry event references, {labels} label-function references. External effects remain unverified; staging forbidden.",
     migrationConsumerOverlap: "Warning: the HVLS output file overlaps a protected manual Google Assistant source. Any V1 generation may change that source.",
-    backupIntro: "Select a backup to compare it with current production. Only the Google Assistant YAML file is restored, never Home Assistant labels.",
+    backupIntro: "Select a backup to prepare changes in Preview. No YAML or labels will be changed.",
     backupLoading: "Loading backups…",
     backupEmpty: "No backups available.",
     backupReviewing: "Comparing with production…",
     backupReviewFailed: "Cannot compare: {error}",
     backupLoadFailed: "Cannot load backups: {error}",
-    backupRestore: "Restore this backup",
+    backupRestore: "Prepare this backup in Preview",
+    backupPreviewPrepared: "Restore staged: {added} added, {removed} removed, {modified} modified. No YAML or labels changed.",
+    backupPreviewNotExecutable: "Restore Preview: review the changes and HA labels before validation.",
+    backupPreviewApply: "Apply this restoration",
+    backupPreviewConfirm: "Apply the reviewed backup? Production YAML and HA labels will be updated. A safety backup will be created.",
+    backupPreviewApplying: "Applying reviewed restoration…",
+    backupPreviewApplied: "Restore completed: {entities} entities, {added} labels added, {removed} removed. Safety backup: {backup}.",
+    backupPreviewApplyFailed: "Restoration refused or incomplete: {error}. Check production and any reconciliation notice.",
+    backupPreviewLabels: "Planned HA labels: {added} add, {removed} remove, {review} need review.",
+    backupLabelAdd: "Labels to add",
+    backupLabelRemove: "Labels to remove",
+    backupLabelReview: "Entities requiring review",
+    backupProjectionAligned: "Simulated HA labels regenerate the selected backup configuration.",
+    backupProjectionMismatch: "Warning: HA labels alone cannot reproduce this backup exactly. Review the differences below.",
     backupConfirm: "Restore this YAML to production? A safety copy of the current production file will always be created. HA labels will not be changed.",
     backupRestoreFailed: "Restore refused: {error}",
     backupRestored: "Restore completed. Safety backup: {backup}",
@@ -755,7 +781,7 @@ const HVLS_TRANSLATIONS = {
     restoreReconcileUncertain: "YAML state could not be verified after interruption. No automatic unlock; inspect backups and ownership.",
     backupNoDiff: "YAML matches production.",
     backupTextOnlyDiff: "No per-entity differences. Only the YAML text differs (for example, comments, ordering or formatting). Restoring would replace the production file text, after a safety backup.",
-    backupRestoreTextOnly: "Restore YAML text",
+    backupRestoreTextOnly: "Preview YAML text differences",
     backupConfirmTextOnly: "Entity configurations are identical but YAML text differs. Restore the backup's exact text to production? A safety copy of current production will always be created. HA labels will not be modified.",
     backupDiffTitle: "Changes if this backup is restored",
     backupSize: "{size} bytes",
@@ -1183,6 +1209,7 @@ class HVLSPreviewPanel extends HTMLElement {
     if (!this._hass || (this._applying && !afterApply)) return;
     const loadId = (this._loadId || 0) + 1;
     this._loadId = loadId;
+    this._stagedRestore = null; // Normal Preview replaces a staged backup only by user action.
     this._review = null;
     this._applyBlockReason = null;
     this._applyBlockReasonCode = null;
@@ -1290,9 +1317,18 @@ class HVLSPreviewPanel extends HTMLElement {
   _updateApplyButton() {
     const button = this.querySelector("#apply");
     if (button) {
-      button.disabled = !this._review || this._applying === true || this._restoring === true ||
+      const staged = this._stagedRestore;
+      const canApplyRestoration =
+        staged?.mode === "restore_preview" &&
+        staged.projection?.ready === true &&
+        staged.label_plan?.review?.length === 0 &&
+        /^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "");
+      button.disabled = (!this._review && !canApplyRestoration) ||
+        this._applying === true || this._restoring === true ||
         this._generating === true || this._refreshing === true ||
         this._entityWritePending === true;
+      button.textContent = staged
+        ? this._t("backupPreviewApply") : this._t("apply");
     }
     let displayReason = this._applyBlockReason || "";
 
@@ -1339,7 +1375,7 @@ class HVLSPreviewPanel extends HTMLElement {
       this._applying === true || this._generating === true || this._refreshing === true;
     const restore = this.querySelector("#restoreBackup");
     if (restore) restore.disabled = !this._backupReview ||
-      this._backupReview?.comparison?.identical_text === true || this._restoring ||
+      this._restoring ||
       this._applying || this._refreshing || this._generating || this._entityWritePending;
     const generate = this.querySelector("#generate");
     if (generate) generate.disabled =
@@ -1398,7 +1434,73 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  async _applyStagedRestore() {
+    const staged = this._stagedRestore;
+    if (!this._hass || !staged || this._applying || this._restoring ||
+        this._refreshing || this._generating || this._entityWritePending ||
+        staged.projection?.ready !== true ||
+        staged.label_plan?.review?.length !== 0 ||
+        !/^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "")) return;
+    if (!window.confirm(this._t("backupPreviewConfirm"))) return;
+
+    this._applying = true;
+    this._loadId = (this._loadId || 0) + 1;
+    this._review = null;
+    this._updateApplyButton();
+    this._setStatusKey("backupPreviewApplying");
+    let applied = null;
+    try {
+      applied = await this._hass.callWS({
+        type: "ha_voice_label_sync/apply_backup_preview",
+        backup_id: staged.backup_id,
+        backup_sha256: staged.backup_sha256,
+        production_sha256: staged.production_sha256,
+        label_plan_sha256: staged.label_plan_sha256,
+      });
+      if (applied?.applied !== true || applied?.reconciled !== true) {
+        throw new Error("Invalid restore verification response");
+      }
+      this._stagedRestore = null;
+      this._backupList = null;
+      this._backupReview = null;
+      this._selectedBackup = null;
+      this._backupReviewNumber = (this._backupReviewNumber || 0) + 1;
+      // The normal Preview must be regenerated from the actual post-restore
+      // HA registry; do not keep an obsolete Preview from before restoration.
+      await this._hass.callWS({type: "ha_voice_label_sync/generate_preview"});
+      await this._loadPreview(true);
+      await this._loadEntities();
+      this._setStatusKey("backupPreviewApplied", {
+        entities: applied.yaml_entities,
+        added: applied.label_additions,
+        removed: applied.label_removals,
+        backup: applied.safety_backup,
+      });
+    } catch (error) {
+      // The server may have changed production before a partial failure:
+      // discard the old approval and load any durable reconciliation guard.
+      this._stagedRestore = null;
+      await this._loadPreview(true);
+      if (applied?.applied === true) {
+        this._setStatusKey("backupPreviewApplied", {
+          entities: applied.yaml_entities,
+          added: applied.label_additions,
+          removed: applied.label_removals,
+          backup: applied.safety_backup,
+        });
+      } else {
+        this._setStatusKey("backupPreviewApplyFailed", {
+          error: error.message || String(error),
+        });
+      }
+    } finally {
+      this._applying = false;
+      this._updateApplyButton();
+    }
+  }
+
   async _applyPreview() {
+    if (this._stagedRestore) return this._applyStagedRestore();
     if (!this._hass || !this._review || this._applying || this._restoring || this._refreshing || this._generating || this._entityWritePending) return;
 
     const review = {...this._review};
@@ -1713,6 +1815,88 @@ class HVLSPreviewPanel extends HTMLElement {
     return "validated";
   }
 
+  _renderStagedRestorePlan() {
+    const previewNotice = this.querySelector("#backupPreviewNotice");
+    if (previewNotice) {
+      previewNotice.hidden = !this._stagedRestore;
+      previewNotice.replaceChildren();
+      if (this._stagedRestore) {
+        const plan = this._stagedRestore.label_plan || {};
+        const description = document.createElement("p");
+        description.textContent = this._t("backupPreviewNotExecutable") +
+          " " + this._tf("backupPreviewLabels", {
+            added: plan.add?.length || 0,
+            removed: plan.remove?.length || 0,
+            review: plan.review?.length || 0,
+          });
+        previewNotice.appendChild(description);
+        const projection = this._stagedRestore.projection;
+        if (projection) {
+          const warning = document.createElement("p");
+          warning.className = "diagnostic-note";
+          warning.textContent = projection.ready === true
+            ? this._t("backupProjectionAligned")
+            : this._t("backupProjectionMismatch");
+          previewNotice.appendChild(warning);
+          const diff = projection.comparison;
+          if (diff?.status === "ok" && projection.ready !== true) {
+            const differences = [
+              ...(diff.added || []).map(entity_id => ({
+                entity_id, fields: {status: {before: "absent", after: "added"}},
+              })),
+              ...(diff.removed || []).map(entity_id => ({
+                entity_id, fields: {status: {before: "present", after: "removed"}},
+              })),
+              ...(diff.modified || []),
+            ];
+            if (differences.length) {
+              const details = document.createElement("details");
+              const heading = document.createElement("summary");
+              heading.textContent = this._tf("entitiesModified", {
+                count: differences.length,
+              });
+              details.appendChild(heading);
+              const list = document.createElement("ul");
+              for (const item of differences) {
+                const entry = document.createElement("li");
+                const fields = Object.keys(item.fields || {}).join(", ");
+                entry.textContent = `${item.entity_id} — ${fields}`;
+                list.appendChild(entry);
+              }
+              details.appendChild(list);
+              previewNotice.appendChild(details);
+            }
+          }
+        }
+        // The actual proposed HA-label operations must be visible individually,
+        // including exceptional entities. The Preview is never an implicit write.
+        for (const [action, label, items] of [
+          ["add", "backupLabelAdd", plan.add || []],
+          ["remove", "backupLabelRemove", plan.remove || []],
+          ["review", "backupLabelReview", plan.review || []],
+        ]) {
+          if (!items.length) continue;
+          const details = document.createElement("details");
+          details.className = "domain-details";
+          const heading = document.createElement("summary");
+          heading.textContent = `${this._t(label)} (${items.length})`;
+          details.appendChild(heading);
+          const list = document.createElement("ul");
+          for (const item of items) {
+            const row = document.createElement("li");
+            const entityId = typeof item === "string" ? item : item.entity_id;
+            row.textContent = action === "review"
+              ? `${entityId} — ${item.reason || this._t("unknownHVLS")}`
+              : entityId;
+            list.appendChild(row);
+          }
+          details.appendChild(list);
+          previewNotice.appendChild(details);
+        }
+      }
+    }
+  }
+
   _renderAnalysis(result) {
     const panel = this.querySelector("#analysis");
     panel.replaceChildren();
@@ -1725,6 +1909,7 @@ class HVLSPreviewPanel extends HTMLElement {
     this._renderPreviewChanges(result);
     this._renderRestoreWarning();
     this._renderRestoreReconciliation();
+    this._renderStagedRestorePlan();
     // The dashboard describes what is on disk, not the changes proposed by
     // Preview. A missing/unreadable production must never show Preview counts.
     const stats = result.production_summary;
@@ -2550,6 +2735,7 @@ class HVLSPreviewPanel extends HTMLElement {
         </section>
         <section id="tab-preview" class="hvls-tab-panel"
           role="tabpanel" hidden>
+        <div id="backupPreviewNotice" class="diagnostic-note" role="status" hidden></div>
         <div id="restoreReconcilePanel" class="migration-review-note"
           role="status" hidden>
           <h3 id="restoreReconcileTitle"></h3>
@@ -3482,7 +3668,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     if (restore) {
       restore.textContent = this._t(textOnly
         ? "backupRestoreTextOnly" : "backupRestore");
-      restore.disabled = Boolean(comparison.identical_text === true ||
+      restore.disabled = Boolean(
         this._restoring || this._applying || this._refreshing ||
         this._generating || this._entityWritePending);
     }
@@ -3709,55 +3895,61 @@ entity_config: !include google_assistant_entities.yaml</pre>
   }
 
   async _restoreBackup() {
+    // A backup is only a proposed configuration at this point. Do not write
+    // google_assistant_entities.yaml or modify native HA labels here.
     const data = this._backupReview;
     if (!data || this._restoring || this._applying ||
         this._refreshing || this._generating || this._entityWritePending ||
-        data.comparison?.identical_text) return;
-    const textOnly = data.comparison?.identical_entities === true &&
-      data.comparison?.identical_text === false;
-    if (!window.confirm(this._t(textOnly
-      ? "backupConfirmTextOnly" : "backupConfirm"))) return;
+        data.comparison?.status !== "ok") return;
+
     this._restoring = true;
-    this._backupReviewNumber = (this._backupReviewNumber || 0) + 1;
-    this._backupReview = null;
-    this._selectedBackup = null;
-    this._review = null; // An earlier Preview is never approved after a restore.
-    this._renderBackupDiff();
-    this._renderBackups();
+    const requestId = (this._loadId || 0) + 1;
+    this._loadId = requestId;
+    this._review = null; // Never allow normal Apply for a staged restoration.
     this._updateApplyButton();
     const status = this.querySelector("#backupStatus");
+    if (status) status.textContent = this._t("backupReviewing");
+
     try {
       const result = await this._hass.callWS({
-        type: "ha_voice_label_sync/restore_backup",
+        type: "ha_voice_label_sync/prepare_backup_preview",
         backup_id: data.backup_id,
         backup_sha256: data.backup_sha256,
         production_sha256: data.production_sha256,
       });
-      this._restoreResult = result.safety_backup;
-      // A successful restore only changes YAML, never Home Assistant labels.
-      this._backupRestoreCompleted = true;
-      await this._loadPreview(true);
-      this._renderRestoreWarning();
-      this._backupList = null;
-      this._selectedBackup = null;
+      if (this._loadId !== requestId) return;
+      if (result?.mode !== "restore_preview" ||
+          result?.available !== true || result?.can_apply !== false ||
+          result?.comparison?.status !== "ok" ||
+          typeof result?.content !== "string" ||
+          !/^[0-9a-f]{64}$/.test(result.label_plan_sha256 || "") ||
+          !result.label_plan || !result.projection) {
+        throw new Error("Invalid restore Preview response");
+      }
+      this._stagedRestore = result;
+      this._backupRestoreCompleted = false;
+      this._previewContent = result.content;
+      this._previewPath = result.path;
+      this._applyBlockReason = this._t("backupPreviewNotExecutable");
+      this._applyBlockReasonCode = null;
+      this._renderAnalysis(result);
+      this._setContent(result.content);
+      this._updateApplyButton();
+      this._activateTab("preview");
+      const diff = result.comparison;
+      const counts = {
+        added: diff.added.length, removed: diff.removed.length,
+        modified: diff.modified.length,
+      };
+      this._setStatusKey("backupPreviewPrepared", counts);
+      if (status) status.textContent = this._tf("backupPreviewPrepared", counts);
     } catch (error) {
-      this._restoreError = error.message || String(error);
+      if (status) status.textContent = this._tf("backupReviewFailed", {
+        error: error.message || String(error),
+      });
     } finally {
       this._restoring = false;
       this._updateApplyButton();
-      // Preview was rendered while _restoring was true: recompute the
-      // reconciliation actions now that the restore transaction is finished.
-      // This only updates the UI and never writes labels or production YAML.
-      this._renderRestoreReconciliation();
-      await this._loadBackups();
-      if (this._restoreResult && status) {
-        status.textContent = this._tf("backupRestored", {backup: this._restoreResult})
-          + " " + this._t("backupRestartHint");
-        this._restoreResult = null;
-      } else if (this._restoreError && status) {
-        status.textContent = this._tf("backupRestoreFailed", {error: this._restoreError});
-        this._restoreError = null;
-      }
     }
   }
 

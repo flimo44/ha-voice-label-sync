@@ -98,6 +98,233 @@ def test_review_direction_is_restoration(backup_module, sample):
     assert diff["identical_text"] is False
 
 
+
+def test_backup_candidate_prepares_preview_and_labels_without_mutating_files(
+    backup_module, tmp_path,
+):
+    """52→40-equivalent removal and 40→52 addition use the same direction."""
+    output = tmp_path / "google_entities.yaml"
+    output.write_text(
+        "switch.a:\n  expose: true\nswitch.b:\n  expose: true\n",
+        encoding="utf-8",
+    )
+    backup_dir = tmp_path / ".hvls_backups"
+    backup_dir.mkdir()
+    backup_id = "google_entities.yaml.20261114-010000.bak"
+    backup = backup_dir / backup_id
+    backup.write_text(
+        "switch.a:\n  expose: true\nswitch.c:\n  expose: true\n",
+        encoding="utf-8",
+    )
+    catalog = {"labeled": 2, "entities": [
+        {"entity_id": "switch.a", "eligible": True, "has_label": True},
+        {"entity_id": "switch.b", "eligible": True, "has_label": True},
+        {"entity_id": "switch.c", "eligible": True, "has_label": False},
+    ]}
+    review = backup_module.review_backup(output, backup_id)
+    before = output.read_bytes()
+    result = backup_module.prepare_backup_preview(
+        output, backup_id, review["backup_sha256"],
+        review["production_sha256"], catalog,
+    )
+    assert result["mode"] == "restore_preview"
+    assert result["can_apply"] is False
+    assert result["production_summary"]["total"] == 2
+    assert result["summary"]["total"] == 2
+    assert result["comparison"]["added"] == ["switch.c"]
+    assert result["comparison"]["removed"] == ["switch.b"]
+    assert result["label_plan"]["add"] == ["switch.c"]
+    assert result["label_plan"]["remove"] == ["switch.b"]
+    assert result["label_plan"]["review"] == []
+    assert output.read_bytes() == before
+    assert backup.read_bytes() == result["content"].encode()
+    assert not (tmp_path / ".hvls").exists()
+
+
+
+def test_restore_preview_52_to_40_proposes_12_yaml_and_label_removals(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    before = "".join(
+        f"switch.test_{n}:\n  expose: true\n" for n in range(52)
+    )
+    candidate = "".join(
+        f"switch.test_{n}:\n  expose: true\n" for n in range(40)
+    )
+    output.write_text(before, encoding="utf-8")
+    backups = tmp_path / ".hvls_backups"
+    backups.mkdir()
+    backup_id = "google_entities.yaml.20261114-015959.bak"
+    (backups / backup_id).write_text(candidate, encoding="utf-8")
+    catalog = {
+        "labeled": 52,
+        "entities": [
+            {"entity_id": f"switch.test_{n}", "eligible": True, "has_label": True}
+            for n in range(52)
+        ],
+    }
+    review = backup_module.review_backup(output, backup_id)
+    result = backup_module.prepare_backup_preview(
+        output, backup_id, review["backup_sha256"],
+        review["production_sha256"], catalog,
+    )
+    removed = {f"switch.test_{n}" for n in range(40, 52)}
+    assert result["comparison"]["added"] == []
+    assert set(result["comparison"]["removed"]) == removed
+    assert set(result["label_plan"]["remove"]) == removed
+    assert result["label_plan"]["add"] == []
+    assert result["production_summary"]["total"] == 52
+    assert result["summary"]["total"] == 40
+    assert output.read_text(encoding="utf-8") == before
+
+
+
+def test_backup_candidate_lists_missing_or_ineligible_entities_for_review(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.a:\n  expose: true\n", encoding="utf-8")
+    backups = tmp_path / ".hvls_backups"
+    backups.mkdir()
+    backup_id = "google_entities.yaml.20261114-010001.bak"
+    (backups / backup_id).write_text(
+        "switch.a:\n  expose: true\n"
+        "switch.disabled:\n  expose: true\n"
+        "switch.missing:\n  expose: true\n"
+        "switch.no_expose:\n  name: Old\n",
+        encoding="utf-8",
+    )
+    catalog = {"labeled": 1, "entities": [
+        {"entity_id": "switch.a", "eligible": True, "has_label": True},
+        {"entity_id": "switch.disabled", "eligible": False, "has_label": False,
+         "exclusion_reason": "disabled"},
+    ]}
+    review = backup_module.review_backup(output, backup_id)
+    result = backup_module.prepare_backup_preview(
+        output, backup_id, review["backup_sha256"],
+        review["production_sha256"], catalog,
+    )
+    reasons = {entry["entity_id"]: entry["reason"]
+               for entry in result["label_plan"]["review"]}
+    assert reasons == {
+        "switch.disabled": "disabled",
+        "switch.missing": "missing_ha_entity",
+        "switch.no_expose": "not_explicitly_exposed",
+    }
+    assert result["label_plan"]["add"] == []
+
+
+def test_backup_candidate_rejects_stale_production_and_backup(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.a:\n  expose: true\n", encoding="utf-8")
+    backups = tmp_path / ".hvls_backups"
+    backups.mkdir()
+    backup_id = "google_entities.yaml.20261114-010002.bak"
+    backup = backups / backup_id
+    backup.write_text("switch.b:\n  expose: true\n", encoding="utf-8")
+    review = backup_module.review_backup(output, backup_id)
+    output.write_text("switch.changed:\n  expose: true\n", encoding="utf-8")
+    with pytest.raises(backup_module.PreviewChangedError, match="Production changed"):
+        backup_module.prepare_backup_preview(
+            output, backup_id, review["backup_sha256"],
+            review["production_sha256"], {"entities": []},
+        )
+    output.write_text("switch.a:\n  expose: true\n", encoding="utf-8")
+    backup.write_text("switch.changed:\n  expose: true\n", encoding="utf-8")
+    with pytest.raises(
+        backup_module.PreviewChangedError, match="Selected backup changed"
+    ):
+        backup_module.prepare_backup_preview(
+            output, backup_id, review["backup_sha256"],
+            review["production_sha256"], {"entities": []},
+        )
+
+def test_restore_projection_52_to_40_matches_labels_without_writing(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    original = "switch.initial:\n  expose: true\n"
+    output.write_text(original, encoding="utf-8")
+    backups = tmp_path / ".hvls_backups"
+    backups.mkdir()
+    backup_id = "google_entities.yaml.20261114-020202.bak"
+    candidate = "".join(
+        f"switch.test_{n}:\n  expose: true\n  name: Device {n}\n\n"
+        for n in range(40)
+    )
+    (backups / backup_id).write_text(candidate)
+    entries = [
+        {"entity_id": f"switch.test_{n}", "name": f"Device {n}",
+         "labels": ["hvls"], "area_id": None, "device_id": None,
+         "disabled_by": None, "hidden_by": None, "entity_category": None}
+        for n in range(52)
+    ]
+    registries = {
+        "entity_registry": {"data": {"entities": entries}},
+        "device_registry": {"data": {"devices": []}},
+        "area_registry": {"data": {"areas": []}},
+        "label_registry": {"data": {"labels": [
+            {"label_id": "hvls", "name": "HVLS"}
+        ]}},
+    }
+    catalog = {"labeled": 52, "entities": [
+        {"entity_id": entry["entity_id"], "has_label": True, "eligible": True}
+        for entry in entries
+    ]}
+    review = backup_module.review_backup(output, backup_id)
+    result = backup_module.prepare_backup_preview(
+        output, backup_id, review["backup_sha256"],
+        review["production_sha256"], catalog,
+        registries=registries, label="HVLS", domains=frozenset({"switch"}),
+    )
+    assert result["projection"]["ready"] is True
+    assert result["projection"]["comparison"]["identical_entities"] is True
+    assert len(result["label_plan"]["remove"]) == 12
+    assert result["can_apply"] is False
+    assert output.read_text() == original
+    assert all(entry["labels"] == ["hvls"] for entry in entries)
+
+
+def test_restore_projection_detects_old_name_mismatch(backup_module, tmp_path):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.old:\n  expose: true\n")
+    backups = tmp_path / ".hvls_backups"
+    backups.mkdir()
+    backup_id = "google_entities.yaml.20261114-020203.bak"
+    (backups / backup_id).write_text(
+        "switch.old:\n  expose: true\n  name: Historic\n",
+    )
+    registry = {
+        "entity_registry": {"data": {"entities": [
+            {"entity_id": "switch.old", "name": "Current",
+             "labels": ["hvls"], "area_id": None, "device_id": None,
+             "disabled_by": None, "hidden_by": None, "entity_category": None}
+        ]}},
+        "device_registry": {"data": {"devices": []}},
+        "area_registry": {"data": {"areas": []}},
+        "label_registry": {"data": {"labels": [
+            {"label_id": "hvls", "name": "HVLS"}
+        ]}},
+    }
+    catalog = {"labeled": 1, "entities": [
+        {"entity_id": "switch.old", "has_label": True, "eligible": True}
+    ]}
+    review = backup_module.review_backup(output, backup_id)
+    result = backup_module.prepare_backup_preview(
+        output, backup_id, review["backup_sha256"],
+        review["production_sha256"], catalog,
+        registries=registry, label="HVLS", domains=frozenset({"switch"}),
+    )
+    assert result["projection"]["ready"] is False
+    modified = result["projection"]["comparison"]["modified"]
+    assert modified[0]["fields"]["name"] == {
+        "before": "Historic", "after": "Current",
+    }
+
+
 def test_restore_creates_mandatory_safety_copy(backup_module, sample):
     output, backup_id, source = sample
     make_owned(output)
@@ -112,6 +339,49 @@ def test_restore_creates_mandatory_safety_copy(backup_module, sample):
     assert safety.is_file()
     assert safety.read_text() == initial
     assert safety.name != backup_id
+
+
+def test_verified_restore_completion_clears_only_matching_guard(
+    backup_module, sample,
+):
+    output, backup_id, backup = sample
+    make_owned(output)
+    review = backup_module.review_backup(output, backup_id)
+    restore(
+        backup_module, output, backup_id,
+        review["backup_sha256"], review["production_sha256"],
+    )
+    ownership = output.parent / ".hvls" / "ownership.json"
+    guard_file = backup_module._guard.guard_path(ownership)
+    assert guard_file.exists()
+
+    result = backup_module.complete_preview_restoration(
+        output, ownership, entry_id="test-installation",
+        backup_sha256=review["backup_sha256"],
+    )
+    assert result["reconciled"] is True
+    assert output.read_bytes() == backup.read_bytes()
+    assert not guard_file.exists()
+
+
+def test_restore_completion_refuses_stale_hash_and_keeps_hold(
+    backup_module, sample,
+):
+    output, backup_id, _ = sample
+    make_owned(output)
+    review = backup_module.review_backup(output, backup_id)
+    restore(
+        backup_module, output, backup_id,
+        review["backup_sha256"], review["production_sha256"],
+    )
+    ownership = output.parent / ".hvls" / "ownership.json"
+    guard_file = backup_module._guard.guard_path(ownership)
+    with pytest.raises(backup_module.BackupRestoreError, match="guard"):
+        backup_module.complete_preview_restoration(
+            output, ownership, entry_id="test-installation",
+            backup_sha256="0" * 64,
+        )
+    assert guard_file.exists()
 
 
 def test_changed_production_refused(backup_module, sample):

@@ -776,7 +776,7 @@ test("Backup tab is present and uses admin-only WS actions", () => {
   assert.match(source, /id="tab-backups"/);
   assert.match(source, /ha_voice_label_sync\/list_backups/);
   assert.match(source, /ha_voice_label_sync\/review_backup/);
-  assert.match(source, /ha_voice_label_sync\/restore_backup/);
+  assert.match(source, /ha_voice_label_sync\/prepare_backup_preview/);
 });
 
 test("Backup review is invalidated when a different snapshot is selected", async () => {
@@ -804,51 +804,176 @@ test("Backup review is invalidated when a different snapshot is selected", async
   assert.deepEqual(calls.map(c => c.backup_id), ["first", "second"]);
 });
 
-test("Cancelled backup restore never sends any restore command", async () => {
+test("Restore preparation never writes production or HA labels", async () => {
   const calls = [];
-  const { panel } = makePanel(async message => {
-    calls.push(message.type);
-    return {};
-  }, () => false);
-  panel._backupReview = {
-    backup_id: "google.yaml.20261108-220000.bak",
-    backup_sha256: "b".repeat(64),
-    production_sha256: "a".repeat(64),
-    comparison: {identical_text: false}
-  };
-  await panel._restoreBackup();
-  assert.deepEqual(calls, []);
-  assert.equal(panel._backupReview.backup_id, "google.yaml.20261108-220000.bak");
-});
-
-test("Confirmed backup restore transmits reviewed hashes and refreshes Preview", async () => {
-  const calls = [];
-  const { panel, controls } = makePanel(async message => {
-    calls.push(message);
-    return {restored: true, safety_backup: "safety.bak"};
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request);
+    return {
+      mode: "restore_preview", available: true, can_apply: false,
+      content: "switch.a:\\n  expose: true\\n",
+      path: "Backup: backup.bak",
+      summary: {total: 1},
+      production_summary: {total: 2},
+      comparison: {
+        status: "ok", added: [], removed: ["switch.b"],
+        modified: [], unchanged: 1, identical_text: false,
+      },
+      label_plan: {add: [], remove: ["switch.b"], review: []},
+      label_plan_sha256: "c".repeat(64), projection: {ready: false},
+    };
   });
   panel._backupReview = {
-    backup_id: "google.yaml.20261108-220000.bak",
+    backup_id: "backup.bak",
     backup_sha256: "b".repeat(64),
     production_sha256: "a".repeat(64),
-    comparison: {identical_text: false}
+    comparison: {status: "ok", identical_text: false},
   };
-  let refreshed = false, backupsRefreshed = false;
-  panel._loadPreview = async () => { refreshed = true; };
-  panel._loadBackups = async () => { backupsRefreshed = true; };
+  let openedTab = null;
+  panel._activateTab = tab => {openedTab = tab;};
   await panel._restoreBackup();
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].type, "ha_voice_label_sync/restore_backup");
-  assert.equal(calls[0].backup_id, "google.yaml.20261108-220000.bak");
+  assert.deepEqual(calls.map(x => x.type), [
+    "ha_voice_label_sync/prepare_backup_preview",
+  ]);
+  assert.equal(calls[0].backup_id, "backup.bak");
   assert.equal(calls[0].backup_sha256, "b".repeat(64));
   assert.equal(calls[0].production_sha256, "a".repeat(64));
-  assert.equal(refreshed, true);
-  assert.equal(backupsRefreshed, true);
   assert.equal(controls.apply.disabled, true);
+  assert.equal(panel._review, null);
+  assert.equal(panel._stagedRestore.mode, "restore_preview");
+  assert.equal(panel._stagedRestore.production_summary.total, 2);
+  assert.equal(panel._stagedRestore.summary.total, 1);
+  assert.deepEqual([...panel._stagedRestore.comparison.removed], ["switch.b"]);
+  assert.equal(openedTab, "preview");
+  assert.doesNotMatch(calls.map(x => x.type).join(","), /restore_backup|set_entity_label|apply_preview/);
 });
 
-test("Backup text-only difference is explicit and uses a separate restore action", () => {
-  const {panel, controls} = makePanel(async () => ({}));
+test("Preparing a backup is read-only and requires no write confirmation", async () => {
+  const calls = [], confirmations = [];
+  const {panel} = makePanel(async req => {
+    calls.push(req.type);
+    return {mode: "restore_preview", available: true, can_apply: false,
+      content: "switch.a: {}\\n", comparison: {status: "ok",
+      added: [], removed: [], modified: [], unchanged: 1},
+      label_plan: {add: [], remove: [], review: []},
+      label_plan_sha256: "c".repeat(64), projection: {ready: false}};
+  }, message => {confirmations.push(message); return false;});
+  panel._backupReview = {backup_id: "backup.bak",
+    backup_sha256: "a".repeat(64), production_sha256: "b".repeat(64),
+    comparison: {status: "ok", identical_text: false}};
+  panel._activateTab = () => {};
+  await panel._restoreBackup();
+  assert.deepEqual(calls, ["ha_voice_label_sync/prepare_backup_preview"]);
+  assert.equal(confirmations.length, 0);
+});
+
+test("Restore Preview shows individual HA label operations and exceptional entities", () => {
+  const {panel} = makePanel(async () => ({}));
+  const notice = {hidden: true, children: [],
+    replaceChildren(...items) {this.children = items;},
+    appendChild(item) {this.children.push(item);},
+  };
+  const originalQuery = panel.querySelector.bind(panel);
+  panel.querySelector = selector => selector === "#backupPreviewNotice"
+    ? notice : originalQuery(selector);
+  panel._stagedRestore = {
+    label_plan: {
+      add: ["switch.new"],
+      remove: ["switch.old"],
+      review: [{entity_id: "switch.missing", reason: "missing_ha_entity"}],
+    },
+  };
+  panel._renderStagedRestorePlan();
+  assert.equal(notice.hidden, false);
+  assert.equal(notice.children.length, 4);
+  assert.match(notice.children[0].textContent, /contrôlez les changements/);
+  assert.match(notice.children[1].children[0].textContent, /Étiquettes à ajouter/);
+  assert.equal(notice.children[1].children[1].children[0].textContent, "switch.new");
+  assert.match(notice.children[2].children[0].textContent, /Étiquettes à retirer/);
+  assert.equal(notice.children[2].children[1].children[0].textContent, "switch.old");
+  assert.match(notice.children[3].children[0].textContent, /Entités à examiner/);
+  assert.match(notice.children[3].children[1].children[0].textContent,
+    /switch.missing.*missing_ha_entity/);
+  panel._stagedRestore = null;
+  panel._renderStagedRestorePlan();
+  assert.equal(notice.hidden, true);
+  assert.deepEqual(notice.children, []);
+});
+
+test("Confirmed restoration applies reviewed YAML and labels then refreshes", async () => {
+  const calls = [];
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request);
+    if (request.type === "ha_voice_label_sync/apply_backup_preview") {
+      return {applied: true, reconciled: true, yaml_entities: 40,
+        label_additions: 0, label_removals: 12, safety_backup: "safety.bak"};
+    }
+    if (request.type === "ha_voice_label_sync/generate_preview") {
+      return {entity_count: 40};
+    }
+    throw new Error("Unexpected request");
+  });
+  panel._stagedRestore = {mode: "restore_preview",
+    backup_id: "backup.bak", backup_sha256: "b".repeat(64),
+    production_sha256: "a".repeat(64),
+    label_plan_sha256: "c".repeat(64),
+    label_plan: {add: [], remove: ["switch.old"], review: []},
+    projection: {ready: true}};
+  let refreshed = false, loaded = false;
+  panel._loadPreview = async () => {refreshed = true;};
+  panel._loadEntities = async () => {loaded = true;};
+  panel._updateApplyButton();
+  assert.equal(controls.apply.disabled, false);
+  await panel._applyPreview();
+  assert.deepEqual(calls.map(x => x.type), [
+    "ha_voice_label_sync/apply_backup_preview",
+    "ha_voice_label_sync/generate_preview",
+  ]);
+  assert.equal(calls[0].backup_id, "backup.bak");
+  assert.equal(calls[0].backup_sha256, "b".repeat(64));
+  assert.equal(calls[0].production_sha256, "a".repeat(64));
+  assert.equal(calls[0].label_plan_sha256, "c".repeat(64));
+  assert.equal(refreshed, true);
+  assert.equal(loaded, true);
+  assert.equal(panel._stagedRestore, null);
+  assert.equal(controls.apply.disabled, true);
+  assert.match(panel.status, /Restauration validée/);
+});
+
+test("Restore with mismatched HA generation cannot be applied", async () => {
+  const calls = [];
+  const {panel, controls} = makePanel(async request => {calls.push(request);});
+  panel._stagedRestore = {mode: "restore_preview",
+    label_plan_sha256: "c".repeat(64),
+    projection: {ready: false}, label_plan: {review: []}};
+  panel._updateApplyButton();
+  assert.equal(controls.apply.disabled, true);
+  await panel._applyPreview();
+  assert.deepEqual(calls, []);
+});
+
+test("Failed restore Apply clears stale approval and reloads guard", async () => {
+  const {panel, controls} = makePanel(async request => {
+    if (request.type === "ha_voice_label_sync/apply_backup_preview") {
+      throw new Error("Incomplete restoration");
+    }
+    throw new Error("Unexpected request");
+  });
+  panel._stagedRestore = {mode: "restore_preview",
+    backup_id: "backup.bak", backup_sha256: "b".repeat(64),
+    production_sha256: "a".repeat(64),
+    label_plan_sha256: "c".repeat(64),
+    projection: {ready: true}, label_plan: {review: []}};
+  let refreshed = false;
+  panel._loadPreview = async () => {refreshed = true;};
+  await panel._applyPreview();
+  assert.equal(refreshed, true);
+  assert.equal(panel._stagedRestore, null);
+  assert.equal(controls.apply.disabled, true);
+  assert.match(panel.status, /Restauration refusée ou incomplète/);
+});
+
+test("Backup text-only differences are identified without direct restore", () => {
+  const {panel} = makePanel(async () => ({}));
   const nodes = {
     backupDiff: {children: [], replaceChildren(...children) {
       this.children = children;
@@ -863,141 +988,39 @@ test("Backup text-only difference is explicit and uses a separate restore action
   }};
   panel._renderBackupDiff();
   assert.equal(nodes.restoreBackup.disabled, false);
-  assert.equal(nodes.restoreBackup.textContent, "Restaurer le texte YAML");
+  assert.equal(nodes.restoreBackup.textContent, "Préparer la comparaison du texte YAML");
   assert.equal(nodes.backupDiff.children.length, 3);
-  assert.match(nodes.backupDiff.children[2].textContent, /Aucune différence entre les entités/);
-  assert.match(nodes.backupDiff.children[2].textContent, /sauvegarde de sécurité/);
-
   panel._backupReview.comparison.identical_text = true;
   panel._renderBackupDiff();
-  assert.equal(nodes.restoreBackup.disabled, true);
-  assert.equal(nodes.restoreBackup.textContent, "Restaurer cette sauvegarde");
-  assert.match(nodes.backupDiff.children[2].textContent, /YAML identique à la production/);
-
-  panel._backupReview = null;
-  panel._renderBackupDiff();
-  assert.deepEqual(nodes.backupDiff.children, []);
-  assert.equal(nodes.restoreBackup.disabled, true);
-  assert.equal(nodes.restoreBackup.textContent, "Restaurer cette sauvegarde");
-  assert.equal(controls.apply.disabled, true);
+  // Identical YAML can still require HA-label reconciliation.
+  assert.equal(nodes.restoreBackup.disabled, false);
+  assert.equal(nodes.restoreBackup.textContent,
+    "Préparer cette sauvegarde dans le Preview");
 });
 
-test("Text-only restore asks a distinct explicit confirmation without changing labels", async () => {
-  const requests = [], confirmations = [];
-  const {panel} = makePanel(async request => {
-    requests.push(request);
-    return {restored: true, safety_backup: "safety.bak"};
-  }, message => {confirmations.push(message); return false;});
-  const review = {
-    backup_id: "backup.bak", backup_sha256: "a".repeat(64),
-    production_sha256: "b".repeat(64),
-    comparison: {
-      status: "ok", identical_entities: true, identical_text: false,
-      added: [], removed: [], modified: [], unchanged: 4,
-    },
-  };
-  panel._backupReview = review;
-  await panel._restoreBackup();
-  assert.deepEqual(requests, []);
-  assert.equal(panel._backupReview, review);
-  assert.equal(confirmations.length, 1);
-  assert.match(confirmations[0], /entités sont identiques/);
-  assert.match(confirmations[0], /Une copie de sécurité/);
-  assert.match(confirmations[0], /étiquettes HA ne seront pas modifiées/);
-  panel._language = "en";
-  await panel._restoreBackup();
-  assert.match(confirmations[1], /Entity configurations are identical/);
-});
-
-test("Restore of 4 entities over 3 clears stale backup diff and warns about next Apply", async () => {
+test("Restore staging leaves previous production untouched after 4 over 3", async () => {
   const calls = [];
-  const {panel, controls} = makePanel(async message => {
-    calls.push(message.type);
-    if (message.type === "ha_voice_label_sync/restore_backup") {
-      return {restored: true, safety_backup: "safety.bak"};
-    }
-    if (message.type === "ha_voice_label_sync/list_backups") {
-      return {backups: [{id: "new.safety.bak", entities_count: 3,
-        timestamp: "2026-11-13", size: 432}]};
-    }
-    throw new Error("Unexpected request");
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request.type);
+    return {mode: "restore_preview", available: true, can_apply: false,
+      content: "switch.a: {}\\nswitch.b: {}\\nswitch.c: {}\\nswitch.d: {}\\n",
+      production_summary: {total: 3},
+      summary: {total: 4},
+      comparison: {status: "ok", added: ["switch.d"], removed: [],
+        modified: [], unchanged: 3},
+      label_plan: {add: ["switch.d"], remove: [], review: []},
+      label_plan_sha256: "c".repeat(64), projection: {ready: false}};
   });
-  const nodes = {
-    backupDiff: {children: ["stale"], replaceChildren(...children) {
-      this.children = children;
-    }},
-    backupStatus: {textContent: ""},
-    backupList: {children: [], replaceChildren(...children) {
-      this.children = children;
-    }, appendChild(child) {this.children.push(child);}},
-    restoreBackup: {disabled: false},
-    backupRestoreNotice: {hidden: true, textContent: ""},
-    restoreSummaryNotice: {hidden: true, textContent: ""},
-    restoreReconcilePanel: {hidden: true},
-    restoreReconcileTitle: {textContent: ""},
-    restoreReconcileSummary: {textContent: ""},
-    restoreReconcileDetails: {textContent: ""},
-    restoreReconcileAddLabels: {hidden: true, disabled: true},
-    restoreReconcileAligned: {hidden: true, disabled: true},
-    restoreReconcileKeepCurrent: {hidden: true, disabled: true},
-    restoreReconcileCancelFailed: {hidden: true, disabled: true},
-    restoreReconcileStatus: {textContent: ""},
-  };
-  const origQuery = panel.querySelector.bind(panel);
-  panel.querySelector = selector =>
-    nodes[selector.slice(1)] || origQuery(selector);
-  panel._backupReview = {
-    backup_id: "old.bak", backup_sha256: "b".repeat(64),
-    production_sha256: "a".repeat(64),
-    comparison: {identical_text: false},
-  };
-  panel._selectedBackup = "old.bak";
-  panel._backupList = [{id: "old.bak", timestamp: "2026-11-13",
-    entities_count: 4, size: 539}];
-  panel._restoreReconcilePending = true;
-  panel._restoreReconcileState = "restored";
-  panel._restoreReconcileReview = {
-    production_sha256: "a".repeat(64),
-    preview_sha256: "b".repeat(64),
-  };
-  let disabledDuringRestore = false;
-  panel._loadPreview = async () => {
-    panel._lastAnalysis = {
-      available: true,
-      comparison: {
-        status: "ok", added: [], removed: ["switch.piscine_chauffage"],
-        modified: [], unchanged: 3,
-      },
-    };
-    panel._renderRestoreReconciliation();
-    disabledDuringRestore = nodes.restoreReconcileAddLabels.disabled &&
-      nodes.restoreReconcileKeepCurrent.disabled;
-  };
-
+  panel._backupReview = {backup_id: "backup-4.bak",
+    backup_sha256: "b".repeat(64), production_sha256: "a".repeat(64),
+    comparison: {status: "ok", identical_text: false}};
+  panel._activateTab = () => {};
   await panel._restoreBackup();
-  assert.deepEqual(calls, [
-    "ha_voice_label_sync/restore_backup", "ha_voice_label_sync/list_backups",
-  ]);
-  assert.equal(panel._selectedBackup, null);
-  assert.equal(panel._backupReview, null);
-  assert.deepEqual(nodes.backupDiff.children, []);
+  assert.deepEqual(calls, ["ha_voice_label_sync/prepare_backup_preview"]);
+  assert.equal(panel._stagedRestore.production_summary.total, 3);
+  assert.equal(panel._stagedRestore.comparison.added.length, 1);
+  assert.equal(panel._stagedRestore.comparison.removed.length, 0);
   assert.equal(controls.apply.disabled, true);
-  assert.equal(disabledDuringRestore, true);
-  assert.equal(nodes.restoreReconcilePanel.hidden, false);
-  assert.equal(nodes.restoreReconcileAddLabels.hidden, false);
-  assert.equal(nodes.restoreReconcileKeepCurrent.hidden, false);
-  // Regression: buttons must become clickable immediately after restore,
-  // without an extra manual refresh and without unlocking Apply.
-  assert.equal(nodes.restoreReconcileAddLabels.disabled, false);
-  assert.equal(nodes.restoreReconcileKeepCurrent.disabled, false);
-  assert.match(nodes.backupStatus.textContent, /Restauration terminée/);
-  assert.equal(nodes.backupRestoreNotice.hidden, false);
-  assert.equal(nodes.restoreSummaryNotice.hidden, false);
-  for (const notice of [nodes.backupRestoreNotice, nodes.restoreSummaryNotice]) {
-    assert.match(notice.textContent, /switch\.piscine_chauffage/);
-    assert.match(notice.textContent, /Un prochain Apply les supprimerait/);
-    assert.match(notice.textContent, /labels HA n'ont pas été restaurés/);
-  }
 });
 
 test("Restore warnings reflect fresh Preview comparison, including uncertainty", () => {
@@ -1217,14 +1240,31 @@ test("Choosing current labels only unlocks a future separate Apply", async () =>
   assert.equal(panel._restoreReconcilePending, false);
 });
 
-test("Identical backup is never restored even with confirmation", async () => {
+test("Identical backup still prepares Preview when HA labels may differ", async () => {
   const calls = [];
-  const { panel } = makePanel(async message => { calls.push(message); });
-  panel._backupReview = {
-    backup_id: "foo", comparison: {identical_text: true}
-  };
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request.type);
+    return {mode: "restore_preview", available: true, can_apply: false,
+      backup_id: "same.bak", backup_sha256: "a".repeat(64),
+      production_sha256: "b".repeat(64),
+      label_plan_sha256: "c".repeat(64),
+      content: "switch.kept:\\n  expose: true\\n",
+      summary: {total: 40}, production_summary: {total: 40},
+      comparison: {status: "ok", identical_text: true, added: [],
+        removed: [], modified: [], unchanged: 40},
+      label_plan: {add: [], remove: ["switch.extra"], review: []},
+      projection: {ready: true, comparison: {
+        status: "ok", identical_entities: true}}};
+  });
+  panel._backupReview = {backup_id: "same.bak",
+    backup_sha256: "a".repeat(64), production_sha256: "b".repeat(64),
+    comparison: {identical_text: true, status: "ok"}};
+  panel._activateTab = () => {};
   await panel._restoreBackup();
-  assert.equal(calls.length, 0);
+  assert.deepEqual(calls, ["ha_voice_label_sync/prepare_backup_preview"]);
+  assert.equal(panel._stagedRestore.label_plan.remove.length, 1);
+  assert.equal(panel._stagedRestore.production_summary.total, 40);
+  assert.equal(controls.apply.disabled, false);
 });
 
 

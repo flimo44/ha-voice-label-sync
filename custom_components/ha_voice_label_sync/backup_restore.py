@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import hmac
+import json
 import os
 import re
 import shutil
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
-from hvls import FileWriterError
+from hvls import FileWriterError, GenerationRequest, run_google_assistant_workflow
+from hvls.engine import resolve_label_ids
 from hvls.output_ownership_registry import OwnershipRegistry
 from hvls.owned_writer import (
     _operation_lock,
@@ -123,6 +126,206 @@ def review_backup(output_path: Path, backup_id: str) -> dict:
         "summary": analysis["summary"],
         "comparison": analysis["comparison"],
     }
+
+
+def _project_restored_yaml(
+    candidate: str,
+    output_path: Path,
+    registries: dict,
+    label: str,
+    domains: frozenset[str],
+) -> dict:
+    """Simulate desired labels using copies of the live HA registries.
+
+    Report differences that cannot be reconstructed from labels alone
+    (renamed rooms/entities, custom YAML attributes, missing entities).
+    This function does not modify Home Assistant or files.
+    """
+    from .preview_compare import _entities
+
+    desired = {
+        entity_id for entity_id, fields in _entities(candidate).items()
+        if fields.get("expose") is True
+    }
+    projected = deepcopy(registries)
+    label_records = projected["label_registry"]["data"]["labels"]
+    candidates, _ = resolve_label_ids(label_records, label)
+    matches = {
+        entry["label_id"] for entry in label_records
+        if entry.get("label_id") in candidates
+    }
+    if len(matches) != 1:
+        return {
+            "ready": False,
+            "reason": "HVLS label unavailable or ambiguous",
+            "comparison": None,
+        }
+    label_id = next(iter(matches))
+    for entity in projected["entity_registry"]["data"]["entities"]:
+        labels = set(entity.get("labels") or [])
+        if entity["entity_id"] in desired:
+            labels.add(label_id)
+        else:
+            labels.discard(label_id)
+        entity["labels"] = sorted(labels)
+
+    request = GenerationRequest(
+        label=label, domains=domains,
+        output_path=output_path, dry_run=True,
+    )
+    generated = run_google_assistant_workflow(
+        request=request, registries=projected,
+    ).generation.content
+    comparison = analyze_preview(generated, candidate)["comparison"]
+    return {
+        "ready": comparison["status"] == "ok"
+        and comparison["identical_entities"] is True,
+        "reason": None,
+        "comparison": comparison,
+    }
+
+
+def prepare_backup_preview(
+    output_path: Path, backup_id: str,
+    backup_sha256: str, production_sha256: str,
+    catalog: dict,
+    *,
+    registries: dict | None = None,
+    label: str | None = None,
+    domains: frozenset[str] | None = None,
+) -> dict:
+    """Review the selected backup as a proposal; never write YAML or labels.
+
+    The review includes a projected HA generation when live registry data is
+    available. Its readiness is informational until the write transaction
+    and recovery protocol have been implemented and tested.
+    """
+    if not all(
+        isinstance(value, str) and _SHA.fullmatch(value)
+        for value in (backup_sha256, production_sha256)
+    ):
+        raise BackupRestoreError("Invalid preview approval fingerprints.")
+    review = review_backup(output_path, backup_id)
+    if not hmac.compare_digest(review["backup_sha256"], backup_sha256):
+        raise PreviewChangedError("Selected backup changed; review it again.")
+    if not hmac.compare_digest(
+        review["production_sha256"], production_sha256
+    ):
+        raise PreviewChangedError("Production changed; review it again.")
+
+    content = _read_yaml(_get_backup(output_path, backup_id))
+    production = _read_yaml(output_path)
+    if preview_digest(content) != backup_sha256:
+        raise PreviewChangedError("Selected backup changed during preparation.")
+    if preview_digest(production) != production_sha256:
+        raise PreviewChangedError("Production changed during preparation.")
+
+    from .preview_compare import _entities
+
+    targets = _entities(content)
+    entities = {
+        entity["entity_id"]: entity
+        for entity in catalog.get("entities", [])
+        if isinstance(entity, dict) and isinstance(entity.get("entity_id"), str)
+    }
+    exposed = {
+        entity_id for entity_id, fields in targets.items()
+        if fields.get("expose") is True
+    }
+    additions = []
+    removals = []
+    review_needed = []
+
+    for entity_id, fields in sorted(targets.items()):
+        if fields.get("expose") is not True:
+            review_needed.append({
+                "entity_id": entity_id, "reason": "not_explicitly_exposed",
+            })
+            continue
+        entity = entities.get(entity_id)
+        if entity is None:
+            review_needed.append({
+                "entity_id": entity_id, "reason": "missing_ha_entity",
+            })
+        elif entity.get("eligible") is not True:
+            review_needed.append({
+                "entity_id": entity_id,
+                "reason": entity.get("exclusion_reason") or "ineligible",
+            })
+        elif entity.get("has_label") is not True:
+            additions.append(entity_id)
+
+    for entity_id, entity in sorted(entities.items()):
+        if entity.get("has_label") is True and entity_id not in exposed:
+            removals.append(entity_id)
+
+    projection = None
+    if registries is not None:
+        if not isinstance(label, str) or domains is None:
+            raise BackupRestoreError("Missing current HVLS generation settings")
+        projection = _project_restored_yaml(
+            content, output_path, registries, label, domains,
+        )
+
+    label_plan = {
+        "add": additions,
+        "remove": removals,
+        "review": review_needed,
+        "current_label_count": catalog.get("labeled"),
+    }
+    # Approval evidence covers the exact proposed HA label operations and
+    # the projected generation, not only the backup and production hashes.
+    approval = preview_digest(json.dumps(
+        {
+            "labels": label_plan, "projection": projection,
+            "label": label, "domains": sorted(domains) if domains else None,
+            "output": str(output_path),
+            "backup_sha256": backup_sha256,
+            "production_sha256": production_sha256,
+        },
+        sort_keys=True, ensure_ascii=False,
+    ))
+    return {
+        **review,
+        "available": True,
+        "mode": "restore_preview",
+        "content": content,
+        "production_path": str(output_path),
+        "path": f"Backup: {backup_id}",
+        "preview_sha256": backup_sha256,
+        "production_summary": analyze_preview(production, None)["summary"],
+        "label_plan": label_plan,
+        "label_plan_sha256": approval,
+        "projection": projection,
+        "can_apply": False,  # The write API owns the final authorization.
+    }
+
+
+def complete_preview_restoration(
+    output_path: Path, ownership_registry_path: Path, *,
+    entry_id: str, backup_sha256: str,
+) -> dict:
+    """Release durable restore hold only for a verified final YAML.
+
+    The caller must first confirm regenerated live HA labels match this YAML.
+    Any failure leaves the hold intact to require explicit recovery.
+    """
+    with _operation_lock(ownership_registry_path):
+        guard = read_guard(ownership_registry_path)
+        if (
+            guard is None or guard["entry_id"] != entry_id
+            or guard["output_path"] != str(output_path)
+            or guard["restored_sha256"] != backup_sha256
+        ):
+            raise BackupRestoreError("Restore guard does not match this review")
+        validate_production_unchanged(output_path, backup_sha256)
+        ownership = evaluate_registered_output(
+            output_path, entry_id, ownership_registry_path,
+        )
+        if ownership.status != "managed" or not ownership.write_allowed:
+            raise BackupRestoreError("Restored YAML ownership is inconsistent")
+        clear_guard(ownership_registry_path, guard)
+        return {"reconciled": True, "production_sha256": backup_sha256}
 
 
 def _safety_backup(output_path: Path) -> Path:
