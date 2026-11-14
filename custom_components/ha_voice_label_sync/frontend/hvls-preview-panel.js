@@ -2250,7 +2250,8 @@ class HVLSPreviewPanel extends HTMLElement {
               const checkbox = document.createElement("input");
               checkbox.type = "checkbox";
               checkbox.className = "entity-hvls-checkbox";
-              checkbox.checked = true;
+              checkbox.checked = this._manualLabelChanges?.has(entity.entity_id)
+                ? this._manualLabelChanges.get(entity.entity_id) : true;
               checkbox.dataset.ineligible = "false";
               checkbox.disabled = Boolean(this._entityWritePending);
               checkbox.setAttribute("aria-label", this._tf("hvlsLabelAria", {
@@ -2260,7 +2261,11 @@ class HVLSPreviewPanel extends HTMLElement {
                 this._setEntityLabel(catalogEntity, checkbox);
               });
               const caption = document.createElement("span");
-              caption.textContent = "HVLS";
+              caption.textContent = this._manualLabelChanges?.has(entity.entity_id)
+                ? "HVLS · " + this._t("manualLabelPending") : "HVLS";
+              if (this._manualLabelChanges?.has(entity.entity_id)) {
+                control.classList.add("pending");
+              }
               control.append(checkbox, caption);
               itemRow.appendChild(control);
             }
@@ -3695,7 +3700,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
           const checkbox = document.createElement("input");
           checkbox.type = "checkbox";
           checkbox.className = "entity-hvls-checkbox";
-          checkbox.checked = entity.has_label === true;
+          checkbox.checked = this._manualLabelChanges?.has(entity.entity_id)
+            ? this._manualLabelChanges.get(entity.entity_id)
+            : entity.has_label === true;
           const ineligibleToAdd = entity.eligible !== true && entity.has_label !== true;
           checkbox.dataset.ineligible = String(ineligibleToAdd);
           checkbox.disabled = Boolean(this._entityWritePending) || ineligibleToAdd;
@@ -3709,7 +3716,11 @@ entity_config: !include google_assistant_entities.yaml</pre>
           });
 
           const controlText = document.createElement("span");
-          controlText.textContent = "HVLS";
+          controlText.textContent = this._manualLabelChanges?.has(entity.entity_id)
+            ? "HVLS · " + this._t("manualLabelPending") : "HVLS";
+          if (this._manualLabelChanges?.has(entity.entity_id)) {
+            control.classList.add("pending");
+          }
 
           control.append(checkbox, controlText);
           row.append(info, label, control);
