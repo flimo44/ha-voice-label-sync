@@ -1375,7 +1375,7 @@ class HVLSPreviewPanel extends HTMLElement {
       this._applying === true || this._generating === true || this._refreshing === true;
     const restore = this.querySelector("#restoreBackup");
     if (restore) restore.disabled = !this._backupReview ||
-      this._backupReview?.comparison?.identical_text === true || this._restoring ||
+      this._restoring ||
       this._applying || this._refreshing || this._generating || this._entityWritePending;
     const generate = this.querySelector("#generate");
     if (generate) generate.disabled =
@@ -3668,7 +3668,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     if (restore) {
       restore.textContent = this._t(textOnly
         ? "backupRestoreTextOnly" : "backupRestore");
-      restore.disabled = Boolean(comparison.identical_text === true ||
+      restore.disabled = Boolean(
         this._restoring || this._applying || this._refreshing ||
         this._generating || this._entityWritePending);
     }
@@ -3900,7 +3900,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const data = this._backupReview;
     if (!data || this._restoring || this._applying ||
         this._refreshing || this._generating || this._entityWritePending ||
-        data.comparison?.identical_text === true) return;
+        data.comparison?.status !== "ok") return;
 
     this._restoring = true;
     const requestId = (this._loadId || 0) + 1;
