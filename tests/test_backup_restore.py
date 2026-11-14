@@ -45,7 +45,10 @@ def backup_module(monkeypatch):
     component = (
         Path(__file__).resolve().parents[1] / "custom_components/ha_voice_label_sync"
     )
-    for name in ("preview_compare", "preview_guard", "restore_guard", "backup_restore"):
+    for name in (
+        "preview_compare", "preview_guard", "restore_guard",
+        "entity_catalog", "label_update", "backup_restore",
+    ):
         spec = importlib.util.spec_from_file_location(
             f"{prefix}.{name}", component / f"{name}.py"
         )
