@@ -145,6 +145,67 @@ test("Assistant honors installer's initial existing-file choice without asking a
   assert.equal(nodes.get("#assistantFileSection").hidden, true);
 });
 
+test("First opening of existing-file install navigates directly to Assistant once", async () => {
+  const response = managedPreviewWithComparison();
+  response.onboarding_mode = "existing";
+  response.ownership = {
+    status: "unknown", write_allowed: false,
+    reason_code: "owned_by_other_installation",
+    reason: "Old installation owns output",
+  };
+  const {panel} = makePanel(async () => response);
+  panel._initialized = true;
+  const original = panel.querySelector.bind(panel);
+  panel.querySelector = selector => selector.includes('data-tab="summary"')
+    ? {getAttribute: () => "true"} : original(selector);
+  const navigated = [];
+  panel._activateTab = name => navigated.push(name);
+  await panel._loadPreview();
+  await panel._loadPreview();
+  assert.deepEqual(navigated, ["migration"]);
+});
+
+
+test("New installation goes to entity selection, not another setup choice", async () => {
+  const response = {...preview(), onboarding_mode: "new"};
+  response.ownership.reason_code = "new_output";
+  const {panel} = makePanel(async () => response);
+  panel._initialized = true;
+  const original = panel.querySelector.bind(panel);
+  panel.querySelector = selector => selector.includes('data-tab="summary"')
+    ? {getAttribute: () => "true"} : original(selector);
+  const navigated = [];
+  panel._activateTab = name => navigated.push(name);
+  await panel._loadPreview();
+  assert.deepEqual(navigated, ["entities"]);
+});
+
+
+test("Guided onboarding never overrides a tab already selected by the user", async () => {
+  const response = {...preview(), onboarding_mode: "existing"};
+  response.ownership = {
+    status: "unmanaged", write_allowed: false,
+    reason_code: "unmanaged_output", reason: "Existing manual YAML",
+  };
+  const {panel} = makePanel(async () => response);
+  panel._initialized = true;
+  const original = panel.querySelector.bind(panel);
+  panel.querySelector = selector => selector.includes('data-tab="summary"')
+    ? {getAttribute: () => "false"} : original(selector);
+  let navigated = false;
+  panel._activateTab = () => {navigated = true;};
+  await panel._loadPreview();
+  assert.equal(navigated, false);
+});
+
+
+test("Recovered file action appears before the long per-entity review", () => {
+  const takeover = source.indexOf('<section id="assistantTakeoverSection"');
+  const adoption = source.indexOf('<section id="assistantAdoption"');
+  assert.ok(takeover > 0 && adoption > takeover);
+  assert.ok(source.includes('id="migrationChoiceDetails"'));
+});
+
 test("Apply disabled without an approved Preview", async () => {
   const { panel, controls } = makePanel(async () => preview(false));
 
@@ -851,6 +912,32 @@ test("Preview renders grouped entity changes and modified fields", () => {
   assert.match(rendered, /ne la supprime pas de Home Assistant/);
 });
 
+test("Import of 40 entities with 39 ordinary Preview removals is flagged", () => {
+  const {panel} = makePanel(async () => preview(false));
+  panel._onboardingMode = "existing";
+  const container = {
+    children: [],
+    replaceChildren() {this.children = [];},
+    appendChild(child) {this.children.push(child);},
+    append(...children) {this.children.push(...children);},
+  };
+  panel.querySelector = selector => selector === "#previewChanges" ? container : null;
+  panel._renderPreviewChanges({
+    available: true,
+    summary: {entities: []},
+    production_summary: {total: 40},
+    comparison: {
+      status: "ok",
+      added: ["switch.one", "switch.two", "switch.three"],
+      removed: Array.from({length: 39}, (_, i) => "switch.old_" + i),
+      modified: [],
+    },
+  });
+  const rendered = flattenText(container);
+  assert.match(rendered, /ce n'est PAS une reprise/);
+  assert.match(rendered, /39 entités sur 40/);
+  assert.match(rendered, /Retourner à l'Assistant/);
+});
 test("Preview clearly reports missing production and identical configurations", () => {
   const { panel } = makePanel(async () => preview());
   const container = {
