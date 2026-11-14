@@ -195,7 +195,9 @@ def test_backup_candidate_rejects_stale_production_and_backup(
         )
     output.write_text("switch.a:\n  expose: true\n", encoding="utf-8")
     backup.write_text("switch.changed:\n  expose: true\n", encoding="utf-8")
-    with pytest.raises(backup_module.PreviewChangedError, match="backup changed|Selected backup changed"):
+    with pytest.raises(
+        backup_module.PreviewChangedError, match="Selected backup changed"
+    ):
         backup_module.prepare_backup_preview(
             output, backup_id, review["backup_sha256"],
             review["production_sha256"], {"entities": []},
