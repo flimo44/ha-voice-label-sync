@@ -164,6 +164,7 @@ def websocket_module(monkeypatch):
     backup_module.BackupRestoreError = type("BackupRestoreError", (ValueError,), {})
     backup_module.list_backups = Mock(return_value={"backups": []})
     backup_module.review_backup = Mock()
+    backup_module.prepare_backup_preview = Mock()
     backup_module.restore_reviewed_backup = Mock()
     backup_module.resolve_restored_output = Mock()
     monkeypatch.setitem(sys.modules, f"{prefix}.backup_restore", backup_module)
@@ -630,49 +631,62 @@ def test_set_entity_label_websocket_refuses_missing_entity(websocket_module):
     ws.update_entity_label.assert_not_called()
 
 
-def test_restore_websocket_passes_ownership_identity(websocket_module):
-    """Restore must use HA's installation identity, not client input."""
+def test_legacy_direct_restore_endpoint_refuses_write(websocket_module):
+    """Even an old client cannot restore production before Preview validation."""
     ws = websocket_module.websocket
-
     ws.restore_reviewed_backup.reset_mock()
-    ws.restore_reviewed_backup.return_value = {
-        "restored": True,
-        "backup_id": "test.bak",
-        "safety_backup": "safety.bak",
-        "bytes_written": 42,
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_restore_backup(
+        make_hass(), connection, {
+            "id": 301,
+            "backup_id": "test.bak",
+            "backup_sha256": "a" * 64,
+            "production_sha256": "b" * 64,
+        },
+    ))
+    connection.send_result.assert_not_called()
+    assert connection.send_error.call_args.args[1] == "restore_requires_preview"
+    ws.restore_reviewed_backup.assert_not_called()
+
+
+def test_backup_preview_endpoint_is_read_only_and_preserves_identity(
+    websocket_module,
+):
+    """The staged restore reads HA labels but does not write anything."""
+    ws = websocket_module.websocket
+    ws.prepare_backup_preview.return_value = {
+        "available": True,
+        "mode": "restore_preview",
+        "can_apply": False,
+        "content": "switch.pompe:\\n  expose: true\\n",
+        "production_summary": {"total": 40},
+        "summary": {"total": 52},
+        "comparison": {"status": "ok", "added": ["switch.new"],
+                       "removed": [], "modified": [], "unchanged": 40},
     }
-
-    connection = SimpleNamespace(
-        send_result=Mock(),
-        send_error=Mock(),
-    )
-
-    asyncio.run(
-        ws.websocket_restore_backup(
-            make_hass(),
-            connection,
-            {
-                "id": 301,
-                "backup_id": "test.bak",
-                "backup_sha256": "a" * 64,
-                "production_sha256": "b" * 64,
-                "entry_id": "forged-client-identity",
-            },
-        )
-    )
-
+    ws.update_entity_label.reset_mock()
+    ws.apply_reviewed_preview.reset_mock()
+    ws.restore_reviewed_backup.reset_mock()
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_prepare_backup_preview(
+        make_hass(), connection, {
+            "id": 302,
+            "backup_id": "test.bak",
+            "backup_sha256": "a" * 64,
+            "production_sha256": "b" * 64,
+            "entry_id": "forged-id",
+        },
+    ))
     connection.send_error.assert_not_called()
-    connection.send_result.assert_called_once()
+    assert connection.send_result.call_args.args[1]["can_apply"] is False
+    call = ws.prepare_backup_preview.call_args
+    assert call.args[0] == Path("/config/google_assistant_entities.yaml")
+    assert call.args[1:4] == ("test.bak", "a" * 64, "b" * 64)
+    assert isinstance(call.args[4], dict)
+    ws.update_entity_label.assert_not_called()
+    ws.apply_reviewed_preview.assert_not_called()
+    ws.restore_reviewed_backup.assert_not_called()
 
-    call = ws.restore_reviewed_backup.call_args
-
-    assert call is not None
-    assert call.kwargs["entry_id"] == "test-installation"
-    assert call.kwargs["ownership_registry_path"] == Path(
-        "/config/.hvls/ownership.json"
-    )
-
-    assert call.kwargs["entry_id"] != "forged-client-identity"
 
 
 def test_preview_disables_apply_for_unmanaged_yaml(
