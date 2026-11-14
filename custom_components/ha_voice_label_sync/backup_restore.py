@@ -145,12 +145,16 @@ def preview_backup_cleanup(
 def apply_backup_cleanup(
     output_path: Path, ownership_registry_path: Path, *,
     keep: int, evidence_sha256: str, confirmed: bool,
+    delete_ids: list[str] | None = None,
 ) -> dict:
-    """Delete only the explicitly reviewed older snapshots.
+    """Delete the administrator's exact reviewed selection.
 
-    Must be called inside the shared Home Assistant workflow lock.
-    Never cleans when a durable restore is pending, or when list contents
-    differ from what the administrator reviewed.
+    The default retains compatibility with clients that approve the
+    suggested older-backup cleanup. Explicit selections may retain older
+    backups or include a more recent backup. At least one must survive.
+
+    Must run under the shared HA workflow lock; do not delete while a
+    durable restoration hold exists or if inventory hashes changed.
     """
     if (
         confirmed is not True
@@ -165,8 +169,29 @@ def apply_backup_cleanup(
         raise BackupRestoreError(
             "Backup history changed since preview; review again."
         )
-    # Verify each candidate's bytes once more BEFORE deleting anything.
-    for entry in plan["to_delete"]:
+    all_entries = plan["kept"] + plan["to_delete"]
+    allowed = {entry["id"]: entry for entry in all_entries}
+    if delete_ids is None:
+        selected = {entry["id"] for entry in plan["to_delete"]}
+    else:
+        if (
+            not isinstance(delete_ids, list)
+            or len(delete_ids) > 5000
+            or any(not isinstance(name, str) for name in delete_ids)
+            or len(set(delete_ids)) != len(delete_ids)
+            or any(name not in allowed for name in delete_ids)
+        ):
+            raise BackupRestoreError("Invalid cleanup selection.")
+        selected = set(delete_ids)
+    if not selected:
+        raise BackupRestoreError("No backups selected for deletion.")
+    if len(selected) >= len(all_entries):
+        raise BackupRestoreError("At least one backup must be retained.")
+    to_delete = [entry for entry in all_entries if entry["id"] in selected]
+
+    # Check all selected files BEFORE the first deletion. Never trust the
+    # browser's proposed list or hashes as write authorization.
+    for entry in to_delete:
         candidate = _get_backup(output_path, entry["id"])
         if not hmac.compare_digest(
             preview_digest(_read_yaml(candidate)), entry["sha256"]
@@ -175,11 +200,14 @@ def apply_backup_cleanup(
                 "A backup changed during cleanup; nothing deleted."
             )
     deleted = []
-    for entry in plan["to_delete"]:
+    for entry in to_delete:
         candidate = _get_backup(output_path, entry["id"])
         candidate.unlink()
         deleted.append(entry["id"])
-    return {"deleted_count": len(deleted), "kept_count": len(plan["kept"])}
+    return {
+        "deleted_count": len(deleted),
+        "kept_count": len(all_entries) - len(deleted),
+    }
 
 
 def review_backup(output_path: Path, backup_id: str) -> dict:
