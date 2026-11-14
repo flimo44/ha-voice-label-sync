@@ -1726,18 +1726,7 @@ class HVLSPreviewPanel extends HTMLElement {
     return "validated";
   }
 
-  _renderAnalysis(result) {
-    const panel = this.querySelector("#analysis");
-    panel.replaceChildren();
-    this.querySelector("#exclusions").replaceChildren();
-    this.querySelector("#unifiedDiff").textContent = "";
-    this.querySelector("#rawDiffDetails").hidden = true;
-    this._lastAnalysis = result;
-    this._syncExclusionsTab(result.exclusions);
-    this._renderExclusions(this.querySelector("#exclusions"), result.exclusions);
-    this._renderPreviewChanges(result);
-    this._renderRestoreWarning();
-    this._renderRestoreReconciliation();
+  _renderStagedRestorePlan() {
     const previewNotice = this.querySelector("#backupPreviewNotice");
     if (previewNotice) {
       previewNotice.hidden = !this._stagedRestore;
@@ -1779,6 +1768,21 @@ class HVLSPreviewPanel extends HTMLElement {
         }
       }
     }
+  }
+
+  _renderAnalysis(result) {
+    const panel = this.querySelector("#analysis");
+    panel.replaceChildren();
+    this.querySelector("#exclusions").replaceChildren();
+    this.querySelector("#unifiedDiff").textContent = "";
+    this.querySelector("#rawDiffDetails").hidden = true;
+    this._lastAnalysis = result;
+    this._syncExclusionsTab(result.exclusions);
+    this._renderExclusions(this.querySelector("#exclusions"), result.exclusions);
+    this._renderPreviewChanges(result);
+    this._renderRestoreWarning();
+    this._renderRestoreReconciliation();
+    this._renderStagedRestorePlan();
     // The dashboard describes what is on disk, not the changes proposed by
     // Preview. A missing/unreadable production must never show Preview counts.
     const stats = result.production_summary;
