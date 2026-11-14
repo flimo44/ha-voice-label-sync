@@ -893,6 +893,120 @@ test("Backup tab is present and uses admin-only WS actions", () => {
   assert.match(source, /ha_voice_label_sync\/prepare_backup_preview/);
 });
 
+test("Backup history shows 10 entries by default and labels all types", () => {
+  const {panel} = makePanel(async () => ({}));
+  const list = {children: [], replaceChildren(...items) {this.children = items;},
+    appendChild(item) {this.children.push(item);}};
+  const more = {hidden: true, textContent: ""};
+  panel.querySelector = selector => ({
+    "#backupList": list, "#backupMore": more,
+  }[selector] || null);
+  panel._backupList = Array.from({length: 12}, (_, idx) => ({
+    id: "backup-" + idx + ".bak",
+    timestamp: "2026-11-14T15:00:00",
+    entities_count: 4, size: 516,
+    kind: ["auto", "safety", "legacy"][idx % 3],
+  }));
+
+  panel._renderBackups();
+  assert.equal(list.children.length, 2);
+  assert.match(list.children[0].textContent, /12 sauvegarde/);
+  assert.equal(list.children[1].children.length, 10);
+  assert.equal(more.hidden, false);
+  assert.match(more.textContent, /2 anciennes/);
+  assert.match(list.children[1].children[0].children[1].textContent, /Automatique/);
+  assert.match(list.children[1].children[1].children[1].textContent, /Sécurité/);
+  assert.match(list.children[1].children[2].children[1].textContent, /Ancienne/);
+
+  panel._backupVisibleAll = true;
+  panel._renderBackups();
+  assert.equal(list.children[1].children.length, 12);
+  assert.match(more.textContent, /10 dernières/);
+});
+
+test("Cleanup preparation is read-only and previews exactly what would be deleted", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {
+      keep: 10, kept: Array.from({length: 10}, (_, i) => ({id: "" + i})),
+      to_delete: [{id: "old.safety.bak", kind: "safety",
+        timestamp: "2026-11-13T14:00:00", entities_count: 4}],
+      evidence_sha256: "a".repeat(64),
+    };
+  });
+  const previewNode = {children: [], replaceChildren(...items) {this.children = items;},
+    appendChild(item) {this.children.push(item);}};
+  const apply = {hidden: true};
+  const cancel = {hidden: true};
+  const status = {textContent: ""};
+  panel.querySelector = selector => ({
+    "#backupCleanupPreview": previewNode,
+    "#backupCleanupApply": apply,
+    "#backupCleanupCancel": cancel,
+    "#backupCleanupStatus": status,
+  }[selector] || null);
+  await panel._prepareBackupCleanup();
+
+  assert.deepEqual(calls.map(x => x.type), [
+    "ha_voice_label_sync/preview_backup_cleanup",
+  ]);
+  assert.equal(panel._backupCleanupPlan.to_delete.length, 1);
+  assert.equal(previewNode.children.length, 2);
+  assert.match(previewNode.children[0].textContent, /conserver 10/);
+  assert.match(previewNode.children[1].children[1].children[0].textContent, /Sécurité/);
+  assert.equal(apply.hidden, false);
+  assert.equal(cancel.hidden, false);
+});
+
+test("Cleanup requires confirmation and posts exact review evidence", async () => {
+  const calls = [], confirmations = [];
+  let allow = false;
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {deleted_count: 1, kept_count: 10};
+  }, message => {
+    confirmations.push(message);
+    return allow;
+  });
+  const plan = {
+    keep: 10, kept: Array.from({length: 10}, (_, i) => ({id: "" + i})),
+    to_delete: [{id: "old.safety.bak"}],
+    evidence_sha256: "b".repeat(64),
+  };
+  panel._backupCleanupPlan = plan;
+  panel._renderBackupCleanup = () => {};
+  panel._renderBackupDiff = () => {};
+  panel._loadBackups = async () => {};
+  const status = {textContent: ""};
+  panel.querySelector = selector => selector === "#backupCleanupStatus"
+    ? status : null;
+
+  await panel._applyBackupCleanup();
+  assert.equal(calls.length, 0);
+  assert.equal(panel._backupCleanupPlan, plan);
+  allow = true;
+  await panel._applyBackupCleanup();
+  assert.deepEqual(calls.map(x => x.type), [
+    "ha_voice_label_sync/apply_backup_cleanup",
+  ]);
+  assert.equal(calls[0].keep, 10);
+  assert.equal(calls[0].evidence_sha256, "b".repeat(64));
+  assert.equal(calls[0].confirmed, true);
+  assert.equal(panel._backupCleanupPlan, null);
+  assert.match(status.textContent, /1 sauvegarde/);
+  assert.equal(confirmations.length, 2);
+});
+
+test("Backup cleanup actions are distinct from restoration Apply", () => {
+  assert.match(source, /id="backupCleanupPrepare"/);
+  assert.match(source, /id="backupCleanupApply"/);
+  assert.match(source, /id="backupCleanupCancel"/);
+  assert.match(source, /id="backupMore"/);
+  assert.match(source, /ha_voice_label_sync\\/preview_backup_cleanup/);
+  assert.match(source, /ha_voice_label_sync\\/apply_backup_cleanup/);
+});
+
 test("Backup review is invalidated when a different snapshot is selected", async () => {
   const pending = deferred();
   const calls = [];
