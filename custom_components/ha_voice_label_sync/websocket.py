@@ -785,7 +785,9 @@ async def websocket_prepare_existing_output_takeover(
     vol.Required("preview_sha256"): str,
     vol.Required("confirmed"): bool,
     vol.Optional("previous_entry_id"): vol.Any(None, str),
+    vol.Optional("previous_sha256"): vol.Any(None, str),
     vol.Optional("ownership_revision"): vol.Any(None, int),
+    vol.Optional("acknowledge_changed_output"): bool,
 })
 async def websocket_confirm_existing_output_takeover(
     hass: HomeAssistant,
@@ -813,7 +815,11 @@ async def websocket_confirm_existing_output_takeover(
                     preview_sha256=msg["preview_sha256"],
                     confirmed=msg["confirmed"],
                     previous_entry_id=msg.get("previous_entry_id"),
+                    previous_sha256=msg.get("previous_sha256"),
                     ownership_revision=msg.get("ownership_revision"),
+                    acknowledge_changed_output=msg.get(
+                        "acknowledge_changed_output", False
+                    ),
                     active_entry_ids=frozenset(e.entry_id for e in entries),
                 )
             )
