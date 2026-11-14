@@ -952,10 +952,13 @@ test("Cleanup preparation is read-only and previews exactly what would be delete
     "ha_voice_label_sync/preview_backup_cleanup",
   ]);
   assert.equal(panel._backupCleanupPlan.to_delete.length, 1);
-  assert.equal(previewNode.children.length, 2);
-  assert.match(previewNode.children[0].textContent, /conserver 10/);
-  assert.match(previewNode.children[1].children[1].children[0].textContent, /Sécurité/);
+  assert.equal(previewNode.children.length, 4);
+  assert.match(previewNode.children[1].textContent, /1 à supprimer/);
+  const item = previewNode.children[3].children[1].children[10];
+  assert.equal(item.children[0].children[0].checked, true);
+  assert.match(item.children[0].children[1].textContent, /Sécurité/);
   assert.equal(apply.hidden, false);
+  assert.equal(apply.disabled, false);
   assert.equal(cancel.hidden, false);
 });
 
@@ -975,6 +978,7 @@ test("Cleanup requires confirmation and posts exact review evidence", async () =
     evidence_sha256: "b".repeat(64),
   };
   panel._backupCleanupPlan = plan;
+  panel._backupCleanupSelected = new Set(["old.safety.bak"]);
   panel._renderBackupCleanup = () => {};
   panel._renderBackupDiff = () => {};
   panel._loadBackups = async () => {};
@@ -992,10 +996,103 @@ test("Cleanup requires confirmation and posts exact review evidence", async () =
   ]);
   assert.equal(calls[0].keep, 10);
   assert.equal(calls[0].evidence_sha256, "b".repeat(64));
+  assert.deepEqual([...calls[0].delete_ids], ["old.safety.bak"]);
   assert.equal(calls[0].confirmed, true);
   assert.equal(panel._backupCleanupPlan, null);
   assert.match(status.textContent, /1 sauvegarde/);
   assert.equal(confirmations.length, 2);
+});
+
+test("Backup cleanup checkboxes let users keep old or delete recent snapshots", () => {
+  const {panel} = makePanel(async () => ({}));
+  const container = {children: [], replaceChildren(...items) {this.children = items;},
+    appendChild(item) {this.children.push(item);}};
+  const apply = {hidden: true, disabled: true, textContent: ""};
+  const cancel = {hidden: true};
+  panel.querySelector = selector => ({
+    "#backupCleanupPreview": container,
+    "#backupCleanupApply": apply,
+    "#backupCleanupCancel": cancel,
+  }[selector] || null);
+  panel._backupCleanupPlan = {
+    keep: 1,
+    kept: [{id: "newest.safety.bak", timestamp: "Newest",
+      kind: "safety", entities_count: 4}],
+    to_delete: [{id: "old.auto.bak", timestamp: "Older",
+      kind: "auto", entities_count: 3}],
+    evidence_sha256: "a".repeat(64),
+  };
+  panel._backupCleanupSelected = new Set(["old.auto.bak"]);
+  panel._renderBackupCleanup();
+
+  // Newest begins unchecked; old begins checked.
+  let items = container.children[3].children[1].children;
+  const recent = items[0].children[0].children[0];
+  const old = items[1].children[0].children[0];
+  assert.equal(recent.checked, false);
+  assert.equal(old.checked, true);
+  assert.equal(apply.disabled, false);
+  assert.match(apply.textContent, /Supprimer la sauvegarde/);
+
+  // Keep the older backup and choose the more recent one for deletion.
+  old.checked = false;
+  old.on_change();
+  items = container.children[3].children[1].children;
+  const recentAgain = items[0].children[0].children[0];
+  recentAgain.checked = true;
+  recentAgain.on_change();
+  assert.deepEqual([...panel._backupCleanupSelected], ["newest.safety.bak"]);
+  assert.match(container.children[1].textContent, /1 à supprimer/);
+  assert.equal(apply.disabled, false);
+});
+
+test("Backup cleanup cannot confirm zero or all snapshots selected", async () => {
+  const calls = [], confirmations = [];
+  const {panel} = makePanel(async request => {calls.push(request);}, message => {
+    confirmations.push(message);
+    return true;
+  });
+  const apply = {hidden: true, disabled: true, textContent: ""};
+  panel.querySelector = selector => selector === "#backupCleanupApply"
+    ? apply : null;
+  panel._backupCleanupPlan = {
+    keep: 1, kept: [{id: "recent.bak"}],
+    to_delete: [{id: "old.bak"}], evidence_sha256: "a".repeat(64),
+  };
+
+  panel._backupCleanupSelected = new Set();
+  panel._renderBackupCleanup();
+  assert.equal(apply.disabled, true);
+  await panel._applyBackupCleanup();
+  assert.equal(calls.length, 0);
+
+  panel._backupCleanupSelected = new Set(["recent.bak", "old.bak"]);
+  panel._renderBackupCleanup();
+  assert.equal(apply.disabled, true);
+  await panel._applyBackupCleanup();
+  assert.equal(calls.length, 0);
+  assert.equal(confirmations.length, 0);
+});
+
+test("Backup cleanup can reset the proposed selection or deselect all", () => {
+  const {panel} = makePanel(async () => ({}));
+  const container = {children: [], replaceChildren(...items) {this.children = items;},
+    appendChild(item) {this.children.push(item);}};
+  panel.querySelector = selector => selector === "#backupCleanupPreview"
+    ? container : null;
+  panel._backupCleanupPlan = {
+    keep: 1, kept: [{id: "latest.bak"}],
+    to_delete: [{id: "old.bak"}], evidence_sha256: "a".repeat(64),
+  };
+  panel._backupCleanupSelected = new Set(["old.bak"]);
+  panel._renderBackupCleanup();
+
+  const none = container.children[2].children[1];
+  none.on_click();
+  assert.equal(panel._backupCleanupSelected.size, 0);
+  const reset = container.children[2].children[0];
+  reset.on_click();
+  assert.deepEqual([...panel._backupCleanupSelected], ["old.bak"]);
 });
 
 test("Backup cleanup actions are distinct from restoration Apply", () => {

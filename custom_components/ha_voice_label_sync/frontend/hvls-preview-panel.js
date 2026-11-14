@@ -289,7 +289,16 @@ const HVLS_TRANSLATIONS = {
     backupShowRecent: "Afficher seulement les 10 dernières",
     backupCleanupPrepare: "Préparer le nettoyage des sauvegardes",
     backupCleanupReview: "Nettoyage proposé : conserver {keep} sauvegarde(s), supprimer {count} sauvegarde(s). Aucune suppression effectuée.",
-    backupCleanupNoop: "Aucune sauvegarde à supprimer.",
+    backupCleanupNoop: "Aucune sauvegarde sélectionnée pour suppression.",
+    backupCleanupPick: "Cochez les sauvegardes à supprimer ; décochez celles à conserver. Les 10 plus récentes sont conservées par défaut.",
+    backupCleanupSelection: "{count} à supprimer · {kept} à conserver",
+    backupCleanupSelectionTitle: "Choisir les sauvegardes à supprimer",
+    backupCleanupCheck: "Supprimer cette sauvegarde",
+    backupCleanupNone: "Tout décocher",
+    backupCleanupReset: "Reprendre la sélection proposée",
+    backupCleanupKeepOne: "Conservez au moins une sauvegarde.",
+    backupCleanupDeleteCount: "Supprimer les {count} sauvegardes sélectionnées",
+    backupCleanupDeleteOne: "Supprimer la sauvegarde sélectionnée",
     backupCleanupConfirmButton: "Confirmer le nettoyage",
     backupCleanupCancel: "Annuler le nettoyage",
     backupCleanupConfirm: "Supprimer définitivement les {count} sauvegardes affichées dans le plan ? Les {keep} plus récentes seront conservées. Cette action est irréversible.",
@@ -768,7 +777,16 @@ const HVLS_TRANSLATIONS = {
     backupShowRecent: "Show only the 10 most recent",
     backupCleanupPrepare: "Preview backup cleanup",
     backupCleanupReview: "Proposed cleanup: keep {keep} backups, delete {count} backups. No deletions performed.",
-    backupCleanupNoop: "No backups to delete.",
+    backupCleanupNoop: "No backups selected for deletion.",
+    backupCleanupPick: "Check the backups to delete; uncheck those to keep. The 10 newest are kept by default.",
+    backupCleanupSelection: "{count} to delete · {kept} to keep",
+    backupCleanupSelectionTitle: "Choose backups to delete",
+    backupCleanupCheck: "Delete this backup",
+    backupCleanupNone: "Uncheck all",
+    backupCleanupReset: "Restore suggested selection",
+    backupCleanupKeepOne: "Keep at least one backup.",
+    backupCleanupDeleteCount: "Delete {count} selected backups",
+    backupCleanupDeleteOne: "Delete the selected backup",
     backupCleanupConfirmButton: "Confirm cleanup",
     backupCleanupCancel: "Cancel cleanup",
     backupCleanupConfirm: "Permanently delete the {count} listed backups? The {keep} newest will be kept. This cannot be undone.",
@@ -3249,6 +3267,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     );
     this.querySelector("#backupCleanupCancel").addEventListener("click", () => {
       this._backupCleanupPlan = null;
+      this._backupCleanupSelected = null;
       this._renderBackupCleanup();
       const status = this.querySelector("#backupCleanupStatus");
       if (status) status.textContent = "";
@@ -3749,6 +3768,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._backupReview = null;
     this._backupList = null;
     this._backupCleanupPlan = null;
+    this._backupCleanupSelected = null;
     this._renderBackupCleanup();
     // Never leave a previous comparison visible without a current selection.
     this._renderBackupDiff();
@@ -3819,38 +3839,92 @@ entity_config: !include google_assistant_entities.yaml</pre>
 
   _renderBackupCleanup() {
     const plan = this._backupCleanupPlan;
+    const selected = this._backupCleanupSelected || new Set();
+    const entries = plan ? [...plan.kept, ...plan.to_delete] : [];
+    const count = entries.filter(item => selected.has(item.id)).length;
+    const kept = entries.length - count;
     const container = this.querySelector("#backupCleanupPreview");
     if (container) {
       container.replaceChildren();
       if (plan) {
-        const summary = document.createElement("p");
-        summary.textContent = plan.to_delete.length
-          ? this._tf("backupCleanupReview", {
-              keep: plan.kept.length, count: plan.to_delete.length,
-            })
+        const instruction = document.createElement("p");
+        instruction.className = "diagnostic-note";
+        instruction.textContent = this._t("backupCleanupPick");
+        container.appendChild(instruction);
+
+        const heading = document.createElement("p");
+        heading.textContent = count
+          ? this._tf("backupCleanupSelection", {count, kept})
           : this._t("backupCleanupNoop");
-        container.appendChild(summary);
-        if (plan.to_delete.length) {
-          const details = document.createElement("details");
-          details.open = true;
-          const heading = document.createElement("summary");
-          heading.textContent = `${plan.to_delete.length} · ${this._t("backupCleanupConfirmButton")}`;
-          details.appendChild(heading);
-          const entries = document.createElement("ul");
-          for (const item of plan.to_delete) {
-            const li = document.createElement("li");
-            const kind = item.kind === "auto" ? "backupTypeAuto"
-              : item.kind === "safety" ? "backupTypeSafety" : "backupTypeLegacy";
-            li.textContent = `${item.timestamp} · ${this._t(kind)} · ${this._tf("backupEntities", {count: item.entities_count})}`;
-            entries.appendChild(li);
-          }
-          details.appendChild(entries);
-          container.appendChild(details);
+        container.appendChild(heading);
+
+        const controls = document.createElement("div");
+        controls.className = "migration-controls";
+        const reset = document.createElement("button");
+        reset.type = "button";
+        reset.className = "secondary";
+        reset.textContent = this._t("backupCleanupReset");
+        reset.addEventListener("click", () => {
+          this._backupCleanupSelected = new Set(plan.to_delete.map(item => item.id));
+          this._renderBackupCleanup();
+        });
+        const none = document.createElement("button");
+        none.type = "button";
+        none.className = "secondary";
+        none.textContent = this._t("backupCleanupNone");
+        none.addEventListener("click", () => {
+          this._backupCleanupSelected = new Set();
+          this._renderBackupCleanup();
+        });
+        controls.append(reset, none);
+        container.appendChild(controls);
+
+        const details = document.createElement("details");
+        details.open = true;
+        const summary = document.createElement("summary");
+        summary.textContent = `${entries.length} · ${this._t("backupCleanupSelectionTitle")}`;
+        details.appendChild(summary);
+        const list = document.createElement("ul");
+        for (const item of entries) {
+          const li = document.createElement("li");
+          const label = document.createElement("label");
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = selected.has(item.id);
+          checkbox.setAttribute("aria-label",
+            `${this._t("backupCleanupCheck")} : ${item.timestamp || item.id}`);
+          checkbox.addEventListener("change", () => {
+            if (!this._backupCleanupPlan || this._backupLoading) return;
+            if (checkbox.checked) this._backupCleanupSelected.add(item.id);
+            else this._backupCleanupSelected.delete(item.id);
+            this._renderBackupCleanup();
+          });
+          const info = document.createElement("span");
+          const kind = item.kind === "auto" ? "backupTypeAuto"
+            : item.kind === "safety" ? "backupTypeSafety" : "backupTypeLegacy";
+          info.textContent = ` ${item.timestamp} · ${this._t(kind)} · ${this._tf("backupEntities", {count: item.entities_count})}`;
+          label.append(checkbox, info);
+          li.appendChild(label);
+          list.appendChild(li);
+        }
+        details.appendChild(list);
+        container.appendChild(details);
+        if (count === entries.length && entries.length > 0) {
+          const warning = document.createElement("p");
+          warning.textContent = this._t("backupCleanupKeepOne");
+          container.appendChild(warning);
         }
       }
     }
     const apply = this.querySelector("#backupCleanupApply");
-    if (apply) apply.hidden = !plan?.to_delete?.length;
+    if (apply) {
+      apply.hidden = !plan;
+      apply.disabled = !plan || count === 0 || count >= entries.length ||
+        this._backupLoading === true;
+      apply.textContent = count === 1
+        ? this._t("backupCleanupDeleteOne")
+        : this._tf("backupCleanupDeleteCount", {count});
+    }
     const cancel = this.querySelector("#backupCleanupCancel");
     if (cancel) cancel.hidden = !plan;
   }
@@ -3860,6 +3934,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
         this._restoring || this._stagedRestore) return;
     this._backupLoading = true;
     this._backupCleanupPlan = null;
+    this._backupCleanupSelected = null;
     this._renderBackupCleanup();
     const status = this.querySelector("#backupCleanupStatus");
     if (status) status.textContent = this._t("backupLoading");
@@ -3873,6 +3948,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
         throw new Error("Invalid cleanup Preview");
       }
       this._backupCleanupPlan = result;
+      this._backupCleanupSelected = new Set(
+        result.to_delete.map(item => item.id)
+      );
       this._renderBackupCleanup();
       if (status) status.textContent = "";
     } catch (error) {
@@ -3881,15 +3959,22 @@ entity_config: !include google_assistant_entities.yaml</pre>
       });
     } finally {
       this._backupLoading = false;
+      this._renderBackupCleanup();
     }
   }
 
   async _applyBackupCleanup() {
     const plan = this._backupCleanupPlan;
-    if (!plan?.to_delete?.length || !this._hass || this._backupLoading ||
+    if (!plan || !this._backupCleanupSelected ||
+        !this._hass || this._backupLoading ||
         this._applying || this._restoring || this._stagedRestore) return;
+    const entries = [...plan.kept, ...plan.to_delete];
+    const selected = [...this._backupCleanupSelected].sort();
+    const valid = new Set(entries.map(item => item.id));
+    if (!selected.length || selected.length >= entries.length ||
+        selected.some(id => !valid.has(id))) return;
     if (!window.confirm(this._tf("backupCleanupConfirm", {
-      count: plan.to_delete.length, keep: plan.kept.length,
+      count: selected.length, keep: entries.length - selected.length,
     }))) return;
     this._backupLoading = true;
     const status = this.querySelector("#backupCleanupStatus");
@@ -3898,12 +3983,14 @@ entity_config: !include google_assistant_entities.yaml</pre>
         type: "ha_voice_label_sync/apply_backup_cleanup",
         keep: plan.keep,
         evidence_sha256: plan.evidence_sha256,
+        delete_ids: selected,
         confirmed: true,
       });
-      if (!result || result.deleted_count !== plan.to_delete.length) {
+      if (!result || result.deleted_count !== selected.length) {
         throw new Error("Cleanup result did not match reviewed count");
       }
       this._backupCleanupPlan = null;
+      this._backupCleanupSelected = null;
       this._selectedBackup = null;
       this._backupReview = null;
       this._renderBackupCleanup();
@@ -3915,6 +4002,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       });
     } catch (error) {
       this._backupCleanupPlan = null;
+      this._backupCleanupSelected = null;
       this._renderBackupCleanup();
       if (status) status.textContent = this._tf("backupCleanupFailed", {
         error: error.message || String(error),

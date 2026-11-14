@@ -1068,3 +1068,105 @@ def test_backup_cleanup_rejects_invalid_limit(
         backup_module.preview_backup_cleanup(
             output, tmp_path / ".hvls" / "ownership.json", keep=keep
         )
+
+
+def test_backup_cleanup_custom_selection_keeps_excluded_old_backups(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    original = "switch.production:\n  expose: true\n"
+    output.write_text(original)
+    files = _create_cleanup_history(output)
+    ownership = tmp_path / ".hvls" / "ownership.json"
+    plan = backup_module.preview_backup_cleanup(output, ownership, keep=10)
+
+    # Default proposal deletes files 0 and 1. User instead selects
+    # file 0 (old) and file 11 (newest), keeping old file 1.
+    selected = [files[0].name, files[11].name]
+    result = backup_module.apply_backup_cleanup(
+        output, ownership, keep=10,
+        evidence_sha256=plan["evidence_sha256"], confirmed=True,
+        delete_ids=selected,
+    )
+    assert result == {"deleted_count": 2, "kept_count": 10}
+    assert not files[0].exists()
+    assert not files[11].exists()
+    assert files[1].exists()
+    assert output.read_text() == original
+
+
+def test_backup_cleanup_can_keep_more_than_retention_without_auto_prune(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.production:\n  expose: true\n")
+    files = _create_cleanup_history(output)
+    ownership = tmp_path / ".hvls" / "ownership.json"
+    plan = backup_module.preview_backup_cleanup(output, ownership, keep=10)
+    result = backup_module.apply_backup_cleanup(
+        output, ownership, keep=10,
+        evidence_sha256=plan["evidence_sha256"], confirmed=True,
+        delete_ids=[files[0].name],
+    )
+    assert result == {"deleted_count": 1, "kept_count": 11}
+    assert not files[0].exists()
+    assert all(path.exists() for path in files[1:])
+
+
+@pytest.mark.parametrize("selection", [
+    [],
+    ["not-a-real-backup.bak"],
+    ["not-a-real-backup.bak", "not-a-real-backup.bak"],
+    ["invalid.yaml", 3],
+    "not-a-list",
+])
+def test_backup_cleanup_rejects_invalid_selected_files_before_writing(
+    backup_module, tmp_path, selection,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.production:\n  expose: true\n")
+    files = _create_cleanup_history(output)
+    ownership = tmp_path / ".hvls" / "ownership.json"
+    plan = backup_module.preview_backup_cleanup(output, ownership, keep=10)
+    with pytest.raises(backup_module.BackupRestoreError):
+        backup_module.apply_backup_cleanup(
+            output, ownership, keep=10,
+            evidence_sha256=plan["evidence_sha256"], confirmed=True,
+            delete_ids=selection,
+        )
+    assert all(path.exists() for path in files)
+
+
+def test_backup_cleanup_cannot_delete_all_backups(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.production:\n  expose: true\n")
+    files = _create_cleanup_history(output)
+    ownership = tmp_path / ".hvls" / "ownership.json"
+    plan = backup_module.preview_backup_cleanup(output, ownership, keep=10)
+    with pytest.raises(backup_module.BackupRestoreError, match="At least one"):
+        backup_module.apply_backup_cleanup(
+            output, ownership, keep=10,
+            evidence_sha256=plan["evidence_sha256"], confirmed=True,
+            delete_ids=[path.name for path in files],
+        )
+    assert all(path.exists() for path in files)
+
+
+def test_backup_cleanup_stale_selection_never_deletes_anything(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.production:\n  expose: true\n")
+    files = _create_cleanup_history(output)
+    ownership = tmp_path / ".hvls" / "ownership.json"
+    plan = backup_module.preview_backup_cleanup(output, ownership, keep=10)
+    files[7].write_text("switch.changed:\n  expose: true\n")
+    with pytest.raises(backup_module.BackupRestoreError, match="changed"):
+        backup_module.apply_backup_cleanup(
+            output, ownership, keep=10,
+            evidence_sha256=plan["evidence_sha256"], confirmed=True,
+            delete_ids=[files[0].name, files[10].name],
+        )
+    assert all(path.exists() for path in files)
