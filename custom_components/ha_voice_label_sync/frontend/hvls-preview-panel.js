@@ -1307,6 +1307,9 @@ class HVLSPreviewPanel extends HTMLElement {
       if (loadId !== this._loadId || (this._applying && !afterApply)) return;
       this._previewPath = result.path;
       this._previewContent = result.content;
+      // The setup choice is guidance only; it never authorizes a write.
+      this._onboardingMode = ["new", "existing"].includes(result.onboarding_mode)
+        ? result.onboarding_mode : null;
       const validHash = value =>
         typeof value === "string" &&
         /^[0-9a-f]{64}$/.test(value);
@@ -5357,6 +5360,13 @@ entity_config: !include google_assistant_entities.yaml</pre>
       }
     }
     guide.hidden = !relevant;
+    if (relevant && !this._migrationIntent && !this._onboardingChoiceApplied &&
+        ["new", "existing"].includes(this._onboardingMode) && !packages) {
+      // Carry the initial installer choice forward rather than asking again.
+      // The user can still choose a different path explicitly at any time.
+      this._migrationIntent = this._onboardingMode;
+      this._onboardingChoiceApplied = true;
+    }
     if (!relevant) {
       this._migrationIntent = null;
       this._assistantFileReport = null;
