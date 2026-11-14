@@ -69,3 +69,30 @@ def test_diagnostic_is_localized_and_escapes_markdown():
     assert "Source file" in english
     assert r"test\*file.yaml" in french
     assert "Aucune adoption automatique" in french
+
+
+def test_diagnostic_has_real_markdown_paragraphs_not_literal_backslashes():
+    item = report(output="existing", review=True)
+    french = module.render_initial_setup_diagnostic(item, "fr")
+    english = module.render_initial_setup_diagnostic(item, "en")
+
+    assert french.startswith("### Diagnostic initial HVLS\n\n")
+    assert "Source Google Assistant" in french
+    assert "Aucune source Google Assistant identifiée" in french
+    assert "Fichier YAML HVLS" in french
+    assert "Fichier existant détecté" in french
+    assert "Vous pouvez installer HVLS" in french
+    assert "Assistant HVLS" in french
+    assert "\\n" not in french
+    assert "\\n" not in english
+    assert "\n\n" in french
+    assert english.startswith("### HVLS initial diagnostic\n\n")
+
+
+def test_diagnostic_escapes_actual_linebreaks_in_source_path():
+    item = report(output="existing", source_match=True, review=True)
+    item["source_path"] = "/config/nottrusted.yaml\nINJECTED *headline*"
+    rendered = module.render_initial_setup_diagnostic(item, "fr")
+    assert "nottrusted.yaml INJECTED" in rendered
+    assert "nottrusted.yaml\nINJECTED" not in rendered
+    assert r"\*headline\*" in rendered
