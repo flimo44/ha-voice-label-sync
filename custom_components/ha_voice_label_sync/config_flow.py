@@ -106,16 +106,21 @@ class HVLSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             DEFAULT_OUTPUT,
         )
         existing = report["output_status"] == "existing"
+        french = str(getattr(self.hass.config, "language", "en")).lower().startswith("fr")
+        if french:
+            hint = (
+                "Un fichier YAML existe déjà ; il restera intact."
+                if existing else "Aucun fichier YAML HVLS habituel détecté."
+            )
+        else:
+            hint = (
+                "An existing YAML file was found; it will remain unchanged."
+                if existing else "No standard HVLS YAML file was detected."
+            )
         return self.async_show_menu(
             step_id="user",
             menu_options=["new", "existing"],
-            description_placeholders={
-                "detected_file": (
-                    "Un fichier YAML existe déjà ; il restera intact."
-                    if existing else
-                    "Aucun fichier YAML HVLS habituel détecté."
-                ),
-            },
+            description_placeholders={"detected_file": hint},
         )
 
     async def async_step_new(
