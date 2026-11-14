@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hmac
+import json
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -17,7 +19,7 @@ from hvls import (
     WorkflowError,
     run_google_assistant_workflow,
 )
-from hvls.owned_writer import evaluate_registered_output
+from hvls.owned_writer import evaluate_registered_output, write_owned_output
 
 from .backup_restore import (
     BackupRestoreError,
@@ -25,6 +27,7 @@ from .backup_restore import (
     complete_preview_restoration,
     list_backups,
     prepare_backup_preview,
+    prepare_manual_label_preview,
     preview_backup_cleanup,
     resolve_restored_output,
     restore_reviewed_backup,
@@ -49,7 +52,7 @@ from .preview_apply import apply_reviewed_preview
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_exclusions import analyze_exclusions
 from .preview_guard import PreviewChangedError, preview_digest
-from .restore_guard import assert_not_guarded, read_guard
+from .restore_guard import assert_not_guarded, create_guard, read_guard
 from .services import DEFAULT_DOMAINS, async_run_workflow
 from .workflow_lock import get_workflow_lock
 
@@ -1498,6 +1501,226 @@ async def websocket_set_entity_label(
 
 
 
+WS_TYPE_PREPARE_MANUAL_LABEL_PREVIEW = f"{DOMAIN}/prepare_manual_label_preview"
+WS_TYPE_APPLY_MANUAL_LABEL_PREVIEW = f"{DOMAIN}/apply_manual_label_preview"
+_MANUAL_LABEL_CHANGES_SCHEMA = [{
+    vol.Required("entity_id"): str, vol.Required("enabled"): bool,
+}]
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_PREPARE_MANUAL_LABEL_PREVIEW,
+    vol.Required("changes"): _MANUAL_LABEL_CHANGES_SCHEMA,
+})
+async def websocket_prepare_manual_label_preview(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Plan the YAML and HA-label changes without modifying either one."""
+    async with get_workflow_lock(hass):
+        try:
+            entries = hass.config_entries.async_entries(DOMAIN)
+            if len(entries) != 1:
+                raise BackupRestoreError("HVLS installation unavailable.")
+            entry = entries[0]
+            output = _configured_output(hass)
+            guard_path = Path(hass.config.path(".hvls", "ownership.json"))
+            assert_not_guarded(guard_path, entry.entry_id, output)
+            owner = await hass.async_add_executor_job(
+                evaluate_registered_output, output, entry.entry_id, guard_path
+            )
+            if not owner.write_allowed or owner.status not in {"new", "managed"}:
+                raise BackupRestoreError(
+                    "Production ownership is not verified; labels unchanged."
+                )
+            settings = {**entry.data, **entry.options}
+            label = settings.get(CONF_LABEL, DEFAULT_LABEL)
+            snapshot = get_live_registries(hass)
+            catalog = build_entity_catalog(snapshot, label, DEFAULT_DOMAINS)
+            result = await hass.async_add_executor_job(
+                prepare_manual_label_preview,
+                output, catalog, snapshot, label, DEFAULT_DOMAINS,
+                msg["changes"],
+            )
+        except (
+            BackupRestoreError, FileWriterError, LabelUpdateError,
+            RegistryError, WorkflowError, PreviewFormatError,
+            OSError, ValueError, TypeError, KeyError, AttributeError,
+        ) as exc:
+            connection.send_error(
+                msg["id"], "manual_label_preview_failed", str(exc)
+            )
+            return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.async_response
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TYPE_APPLY_MANUAL_LABEL_PREVIEW,
+    vol.Required("changes"): _MANUAL_LABEL_CHANGES_SCHEMA,
+    vol.Required("preview_sha256"): str,
+    vol.Required("production_sha256"): vol.Any(None, str),
+    vol.Required("label_plan_sha256"): str,
+})
+async def websocket_apply_manual_label_preview(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Write the reviewed YAML and HA labels as one guarded workflow.
+
+    A durable restore/reconciliation hold is installed BEFORE the first
+    output or label write, so interruptions cannot silently unlock Apply.
+    """
+    async with get_workflow_lock(hass):
+        try:
+            entries = hass.config_entries.async_entries(DOMAIN)
+            if len(entries) != 1:
+                raise BackupRestoreError("HVLS installation unavailable.")
+            entry = entries[0]
+            settings = {**entry.data, **entry.options}
+            output = _configured_output(hass)
+            ownership_path = Path(hass.config.path(".hvls", "ownership.json"))
+            label = settings.get(CONF_LABEL, DEFAULT_LABEL)
+            assert_not_guarded(ownership_path, entry.entry_id, output)
+            ownership = await hass.async_add_executor_job(
+                evaluate_registered_output, output, entry.entry_id,
+                ownership_path,
+            )
+            if not ownership.write_allowed or ownership.status not in {
+                "new", "managed",
+            }:
+                raise BackupRestoreError(
+                    "Production ownership is not verified; labels unchanged."
+                )
+
+            registries = get_live_registries(hass)
+            catalog = build_entity_catalog(registries, label, DEFAULT_DOMAINS)
+            plan = await hass.async_add_executor_job(
+                prepare_manual_label_preview,
+                output, catalog, registries, label, DEFAULT_DOMAINS,
+                msg["changes"],
+            )
+            if (
+                plan["production_sha256"] != msg["production_sha256"]
+                or not isinstance(msg["preview_sha256"], str)
+                or not isinstance(msg["label_plan_sha256"], str)
+                or not hmac.compare_digest(
+                    plan["preview_sha256"], msg["preview_sha256"]
+                )
+                or not hmac.compare_digest(
+                    plan["label_plan_sha256"], msg["label_plan_sha256"]
+                )
+            ):
+                raise PreviewChangedError(
+                    "Manual label Preview is stale; review again."
+                )
+            # Store the approved state before the first filesystem write.
+            # Even a failed/partial label operation must remain protected.
+            await hass.async_add_executor_job(
+                partial(
+                    create_guard,
+                    ownership_path,
+                    entry_id=entry.entry_id,
+                    output_path=output,
+                    backup_id="manual_label_preview",
+                    original_sha256=(
+                        plan["production_sha256"] or preview_digest("")
+                    ),
+                    restored_sha256=plan["preview_sha256"],
+                )
+            )
+            write_result = await hass.async_add_executor_job(
+                partial(
+                    write_owned_output,
+                    output_path=output,
+                    content=plan["content"],
+                    entry_id=entry.entry_id,
+                    ownership_registry_path=ownership_path,
+                    backup_directory=output.parent / ".hvls_backups",
+                    retention=int(settings.get(
+                        CONF_BACKUP_RETENTION, DEFAULT_BACKUP_RETENTION,
+                    )),
+                    create_backup_enabled=settings.get(
+                        CONF_CREATE_BACKUP, DEFAULT_CREATE_BACKUP,
+                    ),
+                    restore_mode=ownership.status == "managed",
+                )
+            )
+            # The native entity registry must still match the exact snapshot
+            # approved by the operator before mutating the first HA label.
+            current = get_live_registries(hass)
+            current_sha = preview_digest(json.dumps(
+                current, sort_keys=True, ensure_ascii=False,
+            ))
+            if current_sha != plan["projection"]["snapshot_sha256"]:
+                raise PreviewChangedError(
+                    "Home Assistant registries changed during Apply; "
+                    "a reconciliation is required."
+                )
+            # No await between consecutive native registry mutations.
+            for entity_id in plan["label_plan"]["add"]:
+                update_entity_label(
+                    hass, entity_id, label, True, False
+                )
+            for entity_id in plan["label_plan"]["remove"]:
+                update_entity_label(
+                    hass, entity_id, label, False, True
+                )
+            actual = get_live_registries(hass)
+            request = GenerationRequest(
+                label=label, domains=DEFAULT_DOMAINS,
+                output_path=output, dry_run=True,
+            )
+            actual_result = await hass.async_add_executor_job(
+                partial(
+                    run_google_assistant_workflow,
+                    request=request, registries=actual,
+                )
+            )
+            comparison = analyze_preview(
+                actual_result.generation.content, plan["content"]
+            )["comparison"]
+            if comparison["status"] != "ok" or (
+                comparison["identical_entities"] is not True
+            ):
+                raise BackupRestoreError(
+                    "HA labels do not reproduce the confirmed YAML; "
+                    "reconciliation is required."
+                )
+            await hass.async_add_executor_job(
+                partial(
+                    complete_preview_restoration,
+                    output, ownership_path,
+                    entry_id=entry.entry_id,
+                    backup_sha256=plan["preview_sha256"],
+                )
+            )
+        except (
+            BackupRestoreError, PreviewChangedError, FileWriterError,
+            LabelUpdateError, RegistryError, WorkflowError, PreviewFormatError,
+            OSError, ValueError, TypeError, KeyError, AttributeError,
+        ) as exc:
+            connection.send_error(
+                msg["id"], "manual_label_apply_failed", str(exc)
+            )
+            return
+    connection.send_result(msg["id"], {
+        "applied": True, "reconciled": True,
+        "label_additions": len(plan["label_plan"]["add"]),
+        "label_removals": len(plan["label_plan"]["remove"]),
+        "yaml_entities": plan["summary"]["total"],
+        "safety_backup": (
+            write_result.backup_path.name
+            if write_result.backup_path else None
+        ),
+    })
+
+
 WS_TYPE_LIST_BACKUPS = f"{DOMAIN}/list_backups"
 WS_TYPE_PREVIEW_BACKUP_CLEANUP = f"{DOMAIN}/preview_backup_cleanup"
 WS_TYPE_APPLY_BACKUP_CLEANUP = f"{DOMAIN}/apply_backup_cleanup"
@@ -2046,6 +2269,12 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_attest_migration_review)
     websocket_api.async_register_command(hass, websocket_get_entities)
     websocket_api.async_register_command(hass, websocket_set_entity_label)
+    websocket_api.async_register_command(
+        hass, websocket_prepare_manual_label_preview
+    )
+    websocket_api.async_register_command(
+        hass, websocket_apply_manual_label_preview
+    )
     websocket_api.async_register_command(hass, websocket_apply_preview)
     websocket_api.async_register_command(hass, websocket_generate_preview)
     websocket_api.async_register_command(hass, websocket_list_backups)
