@@ -12,7 +12,7 @@
       },
       "new": {
         "title": "Créer une nouvelle configuration",
-        "description": "Choisissez le fichier que HVLS générera après votre validation. Un fichier existant n'est jamais écrasé pendant l'installation.\n\n{diagnostic}",
+        "description": "HVLS créera un nouveau fichier uniquement après votre validation dans le Preview. Après installation, ouvrez **HA Voice Label Sync** dans le menu latéral : la sélection des entités s’ouvrira directement.\n\n{diagnostic}",
         "data": {
           "backend": "Assistant vocal",
           "label": "Étiquette Home Assistant",
@@ -30,7 +30,7 @@
       },
       "existing": {
         "title": "Reprendre une configuration existante",
-        "description": "Choisissez votre fichier YAML existant. Il sera conservé sans modification ; après installation, l'Assistant HVLS vous guidera pour l'examiner avant toute action.\n\n{diagnostic}",
+        "description": "Votre YAML existant sera conservé sans modification. Après « Valider », terminez les écrans standards de Home Assistant (« Nommer et attribuer »), puis ouvrez **HA Voice Label Sync** dans le menu latéral : le panneau vous guidera directement dans l’Assistant.\n\n{diagnostic}",
         "data": {
           "backend": "Assistant vocal",
           "label": "Étiquette Home Assistant",
