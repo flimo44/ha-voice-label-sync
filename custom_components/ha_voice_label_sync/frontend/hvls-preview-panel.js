@@ -3920,7 +3920,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     if (apply) {
       apply.hidden = !plan;
       apply.disabled = !plan || count === 0 || count >= entries.length ||
-        this._backupLoading;
+        this._backupLoading === true;
       apply.textContent = count === 1
         ? this._t("backupCleanupDeleteOne")
         : this._tf("backupCleanupDeleteCount", {count});
