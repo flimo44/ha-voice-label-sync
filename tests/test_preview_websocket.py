@@ -771,9 +771,10 @@ def test_readonly_preview_keeps_production_statistics_separate_from_proposal(
 
     output = tmp_path / "google_assistant_entities.yaml"
     preview = tmp_path / "preview.yaml"
-    yaml_entities = lambda count: "".join(
-        f"switch.test_{index}:\\n  expose: true\\n" for index in range(count)
-    )
+    def yaml_entities(count):
+        return "".join(
+            f"switch.test_{index}:\n  expose: true\n" for index in range(count)
+        )
     output.write_text(yaml_entities(production_count), encoding="utf-8")
     preview.write_text(yaml_entities(preview_count), encoding="utf-8")
 
@@ -803,7 +804,7 @@ def test_production_statistics_survive_missing_or_invalid_preview(
     ws.PreviewFormatError = real_compare.PreviewFormatError
     output = tmp_path / "google_assistant_entities.yaml"
     preview = tmp_path / "preview.yaml"
-    output.write_text("switch.real:\\n  expose: true\\n", encoding="utf-8")
+    output.write_text("switch.real:\n  expose: true\n", encoding="utf-8")
     first = ws._read_and_compare_real(preview, output)
     assert first["available"] is False
     assert first["production_summary"]["total"] == 1
@@ -830,7 +831,7 @@ def test_invalid_or_missing_production_never_uses_preview_as_statistics(
     ws.PreviewFormatError = real_compare.PreviewFormatError
     output = tmp_path / "google_assistant_entities.yaml"
     preview = tmp_path / "preview.yaml"
-    preview.write_text("switch.preview:\\n  expose: true\\n", encoding="utf-8")
+    preview.write_text("switch.preview:\n  expose: true\n", encoding="utf-8")
     absent = ws._read_and_compare_real(preview, output)
     assert absent["summary"]["total"] == 1
     assert absent["production_summary"] is None
