@@ -407,6 +407,24 @@ test("Failed generation invalidates previously approved Preview", async () => {
 });
 
 
+function manualStage(changes) {
+  const added = changes.filter(x => x.enabled).map(x => x.entity_id);
+  const removed = changes.filter(x => !x.enabled).map(x => x.entity_id);
+  return {
+    mode: "label_preview", available: true,
+    content: "switch.a:\\n  expose: true\\n",
+    path: "Proposition HVLS",
+    preview_sha256: "b".repeat(64),
+    production_sha256: "a".repeat(64),
+    label_plan_sha256: "c".repeat(64),
+    label_plan: {add: added, remove: removed, review: []},
+    changes,
+    projection: {ready: true},
+    comparison: {status: "ok", identical_entities: false,
+      added, removed, modified: []},
+  };
+}
+
 test("Ineligible unlabelled entity cannot be added from the panel", async () => {
   const calls = [];
   const { panel } = makePanel(async message => {
@@ -422,24 +440,25 @@ test("Ineligible unlabelled entity cannot be added from the panel", async () => 
   assert.equal(calls.length, 0);
 });
 
-test("Ineligible previously labelled entity can be cleaned up", async () => {
+test("Ineligible previously labelled entity can be staged for removal", async () => {
   const calls = [];
-  const { panel } = makePanel(async message => {
-    calls.push(message);
-    return { entity_id: message.entity_id, has_label: false };
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request);
+    return manualStage(request.changes);
   });
-  const checkbox = { checked: false, disabled: false, dataset: { ineligible: "false" } };
-  panel.querySelectorAll = () => [checkbox];
-  panel._loadEntities = async () => true;
-  panel._generatePreview = async () => {};
+  panel._activateTab = () => {};
+  const checkbox = {checked: false};
   await panel._setEntityLabel(
-    { entity_id: "sensor.legacy", name: "Legacy", has_label: true, eligible: false },
+    {entity_id: "sensor.legacy", name: "Legacy",
+      has_label: true, eligible: false},
     checkbox
   );
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].enabled, false);
-  assert.equal(calls[0].expected_enabled, true);
-  assert.equal(checkbox.disabled, false);
+  assert.equal(calls[0].type, "ha_voice_label_sync/prepare_manual_label_preview");
+  assert.equal(calls[0].changes[0].enabled, false);
+  assert.equal(controls.apply.disabled, false);
+  assert.equal(panel._manualLabelChanges.get("sensor.legacy"), false);
+  assert.equal(panel._stagedRestore.mode, "label_preview");
 });
 
 test("Mobile menu follows the native Home Assistant narrow property", () => {
@@ -557,60 +576,57 @@ test("Global refresh is an accessible compact icon action", () => {
   assert.match(source, /this\._refreshAll\(\)/);
 });
 
-test("Label change regenerates Preview after registry reload without production Apply", async () => {
+test("Entity label click stages YAML and HA labels without writing either one", async () => {
   const calls = [];
-  const { panel, controls } = makePanel(async message => {
-    calls.push(message.type);
-    if (message.type === "ha_voice_label_sync/set_entity_label") {
-      assert.equal(controls.apply.disabled, true);
-      return { entity_id: message.entity_id, has_label: message.enabled };
-    }
-    if (message.type === "ha_voice_label_sync/generate_preview")
-      return { generated: true, entity_count: 41 };
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request.type);
+    if (request.type === "ha_voice_label_sync/prepare_manual_label_preview")
+      return manualStage(request.changes);
     return preview(true);
   });
-  const checkbox = { checked: true, disabled: false, dataset: { ineligible: "false" } };
-  panel.querySelectorAll = () => [checkbox];
-  panel._loadEntities = async () => { calls.push("reloaded_entities"); return true; };
+  panel._activateTab = tab => {panel.openedTab = tab;};
+  const checkbox = {checked: true};
   await panel._loadPreview();
   await panel._setEntityLabel(
-    { entity_id: "light.salon", name: "Salon", has_label: false, eligible: true },
+    {entity_id: "light.salon", name: "Salon", has_label: false, eligible: true},
     checkbox
   );
   assert.deepEqual(calls, [
     "ha_voice_label_sync/get_preview",
-    "ha_voice_label_sync/set_entity_label",
-    "reloaded_entities",
-    "ha_voice_label_sync/generate_preview",
-    "ha_voice_label_sync/get_preview",
+    "ha_voice_label_sync/prepare_manual_label_preview",
   ]);
-  assert.equal(calls.includes("ha_voice_label_sync/apply_preview"), false);
+  assert.equal(panel._stagedRestore.mode, "label_preview");
+  assert.equal(panel.openedTab, "preview");
+  assert.equal(panel._manualLabelChanges.get("light.salon"), true);
   assert.equal(controls.apply.disabled, false);
+  assert.equal(calls.includes("ha_voice_label_sync/set_entity_label"), false);
+  assert.equal(calls.includes("ha_voice_label_sync/apply_preview"), false);
 });
 
-test("Failed label write invalidates previous Preview approval", async () => {
+test("Failed label preparation rejects old approval and never writes HA", async () => {
   const calls = [];
-  const { panel, controls } = makePanel(async message => {
-    calls.push(message.type);
-    if (message.type === "ha_voice_label_sync/set_entity_label")
-      throw new Error("Write failed");
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request.type);
+    if (request.type === "ha_voice_label_sync/prepare_manual_label_preview")
+      throw new Error("Planning failed");
     return preview(true);
   });
-  const checkbox = { checked: false, disabled: false, dataset: { ineligible: "false" } };
-  panel.querySelectorAll = () => [checkbox];
-  panel._loadEntities = async () => true;
+  panel._activateTab = () => {};
+  const checkbox = {checked: true};
   await panel._loadPreview();
   assert.equal(controls.apply.disabled, false);
-  panel._generatePreview = () => { throw new Error("Must not regenerate"); };
   await panel._setEntityLabel(
-    { entity_id: "light.salon", name: "Salon", has_label: false, eligible: true },
+    {entity_id: "light.salon", name: "Salon", has_label: false, eligible: true},
     checkbox
   );
   assert.equal(controls.apply.disabled, true);
   assert.equal(panel._review, null);
+  assert.equal(panel._stagedRestore, null);
+  assert.equal(checkbox.checked, false);
   assert.deepEqual(calls, [
     "ha_voice_label_sync/get_preview",
-    "ha_voice_label_sync/set_entity_label",
+    "ha_voice_label_sync/prepare_manual_label_preview",
+    "ha_voice_label_sync/get_preview",
   ]);
 });
 
