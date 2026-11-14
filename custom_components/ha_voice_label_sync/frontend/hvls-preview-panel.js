@@ -1356,6 +1356,7 @@ class HVLSPreviewPanel extends HTMLElement {
         staged.comparison?.status === "ok" &&
         (
           staged.comparison?.identical_entities === false ||
+          staged.comparison?.identical_text === false ||
           (staged.label_plan?.add?.length || 0) > 0 ||
           (staged.label_plan?.remove?.length || 0) > 0
         ) &&
@@ -1534,7 +1535,7 @@ class HVLSPreviewPanel extends HTMLElement {
       this._previewContent = result.content;
       this._previewPath = result.path;
       this._applyBlockReason =
-        result.comparison.identical_entities &&
+        result.comparison.identical_text === true &&
         !(result.label_plan.add?.length || result.label_plan.remove?.length)
           ? this._t("applyNoChanges")
           : this._t("backupPreviewNotExecutable");
@@ -1562,7 +1563,7 @@ class HVLSPreviewPanel extends HTMLElement {
         this._refreshing || this._generating || this._entityWritePending ||
         staged.projection?.ready !== true ||
         staged.label_plan?.review?.length !== 0 ||
-        (staged.comparison?.identical_entities === true &&
+        (staged.comparison?.identical_text === true &&
           !(staged.label_plan?.add?.length || staged.label_plan?.remove?.length)) ||
         !/^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "")) return;
     if (!window.confirm(this._t("backupPreviewConfirm"))) return;
@@ -4090,7 +4091,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._previewContent = result.content;
       this._previewPath = result.path;
       this._applyBlockReason =
-        result.comparison.identical_entities &&
+        result.comparison.identical_text === true &&
         !(result.label_plan.add?.length || result.label_plan.remove?.length)
           ? this._t("applyNoChanges")
           : this._t("backupPreviewNotExecutable");
