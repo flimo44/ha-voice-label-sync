@@ -764,6 +764,7 @@ async def websocket_prepare_existing_output_takeover(
                 registry_path=Path(hass.config.path(".hvls", "ownership.json")),
                 entry_id=entries[0].entry_id,
                 selected_relative_path=msg["path"],
+                active_entry_ids=frozenset(e.entry_id for e in entries),
             )
         )
     except Exception:
@@ -783,6 +784,8 @@ async def websocket_prepare_existing_output_takeover(
     vol.Required("production_sha256"): str,
     vol.Required("preview_sha256"): str,
     vol.Required("confirmed"): bool,
+    vol.Optional("previous_entry_id"): vol.Any(None, str),
+    vol.Optional("ownership_revision"): vol.Any(None, int),
 })
 async def websocket_confirm_existing_output_takeover(
     hass: HomeAssistant,
@@ -809,6 +812,9 @@ async def websocket_confirm_existing_output_takeover(
                     production_sha256=msg["production_sha256"],
                     preview_sha256=msg["preview_sha256"],
                     confirmed=msg["confirmed"],
+                    previous_entry_id=msg.get("previous_entry_id"),
+                    ownership_revision=msg.get("ownership_revision"),
+                    active_entry_ids=frozenset(e.entry_id for e in entries),
                 )
             )
         except Exception:
