@@ -1589,6 +1589,7 @@ async def websocket_preview_backup_cleanup(
     vol.Required("keep"): int,
     vol.Required("evidence_sha256"): str,
     vol.Required("confirmed"): bool,
+    vol.Optional("delete_ids"): [str],
 })
 async def websocket_apply_backup_cleanup(
     hass: HomeAssistant,
@@ -1617,6 +1618,7 @@ async def websocket_apply_backup_cleanup(
                     keep=msg["keep"],
                     evidence_sha256=msg["evidence_sha256"],
                     confirmed=msg["confirmed"],
+                    delete_ids=msg.get("delete_ids"),
                 )
             )
         except (BackupRestoreError, FileWriterError, OSError, ValueError,
