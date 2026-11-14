@@ -934,3 +934,137 @@ def test_reconciliation_rejects_forged_or_stale_preview(
             generated_content="switch.different:\n  expose: true\n",
             resolution="keep_restored", confirmed=True,
         )
+
+
+def _create_cleanup_history(output, count=12):
+    directory = output.parent / ".hvls_backups"
+    directory.mkdir(exist_ok=True)
+    kinds = ("auto", "safety", "")
+    files = []
+    for idx in range(count):
+        suffix = f".{kinds[idx % 3]}" if kinds[idx % 3] else ""
+        path = directory / (
+            f"{output.name}.20261114-0000{idx:02d}{suffix}.bak"
+        )
+        path.write_text(
+            f"switch.test_{idx}:\n  expose: true\n", encoding="utf-8"
+        )
+        files.append(path)
+    return files
+
+
+def test_backup_list_reports_types_and_cleanup_never_runs_on_listing(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.production:\n  expose: true\n")
+    files = _create_cleanup_history(output)
+    items = backup_module.list_backups(output)["backups"]
+    assert len(items) == 12
+    assert {item["kind"] for item in items} == {"auto", "safety", "legacy"}
+    assert all(path.exists() for path in files)
+
+
+def test_backup_cleanup_is_explicit_and_keeps_ten_latest_across_types(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.production:\n  expose: true\n")
+    files = _create_cleanup_history(output)
+    ownership = tmp_path / ".hvls" / "ownership.json"
+    original = output.read_bytes()
+    plan = backup_module.preview_backup_cleanup(
+        output, ownership, keep=10
+    )
+    assert plan["total"] == 12
+    assert len(plan["kept"]) == 10
+    assert len(plan["to_delete"]) == 2
+    assert {entry["kind"] for entry in plan["to_delete"]} == {
+        "auto", "safety"
+    }
+    assert all(path.exists() for path in files)
+    with pytest.raises(backup_module.BackupRestoreError, match="approval"):
+        backup_module.apply_backup_cleanup(
+            output, ownership, keep=10,
+            evidence_sha256=plan["evidence_sha256"], confirmed=False,
+        )
+    result = backup_module.apply_backup_cleanup(
+        output, ownership, keep=10,
+        evidence_sha256=plan["evidence_sha256"], confirmed=True,
+    )
+    assert result == {"deleted_count": 2, "kept_count": 10}
+    assert len(backup_module.list_backups(output)["backups"]) == 10
+    assert output.read_bytes() == original
+    assert not files[0].exists() and not files[1].exists()
+    assert all(path.exists() for path in files[2:])
+
+
+def test_backup_cleanup_rejects_stale_plan_without_deleting(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.production:\n  expose: true\n")
+    files = _create_cleanup_history(output)
+    ownership = tmp_path / ".hvls" / "ownership.json"
+    plan = backup_module.preview_backup_cleanup(output, ownership, keep=10)
+    files[5].write_text("switch.changed:\n  expose: true\n")
+    with pytest.raises(backup_module.BackupRestoreError, match="changed"):
+        backup_module.apply_backup_cleanup(
+            output, ownership, keep=10,
+            evidence_sha256=plan["evidence_sha256"], confirmed=True,
+        )
+    assert all(path.exists() for path in files)
+
+
+def test_backup_cleanup_refuses_pending_reconciliation(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.production:\n  expose: true\n")
+    files = _create_cleanup_history(output)
+    ownership = tmp_path / ".hvls" / "ownership.json"
+    ownership.parent.mkdir()
+    backup_module.create_guard(
+        ownership, entry_id="test-installation", output_path=output,
+        backup_id=files[0].name,
+        original_sha256="a" * 64, restored_sha256="b" * 64,
+    )
+    with pytest.raises(backup_module.BackupRestoreError, match="reconciliation"):
+        backup_module.preview_backup_cleanup(output, ownership, keep=10)
+    assert all(path.exists() for path in files)
+
+
+def test_backup_cleanup_never_targets_unrecognized_or_corrupt_backups(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.production:\n  expose: true\n")
+    files = _create_cleanup_history(output)
+    extra = output.parent / ".hvls_backups" / "other.yaml.20261114-000000.auto.bak"
+    extra.write_text("switch.other:\n  expose: true\n")
+    bad = output.parent / ".hvls_backups" / (
+        f"{output.name}.20261114-020000.safety.bak"
+    )
+    bad.write_text("bad: [")
+    ownership = tmp_path / ".hvls" / "ownership.json"
+    plan = backup_module.preview_backup_cleanup(output, ownership, keep=10)
+    assert len(plan["to_delete"]) == 2
+    backup_module.apply_backup_cleanup(
+        output, ownership, keep=10,
+        evidence_sha256=plan["evidence_sha256"], confirmed=True,
+    )
+    assert extra.exists() and bad.exists()
+    assert len([path for path in files if path.exists()]) == 10
+
+
+@pytest.mark.parametrize("keep", [0, -1, True, 101, 1.5, "10"])
+def test_backup_cleanup_rejects_invalid_limit(
+    backup_module, tmp_path, keep,
+):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.production:\n  expose: true\n")
+    _create_cleanup_history(output)
+    with pytest.raises(backup_module.BackupRestoreError, match="limit"):
+        backup_module.preview_backup_cleanup(
+            output, tmp_path / ".hvls" / "ownership.json", keep=keep
+        )

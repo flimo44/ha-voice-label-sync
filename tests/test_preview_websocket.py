@@ -164,6 +164,8 @@ def websocket_module(monkeypatch):
     backup_module = ModuleType(f"{prefix}.backup_restore")
     backup_module.BackupRestoreError = type("BackupRestoreError", (ValueError,), {})
     backup_module.list_backups = Mock(return_value={"backups": []})
+    backup_module.preview_backup_cleanup = Mock()
+    backup_module.apply_backup_cleanup = Mock()
     backup_module.review_backup = Mock()
     backup_module.prepare_backup_preview = Mock()
     backup_module.complete_preview_restoration = Mock()
