@@ -341,6 +341,49 @@ def test_restore_creates_mandatory_safety_copy(backup_module, sample):
     assert safety.name != backup_id
 
 
+def test_verified_restore_completion_clears_only_matching_guard(
+    backup_module, sample,
+):
+    output, backup_id, backup = sample
+    make_owned(output)
+    review = backup_module.review_backup(output, backup_id)
+    restore(
+        backup_module, output, backup_id,
+        review["backup_sha256"], review["production_sha256"],
+    )
+    ownership = output.parent / ".hvls" / "ownership.json"
+    guard_file = backup_module._guard.guard_path(ownership)
+    assert guard_file.exists()
+
+    result = backup_module.complete_preview_restoration(
+        output, ownership, entry_id="test-installation",
+        backup_sha256=review["backup_sha256"],
+    )
+    assert result["reconciled"] is True
+    assert output.read_bytes() == backup.read_bytes()
+    assert not guard_file.exists()
+
+
+def test_restore_completion_refuses_stale_hash_and_keeps_hold(
+    backup_module, sample,
+):
+    output, backup_id, _ = sample
+    make_owned(output)
+    review = backup_module.review_backup(output, backup_id)
+    restore(
+        backup_module, output, backup_id,
+        review["backup_sha256"], review["production_sha256"],
+    )
+    ownership = output.parent / ".hvls" / "ownership.json"
+    guard_file = backup_module._guard.guard_path(ownership)
+    with pytest.raises(backup_module.BackupRestoreError, match="guard"):
+        backup_module.complete_preview_restoration(
+            output, ownership, entry_id="test-installation",
+            backup_sha256="0" * 64,
+        )
+    assert guard_file.exists()
+
+
 def test_changed_production_refused(backup_module, sample):
     output, backup_id, _ = sample
     review = backup_module.review_backup(output, backup_id)
