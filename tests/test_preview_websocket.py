@@ -168,6 +168,7 @@ def websocket_module(monkeypatch):
     backup_module.apply_backup_cleanup = Mock()
     backup_module.review_backup = Mock()
     backup_module.prepare_backup_preview = Mock()
+    backup_module.prepare_manual_label_preview = Mock()
     backup_module.complete_preview_restoration = Mock()
     backup_module.restore_reviewed_backup = Mock()
     backup_module.resolve_restored_output = Mock()
@@ -175,6 +176,7 @@ def websocket_module(monkeypatch):
 
     restore_guard_module = ModuleType(f"{prefix}.restore_guard")
     restore_guard_module.assert_not_guarded = Mock()
+    restore_guard_module.create_guard = Mock()
     restore_guard_module.read_guard = Mock(return_value=None)
     monkeypatch.setitem(
         sys.modules, f"{prefix}.restore_guard", restore_guard_module
