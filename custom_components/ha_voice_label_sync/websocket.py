@@ -1266,6 +1266,10 @@ async def websocket_get_preview(
         "count": len(excluded),
         "entities": excluded,
     }
+    # Purely a navigation hint for the Assistant. It grants no permission
+    # to adopt, label, or write an existing file.
+    mode = settings.get("onboarding_mode")
+    result["onboarding_mode"] = mode if mode in {"new", "existing"} else None
     connection.send_result(msg["id"], result)
 
 
