@@ -23,6 +23,8 @@ from hvls.owned_writer import (
     write_owned_output,
 )
 
+from .entity_catalog import build_entity_catalog
+from .label_update import ensure_entity_eligible_for_addition, resolve_unique_label_id
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_guard import (
     PreviewChangedError,
@@ -207,6 +209,115 @@ def apply_backup_cleanup(
     return {
         "deleted_count": len(deleted),
         "kept_count": len(all_entries) - len(deleted),
+    }
+
+
+def prepare_manual_label_preview(
+    output_path: Path, catalog: dict, registries: dict,
+    label: str, domains: frozenset[str], changes: list[dict],
+) -> dict:
+    """Simulate checked/unchecked HVLS labels before writing ANY HA state.
+
+    Approval hashes bind the complete live HA registry snapshot, the current
+    YAML, the configuration and the precise requested entity label changes.
+    Changes are only made by the separately reviewed Apply WebSocket.
+    """
+    if (
+        not isinstance(changes, list)
+        or not 1 <= len(changes) <= 100
+        or any(
+            not isinstance(item, dict)
+            or set(item) != {"entity_id", "enabled"}
+            or not isinstance(item["entity_id"], str)
+            or type(item["enabled"]) is not bool
+            for item in changes
+        )
+    ):
+        raise BackupRestoreError("Invalid entity label selection.")
+    wanted = {item["entity_id"]: item["enabled"] for item in changes}
+    if len(wanted) != len(changes):
+        raise BackupRestoreError("Duplicate entity changes in Preview.")
+    current = {item["entity_id"]: item for item in catalog["entities"]}
+    label_records = registries["label_registry"]["data"]["labels"]
+    label_id = resolve_unique_label_id(label_records, label)
+    add, remove = [], []
+    for entity_id, enabled in sorted(wanted.items()):
+        item = current.get(entity_id)
+        if item is None:
+            raise BackupRestoreError(f"Entity not found: {entity_id}")
+        if item["has_label"] is enabled:
+            raise BackupRestoreError(f"Label state changed: {entity_id}")
+        ensure_entity_eligible_for_addition(item, enabled)
+        (add if enabled else remove).append(entity_id)
+
+    production = None
+    if output_path.is_symlink():
+        raise BackupRestoreError("Production cannot be a symlink.")
+    if output_path.exists():
+        production = _read_yaml(output_path)
+        # Do not overwrite a malformed or unrecognized production YAML.
+        analyze_preview(production, None)
+
+    projected = deepcopy(registries)
+    for item in projected["entity_registry"]["data"]["entities"]:
+        entity_id = item.get("entity_id")
+        if entity_id not in wanted:
+            continue
+        labels = set(item.get("labels") or [])
+        if wanted[entity_id]:
+            labels.add(label_id)
+        else:
+            labels.discard(label_id)
+        item["labels"] = sorted(labels)
+
+    request = GenerationRequest(
+        label=label, domains=domains,
+        output_path=output_path, dry_run=True,
+    )
+    generation = run_google_assistant_workflow(
+        request=request, registries=projected,
+    ).generation
+    if generation.entity_count == 0:
+        raise BackupRestoreError(
+            "No selected entities would remain; production was not modified."
+        )
+    analysis = analyze_preview(generation.content, production)
+    if analysis["comparison"]["status"] not in {"ok", "missing"}:
+        raise BackupRestoreError("Cannot compare current production YAML.")
+    production_sha = preview_digest(production) if production is not None else None
+    target_sha = preview_digest(generation.content)
+    snapshot_sha = preview_digest(json.dumps(
+        registries, sort_keys=True, ensure_ascii=False,
+    ))
+    approval = preview_digest(json.dumps({
+        "label": label, "domains": sorted(domains),
+        "output": str(output_path), "production": production_sha,
+        "target": target_sha, "snapshot": snapshot_sha,
+        "changes": sorted(
+            [{"entity_id": eid, "enabled": enabled}
+             for eid, enabled in wanted.items()],
+            key=lambda item: item["entity_id"],
+        ),
+    }, sort_keys=True, ensure_ascii=False))
+    return {
+        "mode": "label_preview", "available": True,
+        "content": generation.content, "path": "Proposition HVLS",
+        "production_path": str(output_path),
+        "production_sha256": production_sha,
+        "preview_sha256": target_sha,
+        "label_plan_sha256": approval,
+        "label_plan": {
+            "add": add, "remove": remove, "review": [],
+        },
+        "changes": [{"entity_id": eid, "enabled": wanted[eid]}
+                    for eid in sorted(wanted)],
+        "projection": {"ready": True, "snapshot_sha256": snapshot_sha},
+        "production_summary": (
+            analyze_preview(production, None)["summary"]
+            if production is not None else None
+        ),
+        **analysis,
+        "can_apply": False,
     }
 
 
