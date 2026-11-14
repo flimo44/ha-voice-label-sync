@@ -1081,3 +1081,152 @@ def test_restore_resolution_regenerates_from_live_labels(websocket_module):
     assert ws.resolve_restored_output.call_args.kwargs["entry_id"] == (
         "test-installation"
     )
+
+
+def _manual_ws_plan(ws, changes, snapshot, *, digest="c" * 64):
+    import json
+    from datetime import datetime
+
+    from hvls.models import FileWriteResult
+
+    plan = {
+        "mode": "label_preview",
+        "production_sha256": "a" * 64,
+        "preview_sha256": "b" * 64,
+        "label_plan_sha256": digest,
+        "label_plan": {
+            "add": ["switch.new"], "remove": [], "review": [],
+        },
+        "projection": {
+            "ready": True,
+            "snapshot_sha256": ws.preview_digest(
+                json.dumps(snapshot, sort_keys=True, ensure_ascii=False)
+            ),
+        },
+        "changes": changes, "content": "switch.new:\n  expose: true\n",
+        "summary": {"total": 2},
+    }
+    ws.prepare_manual_label_preview.return_value = plan
+    ws.evaluate_registered_output = Mock(return_value=SimpleNamespace(
+        status="managed", write_allowed=True,
+    ))
+    ws.write_owned_output = Mock(return_value=FileWriteResult(
+        output_path=Path("/config/google_assistant_entities.yaml"),
+        backup_path=Path("/config/.hvls_backups/safety.bak"),
+        bytes_written=31, written_at=datetime.now(UTC),
+    ))
+    ws.create_guard = Mock()
+    ws.complete_preview_restoration = Mock(return_value={"reconciled": True})
+    ws.update_entity_label = Mock()
+    ws.run_google_assistant_workflow = Mock(return_value=SimpleNamespace(
+        generation=SimpleNamespace(content=plan["content"]),
+    ))
+    ws.analyze_preview = Mock(return_value={
+        "comparison": {"status": "ok", "identical_entities": True}
+    })
+    ws.get_live_registries = Mock(return_value=snapshot)
+    return plan
+
+
+def test_manual_label_websocket_preview_never_mutates_native_registry(
+    websocket_module,
+):
+    ws = websocket_module.websocket
+    ws.evaluate_registered_output = Mock(return_value=SimpleNamespace(
+        status="managed", write_allowed=True,
+    ))
+    ws.prepare_manual_label_preview = Mock(return_value={
+        "mode": "label_preview", "label_plan_sha256": "c" * 64,
+    })
+    ws.create_guard = Mock()
+    ws.update_entity_label = Mock()
+    ws.write_owned_output = Mock()
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    changes = [{"entity_id": "switch.new", "enabled": True}]
+    asyncio.run(ws.websocket_prepare_manual_label_preview(
+        make_hass(), connection, {"id": 210, "changes": changes},
+    ))
+    connection.send_error.assert_not_called()
+    ws.prepare_manual_label_preview.assert_called_once()
+    ws.create_guard.assert_not_called()
+    ws.update_entity_label.assert_not_called()
+    ws.write_owned_output.assert_not_called()
+
+
+def test_manual_label_apply_rejects_stale_approval_before_first_write(
+    websocket_module,
+):
+    ws = websocket_module.websocket
+    changes = [{"entity_id": "switch.new", "enabled": True}]
+    _manual_ws_plan(ws, changes, ws.get_live_registries(make_hass()))
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_manual_label_preview(
+        make_hass(), connection, {
+            "id": 211, "changes": changes,
+            "preview_sha256": "b" * 64,
+            "production_sha256": "a" * 64,
+            "label_plan_sha256": "d" * 64,
+        },
+    ))
+    connection.send_result.assert_not_called()
+    assert connection.send_error.call_args.args[1] == "manual_label_apply_failed"
+    ws.create_guard.assert_not_called()
+    ws.write_owned_output.assert_not_called()
+    ws.update_entity_label.assert_not_called()
+
+
+def test_manual_label_apply_writes_yaml_before_labels_and_checks_final_state(
+    websocket_module,
+):
+    ws = websocket_module.websocket
+    changes = [{"entity_id": "switch.new", "enabled": True}]
+    snapshot = ws.get_live_registries(make_hass())
+    _manual_ws_plan(ws, changes, snapshot)
+    events = []
+    ws.create_guard.side_effect = lambda *args, **kwargs: events.append("guard")
+    ws.write_owned_output.side_effect = lambda *args, **kwargs: (
+        events.append("yaml"),
+        SimpleNamespace(
+            backup_path=Path("/config/.hvls_backups/safety.bak"),
+        )
+    )[1]
+    ws.update_entity_label.side_effect = lambda *args, **kwargs: (
+        events.append("labels")
+    )
+    ws.complete_preview_restoration.side_effect = lambda *args, **kwargs: (
+        events.append("verified")
+    )
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_manual_label_preview(
+        make_hass(), connection, {
+            "id": 212, "changes": changes,
+            "preview_sha256": "b" * 64,
+            "production_sha256": "a" * 64,
+            "label_plan_sha256": "c" * 64,
+        },
+    ))
+    connection.send_error.assert_not_called()
+    assert events == ["guard", "yaml", "labels", "verified"]
+    assert connection.send_result.call_args.args[1]["reconciled"] is True
+
+
+def test_manual_label_apply_keeps_guard_if_label_update_fails(
+    websocket_module,
+):
+    ws = websocket_module.websocket
+    changes = [{"entity_id": "switch.new", "enabled": True}]
+    _manual_ws_plan(ws, changes, ws.get_live_registries(make_hass()))
+    ws.update_entity_label.side_effect = ValueError("Registry failure")
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_manual_label_preview(
+        make_hass(), connection, {
+            "id": 213, "changes": changes,
+            "preview_sha256": "b" * 64,
+            "production_sha256": "a" * 64,
+            "label_plan_sha256": "c" * 64,
+        },
+    ))
+    connection.send_result.assert_not_called()
+    assert connection.send_error.call_args.args[1] == "manual_label_apply_failed"
+    ws.create_guard.assert_called_once()
+    ws.complete_preview_restoration.assert_not_called()
