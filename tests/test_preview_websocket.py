@@ -653,6 +653,9 @@ def _setup_reviewed_restore(websocket_module, *, remove_ids=()):
             "review": [], "current_label_count": len(remove_ids),
         },
         "content": "switch.kept:\\n  expose: true\\n",
+        "preview_sha256": "f" * 64,
+        "comparison": {"status": "ok", "identical_entities": False,
+                       "identical_text": False},
         "summary": {"total": 40},
     }
     ws.build_entity_catalog = Mock(return_value={
