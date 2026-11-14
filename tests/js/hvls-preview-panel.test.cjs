@@ -1003,8 +1003,8 @@ test("Backup cleanup actions are distinct from restoration Apply", () => {
   assert.match(source, /id="backupCleanupApply"/);
   assert.match(source, /id="backupCleanupCancel"/);
   assert.match(source, /id="backupMore"/);
-  assert.match(source, /ha_voice_label_sync\\/preview_backup_cleanup/);
-  assert.match(source, /ha_voice_label_sync\\/apply_backup_cleanup/);
+  assert.match(source, /ha_voice_label_sync\/preview_backup_cleanup/);
+  assert.match(source, /ha_voice_label_sync\/apply_backup_cleanup/);
 });
 
 test("Backup review is invalidated when a different snapshot is selected", async () => {
