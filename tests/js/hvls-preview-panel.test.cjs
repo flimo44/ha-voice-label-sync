@@ -630,6 +630,84 @@ test("Failed label preparation rejects old approval and never writes HA", async 
   ]);
 });
 
+test("Two checkbox choices are both included in the staged Preview, no HA writes", async () => {
+  const calls = [];
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request);
+    return manualStage(request.changes);
+  });
+  panel._activateTab = () => {};
+  await panel._setEntityLabel(
+    {entity_id: "switch.one", name: "One", has_label: true, eligible: true},
+    {checked: false}
+  );
+  await panel._setEntityLabel(
+    {entity_id: "switch.two", name: "Two", has_label: false, eligible: true},
+    {checked: true}
+  );
+  assert.equal(calls.length, 2);
+  assert.deepEqual([...calls[1].changes.map(x => x.entity_id)], [
+    "switch.one", "switch.two"
+  ]);
+  assert.equal(controls.apply.disabled, false);
+  assert.equal(panel._manualLabelChanges.size, 2);
+  assert.ok(calls.every(x => x.type ===
+    "ha_voice_label_sync/prepare_manual_label_preview"));
+});
+
+test("Cancelling a staged manual-label Preview discards pending choices without write", async () => {
+  const calls = [];
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request.type);
+    return preview(true);
+  });
+  panel._manualLabelChanges = new Map([["switch.two", true]]);
+  panel._stagedRestore = manualStage([
+    {entity_id: "switch.two", enabled: true}
+  ]);
+  await panel._cancelPreview();
+  assert.equal(panel._manualLabelChanges, null);
+  assert.equal(panel._stagedRestore, null);
+  assert.equal(controls.apply.disabled, true);
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_preview"]);
+  assert.match(panel.status, /Preview annulé/);
+});
+
+test("Manual-label Preview Apply uses one reviewed server action, not direct setter", async () => {
+  const calls = [];
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request);
+    if (request.type === "ha_voice_label_sync/apply_manual_label_preview") {
+      return {applied: true, reconciled: true,
+        label_additions: 1, label_removals: 0, yaml_entities: 2};
+    }
+    if (request.type === "ha_voice_label_sync/generate_preview") {
+      return {generated: true};
+    }
+    throw new Error("Unexpected request");
+  });
+  panel._stagedRestore = manualStage([
+    {entity_id: "switch.two", enabled: true}
+  ]);
+  panel._manualLabelChanges = new Map([["switch.two", true]]);
+  panel._loadPreview = async () => {};
+  panel._loadEntities = async () => {};
+  panel._updateApplyButton();
+  assert.equal(controls.apply.disabled, false);
+  await panel._applyPreview();
+  assert.deepEqual(calls.map(x => x.type), [
+    "ha_voice_label_sync/apply_manual_label_preview",
+    "ha_voice_label_sync/generate_preview",
+  ]);
+  assert.equal(calls[0].label_plan_sha256, "c".repeat(64));
+  assert.deepEqual([...calls[0].changes], [
+    {entity_id: "switch.two", enabled: true},
+  ]);
+  assert.equal(panel._manualLabelChanges, null);
+  assert.equal(panel._stagedRestore, null);
+  assert.doesNotMatch(calls.map(x => x.type).join(","), /set_entity_label/);
+});
+
 test("Preview contains the Copy YAML and Apply actions, not the header", () => {
   const header = source.match(/<div class="header">([\s\S]*?)<div id="status">/)?.[1];
   const previewPanel = source.match(/<section id="tab-preview"([\s\S]*?)<\/section>/)?.[1];
