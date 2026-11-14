@@ -3499,6 +3499,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._stagedRestore = null;
       checkbox.checked = current;
       await this._loadPreview();
+      this._review = null;  // Do not revive a previous Apply approval.
       this._setStatusKey("manualLabelFailed", {
         error: error.message || String(error),
       });
