@@ -106,7 +106,9 @@ class HVLSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             DEFAULT_OUTPUT,
         )
         existing = report["output_status"] == "existing"
-        french = str(getattr(self.hass.config, "language", "en")).lower().startswith("fr")
+        french = str(
+            getattr(self.hass.config, "language", "en")
+        ).lower().startswith("fr")
         if french:
             hint = (
                 "Un fichier YAML existe déjà ; il restera intact."
@@ -166,9 +168,15 @@ class HVLSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             error = initial_setup_output_error(report)
-            if error is None and mode == "new" and report["output_status"] == "existing":
+            if (
+                error is None and mode == "new"
+                and report["output_status"] == "existing"
+            ):
                 error = "new_output_exists"
-            if error is None and mode == "existing" and report["output_status"] != "existing":
+            if (
+                error is None and mode == "existing"
+                and report["output_status"] != "existing"
+            ):
                 error = "existing_source_missing"
             if error:
                 return self.async_show_form(
