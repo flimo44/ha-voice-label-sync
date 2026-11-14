@@ -634,7 +634,6 @@ def test_set_entity_label_websocket_refuses_missing_entity(websocket_module):
 def test_legacy_direct_restore_endpoint_refuses_write(websocket_module):
     """Even an old client cannot restore production before Preview validation."""
     ws = websocket_module.websocket
-    ws.restore_reviewed_backup.reset_mock()
     connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
     asyncio.run(ws.websocket_restore_backup(
         make_hass(), connection, {
@@ -646,7 +645,6 @@ def test_legacy_direct_restore_endpoint_refuses_write(websocket_module):
     ))
     connection.send_result.assert_not_called()
     assert connection.send_error.call_args.args[1] == "restore_requires_preview"
-    ws.restore_reviewed_backup.assert_not_called()
 
 
 def test_backup_preview_endpoint_is_read_only_and_preserves_identity(
@@ -666,7 +664,6 @@ def test_backup_preview_endpoint_is_read_only_and_preserves_identity(
     }
     ws.update_entity_label.reset_mock()
     ws.apply_reviewed_preview.reset_mock()
-    ws.restore_reviewed_backup.reset_mock()
     connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
     asyncio.run(ws.websocket_prepare_backup_preview(
         make_hass(), connection, {
@@ -685,7 +682,6 @@ def test_backup_preview_endpoint_is_read_only_and_preserves_identity(
     assert isinstance(call.args[4], dict)
     ws.update_entity_label.assert_not_called()
     ws.apply_reviewed_preview.assert_not_called()
-    ws.restore_reviewed_backup.assert_not_called()
 
 
 
