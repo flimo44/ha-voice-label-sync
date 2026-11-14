@@ -1113,6 +1113,17 @@ def _read_and_compare(preview_path: Path, output_path: Path) -> dict[str, Any]:
 
     production_readable = prod_error is None or prod_error == "missing"
 
+    # Dashboard statistics describe the actual production file, never the
+    # proposed Preview. Do not silently substitute Preview if production is
+    # missing, invalid or unreadable.
+    production_summary = None
+    production_summary_error = None
+    if production is not None and production_readable:
+        try:
+            production_summary = analyze_preview(production, None)["summary"]
+        except PreviewFormatError as exc:
+            production_summary_error = str(exc)
+
     if not production_readable:
         analysis["comparison"] = {
             "status": "unreadable",
@@ -1125,6 +1136,8 @@ def _read_and_compare(preview_path: Path, output_path: Path) -> dict[str, Any]:
         "path": str(preview_path),
         "production_path": str(output_path),
         **analysis,
+        "production_summary": production_summary,
+        "production_summary_error": production_summary_error,
         "can_apply": production_readable,
         "preview_sha256": preview_digest(preview),
         "production_sha256": (
