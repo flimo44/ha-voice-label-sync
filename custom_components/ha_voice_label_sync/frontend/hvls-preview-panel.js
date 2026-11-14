@@ -93,7 +93,9 @@ const HVLS_TRANSLATIONS = {
     assistantReinstallTitle: "Récupérer le fichier après réinstallation",
     assistantReinstallIntro: "Ce fichier appartient à une précédente installation HVLS. Si elle n’existe plus, HVLS peut vérifier son empreinte, effectuer une sauvegarde de sécurité, puis transférer sa gestion à cette installation. Ni le YAML ni les étiquettes ne seront modifiés.",
     assistantReinstallAction: "Vérifier et récupérer la gestion",
-    assistantReinstallConfirm: "Transférer la gestion de {path} vers cette installation HVLS ?\n\nLa précédente installation doit être absente de Home Assistant et le SHA-256 doit correspondre. Une sauvegarde vérifiée sera créée.\n\nLe YAML et les étiquettes resteront INCHANGÉS. Le Preview et ses différences sont distincts.",
+    assistantReinstallConfirm: "Transférer la gestion de {path} vers cette installation HVLS ?\n\nLa précédente installation doit être absente de Home Assistant. Le YAML actuel et le registre seront vérifiés, puis une sauvegarde sera créée. Aucun Apply ni changement d’étiquette automatique.",
+    assistantReinstallChangedConfirm: "ATTENTION : le fichier actuel n’est PLUS celui enregistré par l’ancienne installation.\n\nAncien SHA-256 : {oldSha}\nSHA-256 actuel : {newSha}\nEntités actuelles : {entities}\nPreview ordinaire : {added} ajout(s), {removed} suppression(s), {modified} modification(s).\n\nAutoriser uniquement la récupération de gestion, après sauvegarde vérifiée ? AUCUN YAML ni label modifié. NE PAS appliquer le Preview ordinaire avant d’avoir réconcilié les entités.",
+    assistantReinstallChangedSuccess: "Gestion du fichier remplacé récupérée avec sauvegarde vérifiée : {backup}. Les entités et le YAML n’ont pas changé. ATTENTION : le Preview ordinaire reste différent ; ne l’appliquez pas avant une reprise contrôlée des entités.",
 
     assistantTakeoverIntro: "Si ce fichier est le fichier de production configuré, HVLS peut le sauvegarder puis enregistrer sa prise en charge, sans réécrire son contenu. Les différences avec le Preview restent soumises à un Apply distinct.",
     assistantTakeoverAction: "Vérifier et reprendre ce fichier",
@@ -595,7 +597,9 @@ const HVLS_TRANSLATIONS = {
     assistantReinstallTitle: "Recover YAML management after reinstalling",
     assistantReinstallIntro: "This YAML belongs to a previous HVLS installation. If it no longer exists, HVLS can verify its digest, create a safety backup and transfer management to this installation. YAML and HA labels stay unchanged.",
     assistantReinstallAction: "Verify and recover management",
-    assistantReinstallConfirm: "Transfer management of {path} to this HVLS installation?\n\nThe old installation must be absent from Home Assistant and the SHA-256 must match. A verified backup will be made.\n\nYAML and labels will NOT be changed. Preview differences are separate.",
+    assistantReinstallConfirm: "Transfer management of {path} to this HVLS installation?\n\nThe previous installation must be absent from Home Assistant. Both YAML and registry will be verified and a backup will be made. No automatic Apply or HA label changes.",
+    assistantReinstallChangedConfirm: "WARNING: the current file is DIFFERENT from the one registered by the old installation.\n\nPrevious SHA-256: {oldSha}\nCurrent SHA-256: {newSha}\nCurrent entities: {entities}\nOrdinary Preview: {added} added, {removed} removed, {modified} changed.\n\nAuthorize ONLY a management takeover after a verified backup? No YAML or labels will be modified. DO NOT apply the ordinary Preview until the entities have been reconciled.",
+    assistantReinstallChangedSuccess: "Management of the replaced YAML recovered with verified backup: {backup}. No entities or YAML changed. WARNING: ordinary Preview differs; do not apply it until entity reconciliation.",
 
     assistantTakeoverIntro: "If this is the configured production YAML, HVLS can back it up and register its ownership without rewriting its contents. Preview differences still require a separate Apply.",
     assistantTakeoverAction: "Review and take over this file",
@@ -4985,13 +4989,20 @@ entity_config: !include google_assistant_entities.yaml</pre>
       }
       const diff = prepared.changes || {};
       const confirmed = window.confirm(
-        prepared.previous_entry_id
-          ? this._tf("assistantReinstallConfirm", {path})
-          : this._tf("assistantTakeoverConfirm", {
-              path, entities: prepared.entities, issues: prepared.issues,
-              added: diff.added, removed: diff.removed,
-              modified: diff.modified,
+        prepared.recorded_sha_mismatch
+          ? this._tf("assistantReinstallChangedConfirm", {
+              path, oldSha: prepared.previous_sha256,
+              newSha: prepared.production_sha256,
+              entities: prepared.entities, added: diff.added,
+              removed: diff.removed, modified: diff.modified,
             })
+          : prepared.previous_entry_id
+            ? this._tf("assistantReinstallConfirm", {path})
+            : this._tf("assistantTakeoverConfirm", {
+                path, entities: prepared.entities, issues: prepared.issues,
+                added: diff.added, removed: diff.removed,
+                modified: diff.modified,
+              })
       );
       if (!confirmed) {
         this._assistantTakeoverMessage = "";
@@ -5003,7 +5014,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
         path, production_sha256: prepared.production_sha256,
         preview_sha256: prepared.preview_sha256, confirmed: true,
         previous_entry_id: prepared.previous_entry_id,
+        previous_sha256: prepared.previous_sha256,
         ownership_revision: prepared.ownership_revision,
+        acknowledge_changed_output: prepared.recorded_sha_mismatch === true,
       });
       if (result?.taken_over !== true ||
           result?.production_unchanged !== true ||
@@ -5011,9 +5024,11 @@ entity_config: !include google_assistant_entities.yaml</pre>
           typeof result.backup_name !== "string") {
         throw new Error("unverified_result");
       }
-      this._assistantTakeoverMessage = this._tf("assistantTakeoverSuccess", {
-        backup: result.backup_name,
-      });
+      this._assistantTakeoverMessage = this._tf(
+        result.replaced_file_recovered
+          ? "assistantReinstallChangedSuccess" : "assistantTakeoverSuccess",
+        {backup: result.backup_name},
+      );
       // Refresh the server's ownership evaluation, never apply the Preview.
       await this._loadPreview();
     } catch (_error) {
