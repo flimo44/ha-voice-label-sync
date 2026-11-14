@@ -207,6 +207,7 @@ def test_reinstallation_transfers_inactive_owner_after_approval_and_backup(
     result = takeover.confirm_existing_output_takeover(
         **files, active_entry_ids=active,
         previous_entry_id=proposed["previous_entry_id"],
+        previous_sha256=proposed["previous_sha256"],
         ownership_revision=proposed["ownership_revision"],
         production_sha256=proposed["production_sha256"],
         preview_sha256=proposed["preview_sha256"],
@@ -260,6 +261,7 @@ def test_reinstallation_rejects_unapproved_or_stale_transfer(takeover, files):
         files,
         active_entry_ids=active,
         previous_entry_id=proposed["previous_entry_id"],
+        previous_sha256=proposed["previous_sha256"],
         ownership_revision=proposed["ownership_revision"],
         production_sha256=proposed["production_sha256"],
         preview_sha256=proposed["preview_sha256"],
@@ -295,6 +297,7 @@ def test_reinstallation_refuses_changed_yaml(takeover, files):
         takeover.confirm_existing_output_takeover(
             **files, active_entry_ids=active,
             previous_entry_id=proposed["previous_entry_id"],
+            previous_sha256=proposed["previous_sha256"],
             ownership_revision=proposed["ownership_revision"],
             production_sha256=proposed["production_sha256"],
             preview_sha256=proposed["preview_sha256"], confirmed=True,
@@ -317,3 +320,84 @@ def test_reinstallation_refuses_pending_old_owner(takeover, files):
         takeover.prepare_existing_output_takeover(
             **files, active_entry_ids=frozenset({"installation-A"}),
         )
+
+
+def test_reinstallation_with_replaced_yaml_requires_explicit_acknowledgement(
+    takeover, files,
+):
+    old_sha = _seed_old_owner(files)
+    current = (
+        b"switch.pump:\n  expose: true\n  name: Pompe\n  room: Piscine\n"
+        b"switch.extra:\n  expose: true\n  name: Extra\n"
+    )
+    files["output_path"].write_bytes(current)
+    current_sha = hashlib.sha256(current).hexdigest()
+    active = frozenset({"installation-A"})
+    prepared = takeover.prepare_existing_output_takeover(
+        **files, active_entry_ids=active,
+    )
+    assert prepared["eligible"] is True
+    assert prepared["recorded_sha_mismatch"] is True
+    assert prepared["previous_sha256"] == old_sha
+    assert prepared["production_sha256"] == current_sha
+    assert prepared["entities"] == 2
+    assert files["output_path"].read_bytes() == current
+
+    args = dict(
+        files, active_entry_ids=active, confirmed=True,
+        previous_entry_id=prepared["previous_entry_id"],
+        previous_sha256=prepared["previous_sha256"],
+        ownership_revision=prepared["ownership_revision"],
+        production_sha256=prepared["production_sha256"],
+        preview_sha256=prepared["preview_sha256"],
+    )
+    with pytest.raises(
+        takeover.ExistingOutputTakeoverError,
+        match="Explicit changed-file approval",
+    ):
+        takeover.confirm_existing_output_takeover(**args)
+
+    result = takeover.confirm_existing_output_takeover(
+        **args, acknowledge_changed_output=True,
+    )
+    assert result["replaced_file_recovered"] is True
+    assert result["production_unchanged"] is True
+    assert result["apply_performed"] is False
+    assert files["output_path"].read_bytes() == current
+    backup = files["config_dir"] / ".hvls_backups" / result["backup_name"]
+    assert backup.read_bytes() == current
+    reg = OwnershipRegistry(files["registry_path"])
+    assert reg.get_record("old-installation") is None
+    assert reg.get_record("installation-A") == {
+        "state": "managed",
+        "output_path": str(files["output_path"]),
+        "sha256": current_sha,
+    }
+
+
+def test_reinstallation_changed_yaml_rejects_stale_old_owner_sha(
+    takeover, files,
+):
+    old_sha = _seed_old_owner(files)
+    current = files["output_path"].read_bytes() + b"switch.new:\n  expose: true\n"
+    files["output_path"].write_bytes(current)
+    active = frozenset({"installation-A"})
+    prepared = takeover.prepare_existing_output_takeover(
+        **files, active_entry_ids=active,
+    )
+    assert prepared["previous_sha256"] == old_sha
+
+    with pytest.raises(takeover.ExistingOutputTakeoverError):
+        takeover.confirm_existing_output_takeover(
+            **files, active_entry_ids=active, confirmed=True,
+            previous_entry_id=prepared["previous_entry_id"],
+            previous_sha256="0" * 64,
+            ownership_revision=prepared["ownership_revision"],
+            production_sha256=prepared["production_sha256"],
+            preview_sha256=prepared["preview_sha256"],
+            acknowledge_changed_output=True,
+        )
+    assert files["output_path"].read_bytes() == current
+    assert OwnershipRegistry(files["registry_path"]).get_record(
+        "old-installation"
+    )["sha256"] == old_sha
