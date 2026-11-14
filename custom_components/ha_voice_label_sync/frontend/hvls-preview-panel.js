@@ -90,6 +90,11 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptAction: "Ajouter {count} label(s) HVLS",
     assistantAdoptNone: "Aucun ajout automatique proposé. Vous pouvez toujours gérer les entités individuellement dans l'onglet Gestion des entités HVLS.",
     assistantTakeoverTitle: "Confier le fichier existant à HVLS",
+    assistantReinstallTitle: "Récupérer le fichier après réinstallation",
+    assistantReinstallIntro: "Ce fichier appartient à une précédente installation HVLS. Si elle n’existe plus, HVLS peut vérifier son empreinte, effectuer une sauvegarde de sécurité, puis transférer sa gestion à cette installation. Ni le YAML ni les étiquettes ne seront modifiés.",
+    assistantReinstallAction: "Vérifier et récupérer la gestion",
+    assistantReinstallConfirm: "Transférer la gestion de {path} vers cette installation HVLS ?\\n\\nLa précédente installation doit être absente de Home Assistant et le SHA-256 doit correspondre. Une sauvegarde vérifiée sera créée.\\n\\nLe YAML et les étiquettes resteront INCHANGÉS. Le Preview et ses différences sont distincts.",
+
     assistantTakeoverIntro: "Si ce fichier est le fichier de production configuré, HVLS peut le sauvegarder puis enregistrer sa prise en charge, sans réécrire son contenu. Les différences avec le Preview restent soumises à un Apply distinct.",
     assistantTakeoverAction: "Vérifier et reprendre ce fichier",
     assistantTakeoverConfirm: "Confier le fichier {path} à HVLS ?\n\nEntités actuelles : {entities} ({issues} à examiner).\nDifférences proposées par le Preview : {added} ajout(s), {removed} suppression(s), {modified} modification(s).\n\nUne sauvegarde obligatoire sera créée. Le fichier de production ne sera PAS modifié et aucun Apply ne sera lancé. Seule sa gestion future par HVLS sera autorisée.",
@@ -587,6 +592,11 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptAction: "Add {count} HVLS label(s)",
     assistantAdoptNone: "No automatic additions suggested. You can still manage each entity in the HVLS Entity management tab.",
     assistantTakeoverTitle: "Let HVLS manage the existing YAML",
+    assistantReinstallTitle: "Recover YAML management after reinstalling",
+    assistantReinstallIntro: "This YAML belongs to a previous HVLS installation. If it no longer exists, HVLS can verify its digest, create a safety backup and transfer management to this installation. YAML and HA labels stay unchanged.",
+    assistantReinstallAction: "Verify and recover management",
+    assistantReinstallConfirm: "Transfer management of {path} to this HVLS installation?\\n\\nThe old installation must be absent from Home Assistant and the SHA-256 must match. A verified backup will be made.\\n\\nYAML and labels will NOT be changed. Preview differences are separate.",
+
     assistantTakeoverIntro: "If this is the configured production YAML, HVLS can back it up and register its ownership without rewriting its contents. Preview differences still require a separate Apply.",
     assistantTakeoverAction: "Review and take over this file",
     assistantTakeoverConfirm: "Let HVLS manage {path}?\n\nCurrent entities: {entities} ({issues} to review).\nPreview differences: {added} added, {removed} removed, {modified} modified.\n\nA mandatory backup will be created. Production will NOT be edited and no Apply will run. This only authorizes future HVLS management.",
@@ -4898,15 +4908,23 @@ entity_config: !include google_assistant_entities.yaml</pre>
       (plan && !plan.complete ? this._t("assistantAdoptTruncated") : "");
     const takeoverSection = this.querySelector("#assistantTakeoverSection");
     const takeoverVisible = this._assistantAdoptionAvailable() &&
-      this._applyBlockReasonCode === "unmanaged_output";
+      ["unmanaged_output", "owned_by_other_installation"].includes(
+        this._applyBlockReasonCode
+      );
+    const reinstall = this._applyBlockReasonCode ===
+      "owned_by_other_installation";
     if (takeoverSection) takeoverSection.hidden = !takeoverVisible &&
       !this._assistantTakeoverMessage;
     for (const id of ["assistantTakeoverTitle", "assistantTakeoverIntro",
                       "assistantTakeoverButton"]) {
       const node = this.querySelector("#" + id);
       if (!node) continue;
-      node.textContent = this._t(id === "assistantTakeoverButton"
-        ? "assistantTakeoverAction" : id);
+      const key = reinstall
+        ? {assistantTakeoverTitle: "assistantReinstallTitle",
+           assistantTakeoverIntro: "assistantReinstallIntro",
+           assistantTakeoverButton: "assistantReinstallAction"}[id]
+        : id === "assistantTakeoverButton" ? "assistantTakeoverAction" : id;
+      node.textContent = this._t(key);
     }
     const takeoverAction = this.querySelector("#assistantTakeoverButton");
     if (takeoverAction) takeoverAction.hidden = !takeoverVisible;
@@ -4940,7 +4958,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
 
   async _takeOverAssistantFile() {
     if (!this._hass || !this._assistantAdoptionAvailable() ||
-        this._applyBlockReasonCode !== "unmanaged_output" ||
+        !["unmanaged_output", "owned_by_other_installation"].includes(
+          this._applyBlockReasonCode
+        ) ||
         this._assistantTakeoverBusy || this._assistantAdoptBusy ||
         this._entityWritePending || this._generating ||
         this._applying || this._restoring || this._refreshing) return;
@@ -4964,10 +4984,15 @@ entity_config: !include google_assistant_entities.yaml</pre>
         throw new Error("stale_source");
       }
       const diff = prepared.changes || {};
-      const confirmed = window.confirm(this._tf("assistantTakeoverConfirm", {
-        path, entities: prepared.entities, issues: prepared.issues,
-        added: diff.added, removed: diff.removed, modified: diff.modified,
-      }));
+      const confirmed = window.confirm(
+        prepared.previous_entry_id
+          ? this._tf("assistantReinstallConfirm", {path})
+          : this._tf("assistantTakeoverConfirm", {
+              path, entities: prepared.entities, issues: prepared.issues,
+              added: diff.added, removed: diff.removed,
+              modified: diff.modified,
+            })
+      );
       if (!confirmed) {
         this._assistantTakeoverMessage = "";
         return;
@@ -4977,6 +5002,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
         type: "ha_voice_label_sync/confirm_existing_output_takeover",
         path, production_sha256: prepared.production_sha256,
         preview_sha256: prepared.preview_sha256, confirmed: true,
+        previous_entry_id: prepared.previous_entry_id,
+        ownership_revision: prepared.ownership_revision,
       });
       if (result?.taken_over !== true ||
           result?.production_unchanged !== true ||
