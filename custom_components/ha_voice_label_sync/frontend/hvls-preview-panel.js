@@ -291,6 +291,8 @@ const HVLS_TRANSLATIONS = {
     backupLabelAdd: "Étiquettes à ajouter",
     backupLabelRemove: "Étiquettes à retirer",
     backupLabelReview: "Entités à examiner",
+    backupProjectionAligned: "Simulation des étiquettes : le YAML généré correspond à la sauvegarde.",
+    backupProjectionMismatch: "Attention : les étiquettes seules ne reproduiront pas exactement cette sauvegarde. Vérifiez les différences ci-dessous.",
     backupConfirm: "Restaurer ce YAML en production ? Une copie de sécurité de la production actuelle sera créée obligatoirement. Les étiquettes HA ne seront pas modifiées.",
     backupRestoreFailed: "Restauration refusée : {error}",
     backupRestored: "Restauration terminée. Copie de sécurité : {backup}",
@@ -740,6 +742,8 @@ const HVLS_TRANSLATIONS = {
     backupLabelAdd: "Labels to add",
     backupLabelRemove: "Labels to remove",
     backupLabelReview: "Entities requiring review",
+    backupProjectionAligned: "Simulated HA labels regenerate the selected backup configuration.",
+    backupProjectionMismatch: "Warning: HA labels alone cannot reproduce this backup exactly. Review the differences below.",
     backupConfirm: "Restore this YAML to production? A safety copy of the current production file will always be created. HA labels will not be changed.",
     backupRestoreFailed: "Restore refused: {error}",
     backupRestored: "Restore completed. Safety backup: {backup}",
@@ -1741,6 +1745,44 @@ class HVLSPreviewPanel extends HTMLElement {
             review: plan.review?.length || 0,
           });
         previewNotice.appendChild(description);
+        const projection = this._stagedRestore.projection;
+        if (projection) {
+          const warning = document.createElement("p");
+          warning.className = "diagnostic-note";
+          warning.textContent = projection.ready === true
+            ? this._t("backupProjectionAligned")
+            : this._t("backupProjectionMismatch");
+          previewNotice.appendChild(warning);
+          const diff = projection.comparison;
+          if (diff?.status === "ok" && projection.ready !== true) {
+            const differences = [
+              ...(diff.added || []).map(entity_id => ({
+                entity_id, fields: {status: {before: "absent", after: "added"}},
+              })),
+              ...(diff.removed || []).map(entity_id => ({
+                entity_id, fields: {status: {before: "present", after: "removed"}},
+              })),
+              ...(diff.modified || []),
+            ];
+            if (differences.length) {
+              const details = document.createElement("details");
+              const heading = document.createElement("summary");
+              heading.textContent = this._tf("entitiesModified", {
+                count: differences.length,
+              });
+              details.appendChild(heading);
+              const list = document.createElement("ul");
+              for (const item of differences) {
+                const entry = document.createElement("li");
+                const fields = Object.keys(item.fields || {}).join(", ");
+                entry.textContent = `${item.entity_id} — ${fields}`;
+                list.appendChild(entry);
+              }
+              details.appendChild(list);
+              previewNotice.appendChild(details);
+            }
+          }
+        }
         // The actual proposed HA-label operations must be visible individually,
         // including exceptional entities. The Preview is never an implicit write.
         for (const [action, label, items] of [
