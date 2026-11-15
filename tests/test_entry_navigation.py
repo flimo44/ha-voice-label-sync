@@ -65,7 +65,10 @@ def entry_setup_env(monkeypatch):
     module(prefix + "websocket", async_register_websocket_api=Mock())
 
     path = Path("custom_components/ha_voice_label_sync/__init__.py")
-    name = prefix + "_test_init"
+    # __init__.py must be loaded under its actual package name:
+    # giving it a child name would create an implicit nested package,
+    # bypassing the stubs for .label_setup and other relative imports.
+    name = "custom_components.ha_voice_label_sync"
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
     entry_module = importlib.util.module_from_spec(spec)
