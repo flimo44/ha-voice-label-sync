@@ -6,6 +6,13 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+### Security (planned; not released)
+- Remove the legacy `Generate configuration` and `Preview configuration` HA button entities. They no longer represent the reviewed UI workflow.
+- Refuse legacy `ha_voice_label_sync.generate` service calls explicitly, including old automations, and block non-dry-run legacy workflow calls in depth.
+- Preserve the WebSocket Preview -> explicitly reviewed Apply flow, including backups, ownership checks and read-only analysis. The CLI/core library is unchanged.
+- Existing button entity-registry entries may appear unavailable after upgrading; user-managed cleanup may be needed.
+
+
 ## [1.1.0-beta.4] - 2026-11-15
 
 ### Fixed
