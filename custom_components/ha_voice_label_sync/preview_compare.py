@@ -33,6 +33,11 @@ def _entities(content: str) -> dict[str, dict[str, Any]]:
     return result
 
 
+def validate_entity_yaml(content: str) -> None:
+    """Validate production YAML with the exact same rules as Preview."""
+    _entities(content)
+
+
 def analyze_preview(preview: str, production: str | None) -> dict[str, Any]:
     """Summarize Preview, and compare to production when readable.
 
