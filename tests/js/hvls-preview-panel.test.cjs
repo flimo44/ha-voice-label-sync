@@ -6108,6 +6108,8 @@ test("Statistics keeps expanded room and domain lists during analysis refresh", 
   panel._renderRestoreWarning = () => {};
   panel._renderRestoreReconciliation = () => {};
   panel._renderStagedRestorePlan = () => {};
+  // makePanel stubs all full renders by default: restore the real method.
+  panel._renderAnalysis = Object.getPrototypeOf(panel)._renderAnalysis.bind(panel);
   const snapshot = {
     available: true, production_summary: {
       total: 1, rooms: 1, without_room: 0,
