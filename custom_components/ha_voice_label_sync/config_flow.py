@@ -335,6 +335,13 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
                 return "Désactivé"
             return "Non déterminé"
 
+        exposure_status = {
+            "enabled": "Activé",
+            "enabled_default": "Activé (valeur par défaut de Home Assistant)",
+            "disabled": "Désactivé",
+            "unknown": "Non déterminé",
+        }.get(google.get("expose_by_default_state"), "Non déterminé")
+
         lines = ["## Configuration Google Assistant", ""]
 
         if google["status"] == "found":
@@ -356,7 +363,7 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
                 (f"- **Report State :** {enabled(settings.get('report_state'))}"),
                 (
                     "- **Exposition automatique :** "
-                    f"{enabled(settings.get('expose_by_default'))}"
+                    f"{exposure_status}"
                 ),
                 (
                     "- **Compte de service :** "
