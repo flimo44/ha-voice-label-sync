@@ -294,6 +294,12 @@ def prepare_manual_label_preview(
             if options.get("expose") is True
             and current.get(entity_id, {}).get("eligible") is True
         }
+        # Current HA labels also represent deliberate selections made after
+        # the old YAML was created. Preserve them during recovery.
+        expected.update(
+            entity_id for entity_id, item in current.items()
+            if item.get("eligible") is True and item.get("has_label") is True
+        )
         if set(_entities(generation.content)) != expected:
             raise BackupRestoreError(
                 "Recovery Preview differs from eligible old YAML entities."
