@@ -41,7 +41,7 @@ const HVLS_TRANSLATIONS = {
     assistantExampleDirect: "Dans configuration.yaml :",
     assistantExampleInclude: "Variante avec fichier inclus dans configuration.yaml :",
     assistantExampleIncludedContent: "Dans google_assistant.yaml :",
-    assistantExampleNote: "Exemples structurels seulement : d'autres paramètres sont nécessaires. Ne les ajoutez pas à une configuration active sans vérifier les effets Google Home.",
+    assistantExampleNote: "Adaptez project_id au projet Google et SERVICE_ACCOUNT.json à votre fichier de compte de service (sans afficher son contenu). project_id et service_account sont obligatoires pour la configuration manuelle ; report_state est facultatif. Vérifiez la configuration avant toute modification d'une installation active : ces exemples ne prouvent pas la connexion Google Home.",
     assistantFileTitle: "Fichier des entités",
     assistantFileCandidate: "Fichier détecté proposé ; vous pouvez modifier ce chemin.",
     assistantFileManual: "Indiquez le chemin du fichier YAML des entités.",
@@ -582,7 +582,7 @@ const HVLS_TRANSLATIONS = {
     assistantExampleDirect: "In configuration.yaml:",
     assistantExampleInclude: "Alternative with an included file in configuration.yaml:",
     assistantExampleIncludedContent: "In google_assistant.yaml:",
-    assistantExampleNote: "Structural examples only: additional settings are required. Do not add these to an active configuration without checking Google Home effects.",
+    assistantExampleNote: "Replace project_id with your Google project and SERVICE_ACCOUNT.json with your service-account file (never display its contents). project_id and service_account are required for manual setup; report_state is optional. Review active settings before changing them: these examples do not establish a working Google Home connection.",
     assistantFileTitle: "Entity file",
     assistantFileCandidate: "Suggested detected file; you can edit this path.",
     assistantFileManual: "Enter the path to the entity YAML file.",
@@ -3623,12 +3623,18 @@ class HVLSPreviewPanel extends HTMLElement {
             <summary>${this._t("assistantFileHelp")}</summary>
             <p>${this._t("assistantExampleDirect")}</p>
             <pre>google_assistant:
+  project_id: VOTRE_PROJECT_ID
+  service_account: !include SERVICE_ACCOUNT.json
+  report_state: true
   expose_by_default: false
   entity_config: !include google_assistant_entities.yaml</pre>
             <p>${this._t("assistantExampleInclude")}</p>
             <pre>google_assistant: !include google_assistant.yaml</pre>
             <p>${this._t("assistantExampleIncludedContent")}</p>
-            <pre>expose_by_default: false
+            <pre>project_id: VOTRE_PROJECT_ID
+service_account: !include SERVICE_ACCOUNT.json
+report_state: true
+expose_by_default: false
 entity_config: !include google_assistant_entities.yaml</pre>
             <p class="diagnostic-note">${this._t("assistantExampleNote")}</p>
           </details>
