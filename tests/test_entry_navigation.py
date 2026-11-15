@@ -13,7 +13,7 @@ import pytest
 
 
 @pytest.fixture
-def setup_module(monkeypatch):
+def entry_setup_env(monkeypatch):
     """Import the entry setup using minimal Home Assistant stubs."""
     def module(name, **attrs):
         m = ModuleType(name)
@@ -74,8 +74,8 @@ def setup_module(monkeypatch):
     return entry_module, device_registry, registry
 
 
-def test_post_install_device_exposes_visit_link_without_buttons(setup_module):
-    entry_module, dr, registry = setup_module
+def test_post_install_device_exposes_visit_link_without_buttons(entry_setup_env):
+    entry_module, dr, registry = entry_setup_env
     entry = SimpleNamespace(
         entry_id="hvls-instance-1", data={"onboarding_mode": "existing"},
         options={},
@@ -105,7 +105,7 @@ def test_post_install_device_exposes_visit_link_without_buttons(setup_module):
     assert "hvls-instance-1" not in hass.data["ha_voice_label_sync"]
 
 
-def test_sidebar_panel_link_matches_visit_url(setup_module):
-    entry_module, _, _ = setup_module
+def test_sidebar_panel_link_matches_visit_url(entry_setup_env):
+    entry_module, _, _ = entry_setup_env
     assert entry_module.PANEL_URL_PATH == "hvls-preview"
     assert not Path("custom_components/ha_voice_label_sync/button.py").exists()
