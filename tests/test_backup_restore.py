@@ -1389,3 +1389,21 @@ def test_recovery_no_label_changes_is_allowed_when_old_yaml_differs(
     assert plan["comparison"]["status"] == "ok"
     assert "switch.one" in [x["entity_id"] for x in plan["comparison"]["modified"]]
     assert output.read_text() == original
+
+
+def test_recovery_requires_exact_current_ha_membership(backup_module, tmp_path):
+    output = tmp_path / "google_entities.yaml"
+    original = "switch.one:\\n  expose: true\\n  name: One\\n"
+    output.write_text(original, encoding="utf-8")
+    registries = _manual_label_state()
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch"})
+    )
+    # Even a confirmed reviewer cannot silently import an unrelated label.
+    with pytest.raises(backup_module.BackupRestoreError, match="differs"):
+        backup_module.prepare_manual_label_preview(
+            output, catalog, registries, "HVLS", frozenset({"switch"}),
+            [{"entity_id": "switch.two", "enabled": True}],
+            recovery=True,
+        )
+    assert output.read_text() == original
