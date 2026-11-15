@@ -726,7 +726,7 @@ def restore_reviewed_backup(
     output_path: Path,
     backup_id: str,
     backup_sha256: str,
-    production_sha256: str,
+    production_sha256: str | None,
     *,
     entry_id: str,
     ownership_registry_path: Path,
@@ -734,15 +734,23 @@ def restore_reviewed_backup(
     prepared_sha256: str | None = None,
 ) -> dict:
     """Restore only an explicitly reviewed snapshot, after preserving production."""
-    if not all(isinstance(value, str) and _SHA.fullmatch(value)
-               for value in (backup_sha256, production_sha256)):
+    if (
+        not isinstance(backup_sha256, str) or not _SHA.fullmatch(backup_sha256)
+        or (
+            production_sha256 is not None
+            and (
+                not isinstance(production_sha256, str)
+                or not _SHA.fullmatch(production_sha256)
+            )
+        )
+    ):
         raise BackupRestoreError("Invalid review tokens.")
     backup_path = _get_backup(output_path, backup_id)
     candidate = _read_yaml(backup_path)
     if not hmac.compare_digest(preview_digest(candidate), backup_sha256):
         raise PreviewChangedError("Selected backup changed since the review.")
     current_review = review_backup(output_path, backup_id)
-    if not hmac.compare_digest(current_review["production_sha256"], production_sha256):
+    if current_review["production_sha256"] != production_sha256:
         raise PreviewChangedError("Production changed since the review.")
     # The server supplies only a freshly recomputed proposal. Never accept
     # mismatched partial content or a forged target fingerprint.
@@ -773,7 +781,13 @@ def restore_reviewed_backup(
     ownership = evaluate_registered_output(
         output_path, entry_id, ownership_registry_path,
     )
-    if ownership.status != "managed" or not ownership.write_allowed:
+    missing_managed = (
+        production_sha256 is None
+        and ownership.reason_code == "managed_output_missing"
+    )
+    if not missing_managed and (
+        ownership.status != "managed" or not ownership.write_allowed
+    ):
         raise BackupRestoreError(
             "Restore ownership verification failed before creating the hold"
         )
@@ -782,28 +796,38 @@ def restore_reviewed_backup(
     create_guard(
         ownership_registry_path,
         entry_id=entry_id, output_path=output_path,
-        backup_id=backup_id, original_sha256=production_sha256,
+        backup_id=backup_id,
+        original_sha256=production_sha256 or preview_digest(""),
         restored_sha256=target_sha256,
     )
-    # The supported HA endpoints serialize restoration and generation via
-    # the shared HA workflow lock. Recheck once more after installing the hold
-    # before invoking the existing atomic writer.
+    # The shared HA workflow lock serializes restores with other operations.
+    # A missing-file recovery creates exclusively and preserves the guard
+    # until labels and YAML have been reconciled.
     validate_production_unchanged(output_path, production_sha256)
     try:
-        result = write_owned_output(
-            output_path=output_path,
-            content=target,
-            entry_id=entry_id,
-            ownership_registry_path=ownership_registry_path,
-            backup_directory=_backup_directory(output_path),
-            restore_mode=True,
-        )
+        if missing_managed:
+            result = rebuild_missing_owned_output(
+                output_path=output_path,
+                content=target,
+                entry_id=entry_id,
+                ownership_registry_path=ownership_registry_path,
+                restore_backup_id=backup_id,
+            )
+        else:
+            result = write_owned_output(
+                output_path=output_path,
+                content=target,
+                entry_id=entry_id,
+                ownership_registry_path=ownership_registry_path,
+                backup_directory=_backup_directory(output_path),
+                restore_mode=True,
+            )
     except (FileWriterError, ValueError) as exc:
         raise BackupRestoreError(
             f"Restore ownership authorization failed: {exc}"
         ) from exc
 
-    if result.backup_path is None:
+    if result.backup_path is None and not missing_managed:
         raise BackupRestoreError(
             "Restore safety backup was not created."
         )
@@ -811,7 +835,9 @@ def restore_reviewed_backup(
     return {
         "restored": True,
         "backup_id": backup_id,
-        "safety_backup": result.backup_path.name,
+        "safety_backup": (
+            result.backup_path.name if result.backup_path else None
+        ),
         "bytes_written": result.bytes_written,
         "reconciliation_required": True,
     }
