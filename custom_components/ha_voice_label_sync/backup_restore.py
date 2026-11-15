@@ -224,7 +224,7 @@ def prepare_manual_label_preview(
     """
     if (
         not isinstance(changes, list)
-        or not (0 if recovery else 1) <= len(changes) <= 100
+        or not (0 if recovery else 1) <= len(changes) <= (500 if recovery else 100)
         or any(
             not isinstance(item, dict)
             or set(item) != {"entity_id", "enabled"}
