@@ -1963,7 +1963,7 @@ async def websocket_review_backup(
     vol.Required("type"): WS_TYPE_PREPARE_BACKUP_PREVIEW,
     vol.Required("backup_id"): str,
     vol.Required("backup_sha256"): str,
-    vol.Required("production_sha256"): str,
+    vol.Required("production_sha256"): vol.Any(None, str),
     vol.Optional("ignored_entities", default=[]): [str],
 })
 async def websocket_prepare_backup_preview(
@@ -1981,6 +1981,15 @@ async def websocket_prepare_backup_preview(
             registry_path = Path(hass.config.path(".hvls", "ownership.json"))
             # Legacy restores must be reconciled before starting another plan.
             assert_not_guarded(registry_path, entries[0].entry_id, output_path)
+            if msg["production_sha256"] is None:
+                owner = await hass.async_add_executor_job(
+                    evaluate_registered_output,
+                    output_path, entries[0].entry_id, registry_path,
+                )
+                if owner.reason_code != "managed_output_missing":
+                    raise BackupRestoreError(
+                        "Backup recovery requires missing HVLS-owned production."
+                    )
             settings = {**entries[0].data, **entries[0].options}
             registries = get_live_registries(hass)
             catalog = await hass.async_add_executor_job(
@@ -2018,7 +2027,7 @@ async def websocket_prepare_backup_preview(
     vol.Required("type"): WS_TYPE_APPLY_BACKUP_PREVIEW,
     vol.Required("backup_id"): str,
     vol.Required("backup_sha256"): str,
-    vol.Required("production_sha256"): str,
+    vol.Required("production_sha256"): vol.Any(None, str),
     vol.Required("label_plan_sha256"): str,
     vol.Optional("ignored_entities", default=[]): [str],
 })
@@ -2047,6 +2056,15 @@ async def websocket_apply_backup_preview(
                 hass.config.path(".hvls", "ownership.json")
             )
             assert_not_guarded(ownership_path, entry.entry_id, output_path)
+            if msg["production_sha256"] is None:
+                owner = await hass.async_add_executor_job(
+                    evaluate_registered_output,
+                    output_path, entry.entry_id, ownership_path,
+                )
+                if owner.reason_code != "managed_output_missing":
+                    raise BackupRestoreError(
+                        "Backup recovery requires missing HVLS-owned production."
+                    )
 
             # A fresh HA snapshot and file digest must reproduce the exact
             # labels and YAML which the administrator reviewed.
@@ -2071,7 +2089,8 @@ async def websocket_apply_backup_preview(
                 or review["label_plan"]["review"]
                 or not review["projection"]["ready"]
                 or (
-                    review["comparison"]["identical_text"]
+                    review["comparison"]["status"] == "ok"
+                    and review["comparison"]["identical_text"]
                     and not review["label_plan"]["add"]
                     and not review["label_plan"]["remove"]
                 )
