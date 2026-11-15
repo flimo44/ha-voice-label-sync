@@ -1393,7 +1393,7 @@ def test_recovery_no_label_changes_is_allowed_when_old_yaml_differs(
 
 def test_recovery_requires_exact_current_ha_membership(backup_module, tmp_path):
     output = tmp_path / "google_entities.yaml"
-    original = "switch.one:\\n  expose: true\\n  name: One\\n"
+    original = "switch.one:\n  expose: true\n  name: One\n"
     output.write_text(original, encoding="utf-8")
     registries = _manual_label_state()
     catalog = backup_module.build_entity_catalog(
