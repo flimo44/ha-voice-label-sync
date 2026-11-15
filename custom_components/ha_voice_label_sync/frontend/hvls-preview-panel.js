@@ -115,6 +115,7 @@ const HVLS_TRANSLATIONS = {
     assistantTakeoverConfirm: "Confier le fichier {path} à HVLS ?\n\nEntités actuelles : {entities} ({issues} à examiner).\nDifférences proposées par le Preview : {added} ajout(s), {removed} suppression(s), {modified} modification(s).\n\nUne sauvegarde obligatoire sera créée. Le fichier de production ne sera PAS modifié et aucun Apply ne sera lancé. Seule sa gestion future par HVLS sera autorisée.",
     assistantTakeoverSuccess: "Fichier repris par HVLS. Sauvegarde vérifiée : {backup}. Aucun Apply effectué. Examinez les différences dans Preview avant toute application.",
     assistantTakeoverFailure: "Reprise refusée ou incomplète : vérifiez le fichier, les sauvegardes et le statut de propriété, puis actualisez. Aucun Apply automatique.",
+    assistantTakeoverRegistrationFailed: "Sauvegarde créée, mais le transfert de propriété a échoué. Consultez les journaux Home Assistant (HVLS recovery) avant un nouvel essai.",
     assistantTakeoverBusy: "Vérification et sauvegarde du fichier en cours…",
     assistantAdoptConfirm: "Ajouter les labels HVLS aux {count} entités compatibles ? Le fichier YAML source et Google Assistant ne seront pas modifiés. Chaque ajout est contrôlé séparément : en cas d'échec, les ajouts déjà effectués sont conservés et signalés.",
     assistantAdoptBusy: "Ajout des labels HVLS : {done} / {total}",
@@ -632,6 +633,7 @@ const HVLS_TRANSLATIONS = {
     assistantTakeoverConfirm: "Let HVLS manage {path}?\n\nCurrent entities: {entities} ({issues} to review).\nPreview differences: {added} added, {removed} removed, {modified} modified.\n\nA mandatory backup will be created. Production will NOT be edited and no Apply will run. This only authorizes future HVLS management.",
     assistantTakeoverSuccess: "HVLS now manages this YAML. Verified backup: {backup}. No Apply performed. Review Preview differences before applying.",
     assistantTakeoverFailure: "Takeover refused or incomplete: check the YAML, backups and ownership status, then refresh. No automatic Apply.",
+    assistantTakeoverRegistrationFailed: "Sauvegarde créée, mais la propriété n’a pas été transférée. Consultez les journaux Home Assistant (HVLS recovery). Ne répétez pas la reprise avant diagnostic.",
     assistantTakeoverBusy: "Verifying and backing up existing YAML…",
     assistantAdoptConfirm: "Add HVLS labels to {count} eligible entities? Neither the source YAML nor Google Assistant will be changed. Each addition is checked independently: if one fails, earlier successful additions remain and are reported.",
     assistantAdoptBusy: "Adding HVLS labels: {done} / {total}",
@@ -5140,8 +5142,12 @@ entity_config: !include google_assistant_entities.yaml</pre>
         " " + result.backup_name;
       // Refresh the server's ownership evaluation, never apply the Preview.
       await this._loadPreview();
-    } catch (_error) {
-      this._assistantTakeoverMessage = this._t("assistantTakeoverFailure");
+    } catch (error) {
+      const message = String(error?.message || "");
+      this._assistantTakeoverMessage = message.includes(
+        "ownership_registration_failed_after_backup"
+      ) ? this._t("assistantTakeoverRegistrationFailed")
+        : this._t("assistantTakeoverFailure");
       // A backup or ownership record may already exist; always reread.
       await this._loadPreview();
     } finally {
