@@ -2450,8 +2450,6 @@ class HVLSPreviewPanel extends HTMLElement {
               (current) => current.entity_id === entity.entity_id
             );
             if (catalogEntity?.has_label === true) {
-              const control = document.createElement("label");
-              control.className = "entity-hvls-control";
               const checkbox = document.createElement("input");
               checkbox.type = "checkbox";
               checkbox.className = "entity-hvls-checkbox";
@@ -2465,14 +2463,9 @@ class HVLSPreviewPanel extends HTMLElement {
               checkbox.addEventListener("change", () => {
                 this._setEntityLabel(catalogEntity, checkbox);
               });
-              const caption = document.createElement("span");
-              caption.textContent = this._manualLabelChanges?.has(entity.entity_id)
-                ? "HVLS · " + this._t("manualLabelPending") : "HVLS";
-              if (this._manualLabelChanges?.has(entity.entity_id)) {
-                control.classList.add("pending");
-              }
-              control.append(checkbox, caption);
-              itemRow.appendChild(control);
+              itemRow.appendChild(this._createEntityHVLSControl(
+                checkbox, this._manualLabelChanges?.has(entity.entity_id) === true
+              ));
             }
 
             // A removal remains visible even if its HA label is already
@@ -2823,7 +2816,7 @@ class HVLSPreviewPanel extends HTMLElement {
           display:flex; align-items:center; justify-content:space-between; gap:8px;
         }
         .stats-entity-row > .entity-more-info { flex:1; min-width:0; }
-        .stats-entity-row > .entity-hvls-control { flex-shrink:0; }
+        .stats-entity-row > .entity-hvls-control-area { flex-shrink:0; }
         .production-status {
           display:inline-flex; align-items:center; justify-content:center;
           width:15px; min-width:15px; height:15px;
@@ -2984,6 +2977,30 @@ class HVLSPreviewPanel extends HTMLElement {
           margin-top: 10px;
         }
 
+        .entity-hvls-control-area {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 7px;
+        }
+        .entity-hvls-review-link {
+          padding: 0;
+          margin: 0;
+          border: 0;
+          background: none;
+          color: #e6a23c;
+          font: inherit;
+          font-size: 12px;
+          cursor: pointer;
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+        .entity-hvls-review-link:focus-visible {
+          outline: 2px solid var(--primary-color);
+          outline-offset: 2px;
+          border-radius: 3px;
+        }
         .entity-hvls-control {
           display: inline-flex;
           align-items: center;
@@ -3844,6 +3861,32 @@ entity_config: !include google_assistant_entities.yaml</pre>
     }));
   }
 
+  _createEntityHVLSControl(checkbox, pending) {
+    const area = document.createElement("span");
+    area.className = "entity-hvls-control-area";
+    const control = document.createElement("label");
+    control.className = pending
+      ? "entity-hvls-control pending" : "entity-hvls-control";
+    const text = document.createElement("span");
+    text.textContent = "HVLS";
+    control.append(checkbox, text);
+    area.appendChild(control);
+
+    if (pending) {
+      // The review action must NOT be a descendant of the checkbox label:
+      // clicking that label would otherwise toggle and cancel the proposal.
+      const review = document.createElement("button");
+      review.type = "button";
+      review.className = "entity-hvls-review-link";
+      review.textContent = this._t("manualLabelPending");
+      review.title = this._t("pendingAction");
+      review.setAttribute("aria-label", this._t("pendingAction"));
+      review.addEventListener("click", () => this._activateTab("preview"));
+      area.appendChild(review);
+    }
+    return area;
+  }
+
   _renderEntities() {
     const catalog = this._entityCatalog;
     if (!catalog) return;
@@ -4021,9 +4064,6 @@ entity_config: !include google_assistant_entities.yaml</pre>
             info.append(reason, explanationText);
           }
 
-          const control = document.createElement("label");
-          control.className = "entity-hvls-control";
-
           const checkbox = document.createElement("input");
           checkbox.type = "checkbox";
           checkbox.className = "entity-hvls-checkbox";
@@ -4042,15 +4082,10 @@ entity_config: !include google_assistant_entities.yaml</pre>
             this._setEntityLabel(entity, checkbox);
           });
 
-          const controlText = document.createElement("span");
-          controlText.textContent = this._manualLabelChanges?.has(entity.entity_id)
-            ? "HVLS · " + this._t("manualLabelPending") : "HVLS";
-          if (this._manualLabelChanges?.has(entity.entity_id)) {
-            control.classList.add("pending");
-          }
-
-          control.append(checkbox, controlText);
-          row.append(info, label, control);
+          const controlArea = this._createEntityHVLSControl(
+            checkbox, this._manualLabelChanges?.has(entity.entity_id) === true
+          );
+          row.append(info, label, controlArea);
           rows.appendChild(row);
         }
 
