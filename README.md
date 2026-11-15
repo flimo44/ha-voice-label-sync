@@ -14,7 +14,7 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 > [!IMPORTANT]
 > **HA Voice Label Sync (HVLS) is not a voice assistant integration.**
 >
-> HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. Set up and verify Google Assistant before using HVLS.
+> HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. You can select entities, inspect a Preview and manage the YAML **without Google Assistant being connected**; configure Google Assistant separately only when you want to expose the selected entities to Google Home.
 
 **Latest published stable:** [`v1.0.1`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.1). **Previous beta:** [`v1.1.0-beta.4`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.1.0-beta.4). **Next beta candidate:** `v1.1.0-beta.5` (tag from `release/v1.1.0-beta.5` only).  
 **Python core dependency:** `ha-voice-label-sync==0.3.6` (separate from the Home Assistant integration version).
