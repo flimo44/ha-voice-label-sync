@@ -1230,3 +1230,47 @@ def test_manual_label_apply_keeps_guard_if_label_update_fails(
     assert connection.send_error.call_args.args[1] == "manual_label_apply_failed"
     ws.create_guard.assert_called_once()
     ws.complete_preview_restoration.assert_not_called()
+
+
+def test_recovery_apply_unlocks_only_after_guarded_yaml_and_labels(
+    websocket_module,
+):
+    """Review flag cannot bypass the old-file recovery gate."""
+    ws = websocket_module.websocket
+    changes = [{"entity_id": "switch.new", "enabled": True}]
+    hass = make_hass()
+    entry = SimpleNamespace(
+        data={"label": "google_assistant", "onboarding_mode": "existing"},
+        options={}, entry_id="test-installation",
+    )
+    hass.config_entries.async_entries = lambda domain: [entry]
+    hass.config_entries.async_update_entry = Mock()
+    snapshot = ws.get_live_registries(hass)
+    _manual_ws_plan(ws, changes, snapshot)
+    first = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    request = {
+        "id": 240, "changes": changes,
+        "preview_sha256": "b" * 64,
+        "production_sha256": "a" * 64,
+        "label_plan_sha256": "c" * 64,
+    }
+    asyncio.run(ws.websocket_apply_manual_label_preview(
+        hass, first, request,
+    ))
+    first.send_result.assert_not_called()
+    assert first.send_error.call_args.args[1] == "manual_label_apply_failed"
+    ws.write_owned_output.assert_not_called()
+    hass.config_entries.async_update_entry.assert_not_called()
+
+    second = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_manual_label_preview(
+        hass, second, {**request, "recovery": True},
+    ))
+    second.send_error.assert_not_called()
+    assert second.send_result.call_args.args[1]["reconciled"] is True
+    ws.write_owned_output.assert_called_once()
+    assert ws.write_owned_output.call_args.kwargs["restore_mode"] is True
+    ws.complete_preview_restoration.assert_called_once()
+    hass.config_entries.async_update_entry.assert_called_once_with(
+        entry, data={**entry.data, "recovery_completed": True},
+    )
