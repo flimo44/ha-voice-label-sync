@@ -1340,6 +1340,9 @@ class HVLSPreviewPanel extends HTMLElement {
       // The setup choice is guidance only; it never authorizes a write.
       this._onboardingMode = ["new", "existing"].includes(result.onboarding_mode)
         ? result.onboarding_mode : null;
+      this._recoveryPending = result.recovery_pending === true;
+      this._ownershipManaged = result.ownership?.status === "managed" &&
+        result.ownership?.write_allowed === true;
       const validHash = value =>
         typeof value === "string" &&
         /^[0-9a-f]{64}$/.test(value);
@@ -1387,7 +1390,7 @@ class HVLSPreviewPanel extends HTMLElement {
         validHash(result.preview_sha256);
       const canReview = allowedBySafety && !hasNoChanges;
 
-      this._review = canReview
+      this._review = canReview && !this._recoveryPending
         ? {
             preview_sha256: result.preview_sha256,
             production_sha256: result.production_sha256,
@@ -1480,7 +1483,7 @@ class HVLSPreviewPanel extends HTMLElement {
         staged?.mode === "label_preview" &&
         staged.projection?.ready === true &&
         Array.isArray(staged.changes) &&
-        staged.changes.length > 0 &&
+        (staged.recovery === true || staged.changes.length > 0) &&
         staged.label_plan?.review?.length === 0 &&
         ["ok", "missing"].includes(staged.comparison?.status) &&
         /^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "");
@@ -3588,7 +3591,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
   async _applyManualLabelPreview() {
     const stage = this._stagedRestore;
     if (!this._hass || stage?.mode !== "label_preview" ||
-        stage.projection?.ready !== true || !stage.changes?.length ||
+        stage.projection?.ready !== true ||
+        (!stage.recovery && !stage.changes?.length) ||
         !/^[0-9a-f]{64}$/.test(stage.label_plan_sha256 || "") ||
         this._entityWritePending || this._restoring || this._applying ||
         this._generating || this._refreshing) return;
@@ -3606,12 +3610,17 @@ entity_config: !include google_assistant_entities.yaml</pre>
         preview_sha256: stage.preview_sha256,
         production_sha256: stage.production_sha256,
         label_plan_sha256: stage.label_plan_sha256,
+        recovery: stage.recovery === true,
       });
       if (applied?.applied !== true || applied?.reconciled !== true) {
         throw new Error("Unverified label-Preview Apply response");
       }
       this._manualLabelChanges = null;
       this._stagedRestore = null;
+      if (stage.recovery === true) {
+        this._assistantFileReport = null;
+        this._assistantAdoptMessage = null;
+      }
       this._backupList = null;
       await this._hass.callWS({
         type: "ha_voice_label_sync/generate_preview",
@@ -4861,10 +4870,10 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const catalog = new Map(this._entityCatalog.entities.map(
       entity => [entity.entity_id, entity]
     ));
-    const seen = new Set();
-    const rows = [];
-    const candidates = [];
-    const totals = {ready: 0, already: 0, excluded: 0, review: 0};
+    const rows = [], candidates = [], recoverable = [], seen = new Set();
+    const totals = {total: report.counts?.entries || 0,
+      ready: 0, already: 0, recoverable: 0, missing: 0,
+      ineligible: 0, excluded: 0, review: 0};
     for (const entry of report.adoption_entries) {
       if (!entry || typeof entry.entity_id !== "string" ||
           !/^[a-z0-9_]+\.[a-z0-9_]+$/.test(entry.entity_id) ||
@@ -4874,53 +4883,44 @@ entity_config: !include google_assistant_entities.yaml</pre>
           !Array.isArray(entry.reasons)) return null;
       seen.add(entry.entity_id);
       const entity = catalog.get(entry.entity_id);
-      let category = "review";
-      let reasonKey = null;
-      let noteKey = null;
+      let category = "review", reasonKey = null, noteKey = null;
       if (entry.reasons.length) {
         reasonKey = "assistantAdoptReviewYamlIssue";
-      } else if (entry.exposure === "invalid") {
-        reasonKey = "assistantAdoptReviewInvalidExposure";
-      } else if (!entity) {
-        reasonKey = "assistantAdoptReviewMissingEntity";
-      } else if (entry.exposure === "unset") {
-        reasonKey = "assistantAdoptReviewImplicitExposure";
-      } else if (entity.has_label !== true && entity.has_label !== false) {
-        reasonKey = "assistantAdoptReviewUnknownLabel";
       } else if (entry.exposure === "exclude") {
-        if (entity.has_label === false) {
-          category = "excluded";
-          if (entry.has_customizations) {
-            noteKey = "assistantAdoptCustomValuesUnverified";
-          }
-        } else {
-          reasonKey = "assistantAdoptReviewExcludedLabeled";
+        category = "excluded";
+        if (entity?.has_label === true) {
+          noteKey = "assistantAdoptReviewExcludedLabeled";
         }
+      } else if (entry.exposure !== "expose") {
+        reasonKey = entry.exposure === "unset" ?
+          "assistantAdoptReviewImplicitExposure" : "assistantAdoptReviewInvalidExposure";
+      } else if (!entity) {
+        category = "missing";
+        reasonKey = "assistantAdoptReviewMissingEntity";
       } else if (entity.eligible !== true) {
+        category = "ineligible";
         reasonKey = "assistantAdoptReviewIneligible";
       } else if (entity.has_label === true) {
-        // The label is already present. name/room are generated by HVLS too:
-        // their presence alone must not turn a labeled entity into "review".
-        // Do not claim YAML values match; the inspector never returns them.
         category = "already";
-        if (entry.has_customizations) {
-          noteKey = "assistantAdoptCustomValuesUnverified";
-        }
-      } else if (entry.has_customizations) {
-        reasonKey = "assistantAdoptReviewUnlabeledCustom";
-      } else {
+        recoverable.push(entry.entity_id);
+      } else if (entity.has_label === false) {
         category = "ready";
+        recoverable.push(entry.entity_id);
         candidates.push(entry.entity_id);
+      } else {
+        reasonKey = "assistantAdoptReviewUnknownLabel";
+      }
+      if (entry.has_customizations && ["ready", "already"].includes(category)) {
+        noteKey = "assistantAdoptCustomValuesUnverified";
       }
       totals[category] += 1;
       rows.push({entity_id: entry.entity_id, category, reasonKey, noteKey});
     }
-    // Invalid YAML keys have no safe entity ID to display, but remain
-    // local issues. Do not silently classify them as importable entries.
-    const unlisted = Math.max(0, (report.counts?.entries || 0) - rows.length);
+    const unlisted = Math.max(0, totals.total - rows.length);
     totals.review += unlisted;
+    totals.recoverable = recoverable.length;
     return {
-      candidates, rows, totals,
+      candidates, recoverable, rows, totals,
       complete: report.adoption_entries_complete === true &&
         unlisted <= (report.counts?.entries_with_anomalies || 0),
       canWrite: Array.isArray(this._entityCatalog.label_ids) &&
@@ -4959,13 +4959,14 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._entityLoading === true;
     const action = this.querySelector("#assistantAdoptApply");
     if (action) {
-      action.textContent = plan?.candidates.length
-        ? this._tf("assistantAdoptAction", {count: plan.candidates.length})
+      action.textContent = plan?.recoverable.length
+        ? this._tf("assistantAdoptAction", {count: plan.recoverable.length})
         : this._t("assistantAdoptNone");
       action.disabled = this._assistantAdoptBusy === true ||
         this._entityWritePending === true ||
         this._entityLoading === true ||
-        !plan?.complete || !plan?.canWrite || !plan.candidates.length;
+        !plan?.complete || !plan?.canWrite || !plan.recoverable.length ||
+        !this._ownershipManaged || !this._recoveryPending;
     }
     const result = this.querySelector("#assistantAdoptResult");
     if (result) result.textContent = this._assistantAdoptMessage ||
@@ -5009,6 +5010,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
           ready: "assistantAdoptReasonAdd",
           already: "assistantAdoptReasonAlready",
           excluded: "assistantAdoptReasonExclude",
+          missing: "assistantAdoptReasonReview",
+          ineligible: "assistantAdoptReasonReview",
           review: "assistantAdoptReasonReview",
         }[entry.category];
         const details = [entry.reasonKey, entry.noteKey]
@@ -5047,22 +5050,15 @@ entity_config: !include google_assistant_entities.yaml</pre>
           !/^[0-9a-f]{64}$/.test(prepared.preview_sha256 || "")) {
         throw new Error("stale_source");
       }
-      const diff = prepared.changes || {};
+      const plan = this._assistantAdoptionPlan();
+      if (!plan?.complete || !plan.canWrite ||
+          prepared.entities !== plan.totals.total) {
+        throw new Error("recovery_inventory_changed");
+      }
       const confirmed = window.confirm(
-        prepared.recorded_sha_mismatch
-          ? this._tf("assistantReinstallChangedConfirm", {
-              path, oldSha: prepared.previous_sha256,
-              newSha: prepared.production_sha256,
-              entities: prepared.entities, added: diff.added,
-              removed: diff.removed, modified: diff.modified,
-            })
-          : prepared.previous_entry_id
-            ? this._tf("assistantReinstallConfirm", {path})
-            : this._tf("assistantTakeoverConfirm", {
-                path, entities: prepared.entities, issues: prepared.issues,
-                added: diff.added, removed: diff.removed,
-                modified: diff.modified,
-              })
+        (prepared.recorded_sha_mismatch ?
+          this._t("assistantRecoveryChangedNote") : "") +
+        this._tf("assistantRecoveryTakeoverConfirm", plan.totals)
       );
       if (!confirmed) {
         this._assistantTakeoverMessage = "";
@@ -5084,11 +5080,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
           typeof result.backup_name !== "string") {
         throw new Error("unverified_result");
       }
-      this._assistantTakeoverMessage = this._tf(
-        result.replaced_file_recovered
-          ? "assistantReinstallChangedSuccess" : "assistantTakeoverSuccess",
-        {backup: result.backup_name},
-      );
+      this._assistantTakeoverMessage = this._t("assistantRecoveryReady") +
+        " " + result.backup_name;
       // Refresh the server's ownership evaluation, never apply the Preview.
       await this._loadPreview();
     } catch (_error) {
@@ -5104,94 +5097,83 @@ entity_config: !include google_assistant_entities.yaml</pre>
   async _adoptAssistantFile() {
     const plan = this._assistantAdoptionPlan();
     if (!this._hass || !plan?.complete || !plan.canWrite ||
-        !plan.candidates.length || this._assistantAdoptBusy ||
+        !plan.recoverable.length || !this._ownershipManaged ||
+        !this._recoveryPending || this._assistantAdoptBusy ||
         this._entityWritePending || this._entityLoading ||
         this._applying || this._restoring || this._generating) return;
-    const ids = [...plan.candidates];
     const path = this._assistantFilePath.trim();
     const original = this._assistantFileReport;
     const requestId = this._assistantFileRequestId || 0;
-    if (!window.confirm(this._tf("assistantAdoptConfirm", {
-      count: ids.length,
-    }))) return;
-
     this._assistantAdoptBusy = true;
     this._entityWritePending = true;
-    this._review = null;  // Label changes invalidate previous Preview approval.
-    this._loadId = (this._loadId || 0) + 1;
+    this._stagedRestore = null;
+    this._review = null;
     this._updateApplyButton();
-    let completed = 0;
-    let finished = false;
-    let writeAttempted = false;
-    this._assistantAdoptMessage = this._tf("assistantAdoptBusy", {
-      done: completed, total: ids.length,
-    });
-    this._renderAssistantAdoption();
     try {
       const fresh = await this._hass.callWS({
         type: "ha_voice_label_sync/inspect_assistant_entity_file", path,
       });
-      if (!this._assistantAdoptionAvailable() ||
-          requestId !== (this._assistantFileRequestId || 0) ||
+      if (requestId !== (this._assistantFileRequestId || 0) ||
           this._assistantFilePath.trim() !== path ||
-          fresh?.read_only !== true ||
-          fresh?.source_active_verified !== false ||
-          fresh?.migration_authorized !== false ||
-          fresh?.stage_allowed !== false ||
-          fresh?.apply_allowed !== false ||
-          fresh?.cutover_allowed !== false ||
-          !["parsed", "review_required"].includes(fresh.status) ||
-          fresh.file_sha256 !== original.file_sha256 ||
+          fresh?.file_sha256 !== original?.file_sha256 ||
           JSON.stringify(fresh.adoption_entries) !==
-            JSON.stringify(original.adoption_entries)) {
+            JSON.stringify(original?.adoption_entries)) {
         throw new Error("stale_source");
       }
-      // Revalidate current labels and eligibility before starting any write.
       if (!await this._loadEntities()) throw new Error("catalog_unavailable");
-      const verified = this._assistantAdoptionPlan();
-      if (!verified?.complete || !verified.canWrite ||
-          JSON.stringify(verified.candidates) !== JSON.stringify(ids)) {
+      const current = this._assistantAdoptionPlan();
+      if (!current?.complete || !current.canWrite ||
+          JSON.stringify(current.recoverable.slice().sort()) !==
+            JSON.stringify(plan.recoverable.slice().sort())) {
         throw new Error("stale_catalog");
       }
-      for (const entity_id of ids) {
-        if (requestId !== (this._assistantFileRequestId || 0) ||
-            this._assistantFilePath.trim() !== path) {
-          throw new Error("context_changed");
-        }
-        // Existing admin-only, per-entity, eligibility-checked HA label API.
-        // No migration staging API, source YAML write or Google cutover.
-        writeAttempted = true;
-        const response = await this._hass.callWS({
-          type: "ha_voice_label_sync/set_entity_label",
-          entity_id, enabled: true, expected_enabled: false,
-        });
-        if (response?.entity_id !== entity_id ||
-            response?.has_label !== true || response?.changed !== true) {
-          throw new Error("label_not_confirmed");
-        }
-        completed += 1;
-        this._assistantAdoptMessage = this._tf("assistantAdoptBusy", {
-          done: completed, total: ids.length,
-        });
-        this._renderAssistantAdoption();
+      // Start from the old YAML selection but use CURRENT HA eligibility.
+      // Any former entity missing from HA is removed from the NEW YAML only.
+      const desired = new Set(current.recoverable);
+      const changes = this._entityCatalog.entities
+        .filter(entity =>
+          (desired.has(entity.entity_id) && entity.has_label === false) ||
+          (!desired.has(entity.entity_id) && entity.has_label === true))
+        .map(entity => ({
+          entity_id: entity.entity_id, enabled: desired.has(entity.entity_id),
+        }))
+        .sort((a, b) => a.entity_id.localeCompare(b.entity_id));
+      if (changes.length > 500) throw new Error("too_many_label_changes");
+      const preview = await this._hass.callWS({
+        type: "ha_voice_label_sync/prepare_manual_label_preview",
+        changes, recovery: true,
+      });
+      if (preview?.mode !== "label_preview" ||
+          preview.recovery !== true || preview.projection?.ready !== true ||
+          !Array.isArray(preview.changes) ||
+          !/^[a-f0-9]{64}$/.test(preview.label_plan_sha256 || "") ||
+          preview.production_sha256 !== original.file_sha256 ||
+          preview.summary?.total !== current.recoverable.length) {
+        throw new Error("recovery_preview_inconsistent");
       }
-      finished = true;
-    } catch (_error) {
-      // Fail at the first uncertain result. Never guess a rollback.
+      this._manualLabelChanges = new Map(changes.map(
+        item => [item.entity_id, item.enabled]
+      ));
+      this._stagedRestore = preview;
+      this._previewContent = preview.content;
+      this._previewPath = preview.path;
+      this._applyBlockReason = this._t("manualLabelHelp");
+      this._applyBlockReasonCode = null;
+      this._renderAnalysis(preview);
+      this._setContent(preview.content);
+      this._assistantAdoptMessage = this._t("assistantRecoveryPreviewPrepared");
+      this._activateTab("preview");
+    } catch (error) {
+      this._stagedRestore = null;
+      this._manualLabelChanges = null;
+      this._assistantAdoptMessage = this._tf("assistantRecoveryPreviewFailed", {
+        error: error?.message || String(error),
+      });
     } finally {
-      if (writeAttempted) {
-        await this._loadEntities();
-        await this._generatePreview(); // Preview only; never Apply YAML.
-      }
       this._entityWritePending = false;
       this._assistantAdoptBusy = false;
-      this._assistantAdoptMessage = this._tf(
-        finished ? "assistantAdoptDone" :
-          writeAttempted ? "assistantAdoptStopped" : "assistantAdoptStale",
-        {count: completed}
-      );
-      this._updateApplyButton();
       this._renderAssistantAdoption();
+      this._updateApplyButton();
     }
   }
 
