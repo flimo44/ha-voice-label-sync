@@ -879,6 +879,59 @@ function flattenText(node) {
   return [node.textContent || "", ...(node.children || []).map(flattenText)].join(" | ");
 }
 
+test("Recovery Preview explains old-to-new YAML totals without changing diff counts", () => {
+  const {panel} = makePanel(async () => preview());
+  panel._recoveryPending = true;
+  panel._stagedRestore = {recovery: true, mode: "label_preview"};
+  const container = {
+    children: [],
+    appendChild(node) { this.children.push(node); },
+    replaceChildren() { this.children = []; },
+  };
+  panel.querySelector = selector => selector === "#previewChanges" ? container : null;
+  panel._renderPreviewChanges({
+    available: true,
+    production_summary: {total: 40},
+    summary: {total: 25, entities: []},
+    comparison: {
+      status: "ok", added: [],
+      removed: Array.from({length: 15}, (_, i) => "switch.old_" + i),
+      modified: Array.from({length: 16}, (_, i) => ({
+        entity_id: "switch.changed_" + i,
+        fields: {name: {before: "Old", after: "Current"}},
+      })),
+    },
+  });
+  const rendered = flattenText(container);
+  assert.match(rendered, /Différences entre l'ancien et le nouveau YAML/);
+  assert.match(rendered, /Ancien fichier : 40 entités/);
+  assert.match(rendered, /Nouveau fichier proposé : 25 entités/);
+  assert.match(rendered, /Entités supprimées \(15\)/);
+  assert.match(rendered, /Entités modifiées \(16\)/);
+  assert.doesNotMatch(rendered, /Entités ajoutées \(1\)/);
+});
+
+test("Normal Preview keeps its original title and shows no recovery totals", () => {
+  const {panel} = makePanel(async () => preview());
+  const container = {
+    children: [],
+    appendChild(node) { this.children.push(node); },
+    replaceChildren() { this.children = []; },
+  };
+  panel.querySelector = selector => selector === "#previewChanges" ? container : null;
+  panel._renderPreviewChanges({
+    available: true,
+    production_summary: {total: 40},
+    summary: {total: 25, entities: []},
+    comparison: {
+      status: "ok", added: [], removed: ["switch.old"], modified: [],
+    },
+  });
+  const rendered = flattenText(container);
+  assert.match(rendered, /Changements proposés à Google Assistant/);
+  assert.doesNotMatch(rendered, /Ancien fichier : 40 entités/);
+});
+
 test("Preview renders grouped entity changes and modified fields", () => {
   const { panel } = makePanel(async () => preview());
   const container = {
