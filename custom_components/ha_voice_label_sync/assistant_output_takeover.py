@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
 import re
 import stat
@@ -29,6 +30,7 @@ from .restore_guard import read_guard
 
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
 _MAX_BYTES = 2 * 1024 * 1024
+_LOGGER = logging.getLogger(__name__)
 
 
 class ExistingOutputTakeoverError(ValueError):
@@ -229,20 +231,31 @@ def confirm_existing_output_takeover(
         # server-verified unmanaged status, the common writer lock and mandatory
         # verified safety backup. No production write is performed.
         registry = OwnershipRegistry(registry_file)
-        if previous_entry_id is not None:
-            registry.transfer_inactive_owner(
-                previous_entry_id=previous_entry_id,
-                entry_id=entry_id,
-                output_path=str(output),
-                sha256=production_sha256,
-                previous_sha256=previous_sha256,
-                expected_revision=ownership_revision,
+        try:
+            if previous_entry_id is not None:
+                registry.transfer_inactive_owner(
+                    previous_entry_id=previous_entry_id,
+                    entry_id=entry_id,
+                    output_path=str(output),
+                    sha256=production_sha256,
+                    previous_sha256=previous_sha256,
+                    expected_revision=ownership_revision,
+                )
+            else:
+                registry.record_generation(
+                    entry_id=entry_id, output_path=str(output),
+                    sha256=production_sha256,
+                )
+        except (OSError, ValueError):
+            # Keep the exact underlying reason in HA's private log. The
+            # WebSocket error only carries a non-sensitive step identifier.
+            _LOGGER.exception(
+                "HVLS recovery: ownership registration failed after "
+                "verified safety backup; production YAML was not overwritten"
             )
-        else:
-            registry.record_generation(
-                entry_id=entry_id, output_path=str(output),
-                sha256=production_sha256,
-            )
+            raise ExistingOutputTakeoverError(
+                "ownership_registration_failed_after_backup"
+            ) from None
         ownership = evaluate_registered_output(output, entry_id, registry_file)
         if not ownership.write_allowed or ownership.status != "managed":
             raise ExistingOutputTakeoverError(
