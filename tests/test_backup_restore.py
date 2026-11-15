@@ -123,6 +123,7 @@ def _missing_backup_fixture(backup_module, tmp_path):
     output.rename(original)
     backup_id = "google_entities.yaml.20261115-023059.safety.bak"
     backup = tmp_path / ".hvls_backups" / backup_id
+    backup.parent.mkdir(parents=True, exist_ok=True)
     backup.write_text(generated, encoding="utf-8")
     catalog = backup_module.build_entity_catalog(
         registries, "google_assistant", frozenset({"switch"}),
