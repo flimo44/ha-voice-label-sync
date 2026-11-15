@@ -326,6 +326,9 @@ const HVLS_TRANSLATIONS = {
     backupCleanupDone: "Nettoyage effectué : {count} sauvegarde(s) supprimée(s).",
     backupCleanupFailed: "Nettoyage impossible : {error}. Actualisez la liste et réexaminez le plan.",
     backupReviewing: "Comparaison avec la production…",
+    backupMissingReview: "Le fichier de production est absent. Sauvegarde sélectionnée : {count} entités. Vous pouvez la préparer dans le Preview, puis examiner les entités et les étiquettes avant validation.",
+    backupMissingPreview: "La production est absente. Cette sauvegarde propose {count} entités. Les conflits avec les étiquettes actuelles doivent être résolus avant de recréer le YAML.",
+    backupMissingNoSafety: "Aucune (le fichier de production était absent)",
     backupReviewFailed: "Comparaison impossible : {error}",
     backupLoadFailed: "Chargement impossible : {error}",
     backupRestore: "Préparer cette sauvegarde dans le Preview",
@@ -856,6 +859,9 @@ const HVLS_TRANSLATIONS = {
     backupCleanupDone: "Cleanup complete: {count} backups deleted.",
     backupCleanupFailed: "Cleanup refused: {error}. Refresh the list and review again.",
     backupReviewing: "Comparing with production…",
+    backupMissingReview: "Production is missing. Selected backup: {count} entities. You can prepare it in Preview, then review entities and HA labels before confirming.",
+    backupMissingPreview: "Production is missing. This backup proposes {count} entities. Resolve differences with current HA labels before rebuilding the YAML.",
+    backupMissingNoSafety: "None (production file was missing)",
     backupReviewFailed: "Cannot compare: {error}",
     backupLoadFailed: "Cannot load backups: {error}",
     backupRestore: "Prepare this backup in Preview",
@@ -1520,8 +1526,9 @@ class HVLSPreviewPanel extends HTMLElement {
         staged?.mode === "restore_preview" &&
         staged.projection?.ready === true &&
         staged.label_plan?.review?.length === 0 &&
-        staged.comparison?.status === "ok" &&
+        ["ok", "missing"].includes(staged.comparison?.status) &&
         (
+          staged.comparison?.status === "missing" ||
           staged.comparison?.identical_entities === false ||
           staged.comparison?.identical_text === false ||
           (staged.label_plan?.add?.length || 0) > 0 ||
@@ -1712,7 +1719,7 @@ class HVLSPreviewPanel extends HTMLElement {
       });
       if (this._loadId !== requestId) return;
       if (result?.mode !== "restore_preview" ||
-          result?.comparison?.status !== "ok" ||
+          !["ok", "missing"].includes(result?.comparison?.status) ||
           !Array.isArray(result.ignored_entities) ||
           !result.label_plan || !result.projection ||
           !/^[0-9a-f]{64}$/.test(result.label_plan_sha256 || "")) {
@@ -1750,8 +1757,9 @@ class HVLSPreviewPanel extends HTMLElement {
         this._refreshing || this._generating || this._entityWritePending ||
         staged.projection?.ready !== true ||
         staged.label_plan?.review?.length !== 0 ||
-        (staged.comparison?.identical_text === true &&
-          !(staged.label_plan?.add?.length || staged.label_plan?.remove?.length)) ||
+        (staged.comparison?.status === "ok" &&
+         staged.comparison?.identical_text === true &&
+         !(staged.label_plan?.add?.length || staged.label_plan?.remove?.length)) ||
         !/^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "")) return;
     if (!window.confirm(this._t("backupPreviewConfirm"))) return;
 
@@ -1787,7 +1795,7 @@ class HVLSPreviewPanel extends HTMLElement {
         entities: applied.yaml_entities,
         added: applied.label_additions,
         removed: applied.label_removals,
-        backup: applied.safety_backup,
+        backup: applied.safety_backup || this._t("backupMissingNoSafety"),
       });
     } catch (error) {
       // The server may have changed production before a partial failure:
@@ -1799,7 +1807,7 @@ class HVLSPreviewPanel extends HTMLElement {
           entities: applied.yaml_entities,
           added: applied.label_additions,
           removed: applied.label_removals,
-          backup: applied.safety_backup,
+          backup: applied.safety_backup || this._t("backupMissingNoSafety"),
         });
       } else {
         this._setStatusKey("backupPreviewApplyFailed", {
@@ -2036,8 +2044,12 @@ class HVLSPreviewPanel extends HTMLElement {
       note.className = "diagnostic-note";
       const managedMissing = result.ownership?.reason_code ===
         "managed_output_missing";
+      const missingBackup = this._stagedRestore?.mode === "restore_preview" &&
+        this._stagedRestore.production_missing === true;
       note.textContent = comparison.status === "missing"
-        ? managedMissing
+        ? missingBackup
+          ? this._tf("backupMissingPreview", {count: result.summary.total})
+          : managedMissing
           ? this._tf("missingRebuildReview", {count: result.summary.total})
           : this._onboardingMode === "new" && result.summary.total > 0
             ? this._tf("initialYamlPreview", {count: result.summary.total})
@@ -4412,8 +4424,24 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const restore = this.querySelector("#restoreBackup");
     if (restore) restore.textContent = this._t("backupRestore");
     const data = this._backupReview;
-    if (!data || !data.comparison || data.comparison.status !== "ok") {
+    if (!data || !data.comparison ||
+        !["ok", "missing"].includes(data.comparison.status)) {
       if (restore) restore.disabled = true;
+      return;
+    }
+    if (data.comparison.status === "missing") {
+      const note = document.createElement("p");
+      note.className = "diagnostic-note";
+      note.textContent = this._tf("backupMissingReview", {
+        count: data.summary?.total || 0,
+      });
+      container.appendChild(note);
+      if (restore) {
+        restore.disabled = Boolean(
+          this._restoring || this._applying || this._refreshing ||
+          this._generating || this._entityWritePending
+        );
+      }
       return;
     }
     const heading = document.createElement("h3");
@@ -4695,7 +4723,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const data = this._backupReview;
     if (!data || this._restoring || this._applying ||
         this._refreshing || this._generating || this._entityWritePending ||
-        data.comparison?.status !== "ok") return;
+        !["ok", "missing"].includes(data.comparison?.status)) return;
 
     this._restoring = true;
     const requestId = (this._loadId || 0) + 1;
@@ -4716,7 +4744,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       if (this._loadId !== requestId) return;
       if (result?.mode !== "restore_preview" ||
           result?.available !== true || result?.can_apply !== false ||
-          result?.comparison?.status !== "ok" ||
+          !["ok", "missing"].includes(result?.comparison?.status) ||
           typeof result?.content !== "string" ||
           !/^[0-9a-f]{64}$/.test(result.label_plan_sha256 || "") ||
           !result.label_plan || !result.projection) {
@@ -4737,7 +4765,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._updateApplyButton();
       this._activateTab("preview");
       const diff = result.comparison;
-      const counts = {
+      const counts = diff.status === "missing" ? {
+        added: result.summary?.total || 0, removed: 0, modified: 0,
+      } : {
         added: diff.added.length, removed: diff.removed.length,
         modified: diff.modified.length,
       };
