@@ -1407,3 +1407,30 @@ def test_recovery_requires_exact_current_ha_membership(backup_module, tmp_path):
             recovery=True,
         )
     assert output.read_text() == original
+
+
+def test_recovery_preserves_current_labeled_ha_entities_not_in_old_yaml(
+    backup_module, tmp_path,
+):
+    """An old YAML must not erase newer, explicit HA label selections."""
+    output = tmp_path / "google_entities.yaml"
+    original = "switch.one:\n  expose: true\n  name: Old One\n"
+    output.write_text(original, encoding="utf-8")
+    registries = _manual_label_state()
+    # switch.one was selected in the old YAML, and switch.two got labeled
+    # later directly in HA. Both must be part of the current output.
+    registries["entity_registry"]["data"]["entities"][1]["labels"] = [
+        "hvls", "other",
+    ]
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch"})
+    )
+    plan = backup_module.prepare_manual_label_preview(
+        output, catalog, registries, "HVLS", frozenset({"switch"}),
+        [], recovery=True,
+    )
+    assert plan["summary"]["total"] == 2
+    assert plan["comparison"]["added"] == ["switch.two"]
+    assert plan["label_plan"]["remove"] == []
+    assert plan["label_plan"]["add"] == []
+    assert output.read_text() == original
