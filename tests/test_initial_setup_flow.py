@@ -347,3 +347,54 @@ def test_entry_remembers_choice_only_as_navigation_hint(
     new = run(flow, values(new_output), step="new")
     assert new["data"]["onboarding_mode"] == "new"
     assert not new_output.exists()
+
+
+
+def test_initial_default_follows_real_home_assistant_config(tmp_path, environment):
+    module, _ = environment
+    flow, _ = make_flow(environment, tmp_path)
+    module.DEFAULT_OUTPUT = "google_assistant_entities.yaml"
+
+    result = run(flow, step="new")
+    fields = list(result["data_schema"].schema)
+    output_field = next(k for k in fields if str(k) == "output")
+
+    assert output_field.default() == str(
+        tmp_path / "google_assistant_entities.yaml"
+    )
+
+
+def test_options_reject_unsafe_path_before_label_change(tmp_path, environment):
+    from types import SimpleNamespace
+
+    module, labels = environment
+    initial, _ = make_flow(environment, tmp_path)
+    options = module.HVLSOptionsFlow()
+    options.hass = initial.hass
+    options.config_entry = SimpleNamespace(
+        data=values(tmp_path / "google_assistant_entities.yaml"),
+        options={},
+    )
+
+    unsafe = tmp_path.parent / "outside-hvls.yaml"
+    result = asyncio.run(
+        options.async_step_settings(values(unsafe)),
+    )
+    assert result["type"] == "form"
+    assert result["errors"]["base"] == "unsafe_output_path"
+    assert labels == []
+
+
+def test_options_accept_safe_path_without_changing_yaml(tmp_path, environment):
+    from types import SimpleNamespace
+
+    module, labels = environment
+    initial, _ = make_flow(environment, tmp_path)
+    options = module.HVLSOptionsFlow()
+    options.hass = initial.hass
+    data = values(tmp_path / "google_assistant_entities.yaml")
+    options.config_entry = SimpleNamespace(data=data, options={})
+    result = asyncio.run(options.async_step_settings(data))
+    assert result["type"] == "create_entry"
+    assert result["data"]["output"] == data["output"]
+    assert labels == ["google_assistant"]
