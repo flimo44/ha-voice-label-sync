@@ -431,6 +431,7 @@ const HVLS_TRANSLATIONS = {
     productionStatsUnavailable: "Statistiques de production indisponibles : fichier absent, illisible ou invalide.",
     initialLabelsDetected: "{count} entités étiquetées HVLS détectées dans Home Assistant. Vous pouvez créer votre premier YAML à partir de cette sélection.",
     initialLabelsPreview: "Préparer le Preview initial ({count} entités)",
+    initialPendingPreview: "Voir le Preview en attente ({count} modification(s))",
     initialYamlPreview: "Première configuration : {count} entités proposées depuis les étiquettes HA. Le YAML sera créé uniquement après validation.",
     productionRemoval: "Suppression prévue dans le Preview : entité encore présente en production",
     metricRooms: "Pièces",
@@ -954,6 +955,7 @@ const HVLS_TRANSLATIONS = {
     productionStatsUnavailable: "Production statistics unavailable: file missing, unreadable or invalid.",
     initialLabelsDetected: "{count} HVLS-labeled entities found in Home Assistant. You can create the first YAML from this selection.",
     initialLabelsPreview: "Prepare initial Preview ({count} entities)",
+    initialPendingPreview: "Review pending Preview ({count} change(s))",
     initialYamlPreview: "First configuration: {count} entities proposed from current HA labels. YAML will be created only after approval.",
     productionRemoval: "Pending removal in Preview: entity is still present in production",
     metricRooms: "Areas",
@@ -1581,6 +1583,12 @@ class HVLSPreviewPanel extends HTMLElement {
 
   async _generatePreview(fromRefresh = false) {
     if (!this._hass || this._generating || this._applying || this._restoring || (this._refreshing && !fromRefresh)) return;
+    // A normal generation uses only SAVED HA labels. It must not discard
+    // a separately reviewed, not-yet-applied change in the label Preview.
+    if (this._stagedRestore?.mode === "label_preview") {
+      this._activateTab("preview");
+      return;
+    }
 
     this._generating = true;
     this._loadId = (this._loadId || 0) + 1;
@@ -2502,12 +2510,19 @@ class HVLSPreviewPanel extends HTMLElement {
           const prepare = document.createElement("button");
           prepare.type = "button";
           prepare.className = "secondary";
-          prepare.textContent = this._tf("initialLabelsPreview", {
-            count: selected,
-          });
+          const pending = this._stagedRestore?.mode === "label_preview"
+            ? this._stagedRestore.changes?.length || 0 : 0;
+          prepare.textContent = this._tf(
+            pending ? "initialPendingPreview" : "initialLabelsPreview",
+            {count: pending || selected},
+          );
           prepare.disabled = this._generating || this._applying ||
             this._entityWritePending || this._restoring;
           prepare.addEventListener("click", async () => {
+            if (this._stagedRestore?.mode === "label_preview") {
+              this._activateTab("preview");
+              return;
+            }
             await this._generatePreview();
             if (this._review) this._activateTab("preview");
           });
