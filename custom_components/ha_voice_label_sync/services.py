@@ -39,6 +39,11 @@ _LOGGER = logging.getLogger(__name__)
 
 SERVICE_GENERATE = "generate"
 
+DIRECT_GENERATION_DISABLED = (
+    "Direct YAML generation is disabled. Open HA Voice Label Sync, "
+    "review the Preview, and select Apply explicitly."
+)
+
 DEFAULT_DOMAINS = frozenset(
     {
         "binary_sensor",
@@ -94,6 +99,11 @@ async def _async_run_workflow_unlocked(
     context: Context | None = None,
 ) -> WorkflowResult:
     """Run the HVLS workflow for one config entry."""
+    # Defense in depth: do not allow this legacy workflow to write output.
+    # Production writes must use the guarded WebSocket Preview -> Apply path.
+    if not dry_run:
+        raise HomeAssistantError(DIRECT_GENERATION_DISABLED)
+
     settings = {
         **entry.data,
         **entry.options,
@@ -262,18 +272,10 @@ async def async_register_services(hass: HomeAssistant) -> None:
         return
 
     async def handle_generate(call: ServiceCall) -> None:
-        """Generate Google Assistant configuration."""
-        entries = hass.config_entries.async_entries(DOMAIN)
-
-        if not entries:
-            raise HomeAssistantError("HA Voice Label Sync is not configured.")
-
-        await async_run_workflow(
-            hass,
-            entries[0],
-            dry_run=False,
-            context=call.context,
-        )
+        """Reject legacy direct writes, including existing automations."""
+        # Keep the deprecated service registered for an explicit failure,
+        # rather than silently doing nothing or bypassing review.
+        raise HomeAssistantError(DIRECT_GENERATION_DISABLED)
 
     hass.services.async_register(
         DOMAIN,
