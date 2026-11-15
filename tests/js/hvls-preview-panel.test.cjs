@@ -4926,7 +4926,7 @@ test("Recovery stage shows 25 entities and never calls direct set_entity_label",
     }
     if (req.type === "ha_voice_label_sync/prepare_manual_label_preview") {
       assert.equal(req.recovery, true);
-      assert.deepEqual(Array.from(req.changes), [
+      assert.deepEqual(JSON.parse(JSON.stringify(req.changes)), [
         {entity_id: "light.custom", enabled: true},
         {entity_id: "light.new", enabled: true},
       ]);
