@@ -22,7 +22,6 @@ from hvls import (
 )
 from hvls.owned_writer import evaluate_registered_output, write_owned_output
 
-from .bulk_removal import require_bulk_removal_approval
 from .backup_restore import (
     BackupRestoreError,
     apply_backup_cleanup,
@@ -35,6 +34,7 @@ from .backup_restore import (
     restore_reviewed_backup,
     review_backup,
 )
+from .bulk_removal import require_bulk_removal_approval
 from .const import (
     CONF_BACKUP_RETENTION,
     CONF_CREATE_BACKUP,
