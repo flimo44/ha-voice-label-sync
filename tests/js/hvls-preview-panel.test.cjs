@@ -449,6 +449,41 @@ test("Generate Preview regenerates YAML and refreshes panel", async () => {
   assert.match(panel.status, /32 entités/);
 });
 
+test("Generating normal Preview must not discard a pending HA label proposal", async () => {
+  const calls = [], tabs = [];
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request.type);
+    return preview(true);
+  });
+  panel._activateTab = tab => tabs.push(tab);
+  const staged = {
+    mode: "label_preview",
+    changes: [{entity_id: "climate.thermostat_test", enabled: true}],
+    projection: {ready: true},
+  };
+  panel._stagedRestore = staged;
+  panel._manualLabelChanges = new Map([
+    ["climate.thermostat_test", true],
+  ]);
+  await panel._generatePreview();
+  assert.deepEqual(calls, []);
+  assert.deepEqual(tabs, ["preview"]);
+  assert.strictEqual(panel._stagedRestore, staged);
+  assert.equal(panel._manualLabelChanges.get("climate.thermostat_test"), true);
+  assert.equal(controls.generate.disabled, false);
+});
+
+test("Initial Preview button uses a prepared label Preview when one exists", () => {
+  const start = source.indexOf('const pending = this._stagedRestore?.mode === "label_preview"');
+  const end = source.indexOf('panel.appendChild(prepare);', start);
+  const fragment = source.slice(start, end);
+  assert.ok(start > 0 && end > start);
+  assert.match(fragment, /initialPendingPreview/);
+  assert.match(fragment, /this._activateTab\("preview"\)/);
+  assert.match(fragment, /if \(this._stagedRestore\?\.mode === "label_preview"\)/);
+  assert.doesNotMatch(fragment, /apply_preview|set_entity_label/);
+});
+
 test("Generate Preview prevents applying stale review", async () => {
   const pending = deferred();
   const calls = [];
