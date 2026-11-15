@@ -211,6 +211,49 @@ test("Saved draft is blocked when production or HA label state changed", async (
   }
 });
 
+test("A failed second checkbox preparation preserves the earlier saved draft", async () => {
+  const storage = fakeLocalStorage(), calls = [];
+  const entities = [
+    {entity_id: "switch.first", has_label: false, eligible: true},
+    {entity_id: "switch.second", has_label: false, eligible: true},
+  ];
+  const baseline = {
+    ...preview(true),
+    production_sha256: "a".repeat(64),
+    ownership: {status: "managed", write_allowed: true},
+  };
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request.type);
+    if (request.changes.length === 1) return {
+      ...manualStage(request.changes),
+      production_path: baseline.production_path,
+    };
+    throw Error("New proposal failed");
+  }, () => true, storage);
+  panel._hass.user = {id: "alice-user-12"};
+  panel._lastAnalysis = baseline;
+  panel._entityCatalog = {entities};
+  panel._activateTab = () => {};
+
+  await panel._setEntityLabel(entities[0], {checked: true});
+  const earlier = panel._stagedRestore;
+  assert.equal(panel._manualLabelChanges.size, 1);
+  const secondCheckbox = {checked: true};
+  await panel._setEntityLabel(entities[1], secondCheckbox);
+  assert.strictEqual(panel._stagedRestore, earlier);
+  assert.equal(panel._manualLabelChanges.size, 1);
+  assert.equal(panel._manualLabelChanges.get("switch.first"), true);
+  assert.equal(secondCheckbox.checked, false);
+  assert.equal(controls.apply.disabled, false);
+  const saved = panel._readSavedLabelDraft();
+  assert.equal(saved.changes.length, 1);
+  assert.equal(saved.changes[0].entity_id, "switch.first");
+  assert.deepEqual(calls, [
+    "ha_voice_label_sync/prepare_manual_label_preview",
+    "ha_voice_label_sync/prepare_manual_label_preview",
+  ]);
+});
+
 test("A saved proposal is isolated to the authenticated HA user", async () => {
   const storage = fakeLocalStorage();
   storage.setItem("hvls:label-draft:v1:alice-user-12", JSON.stringify({
