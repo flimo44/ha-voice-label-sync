@@ -398,3 +398,77 @@ def test_options_accept_safe_path_without_changing_yaml(tmp_path, environment):
     assert result["type"] == "create_entry"
     assert result["data"]["output"] == data["output"]
     assert labels == ["google_assistant"]
+
+
+
+def _assert_unsafe_output_path(environment, root, value):
+    resolver = environment[0].resolve_output_path
+    unsafe_error = environment[0].UnsafeOutputPath
+    try:
+        resolver(root, value)
+    except unsafe_error:
+        return
+    raise AssertionError("Unsafe output path unexpectedly accepted")
+
+
+def test_output_guard_accepts_valid_relative_and_absolute(tmp_path, environment):
+    resolver = environment[0].resolve_output_path
+    for name in ("google_assistant_entities.yaml", "subdir/assistant.yaml"):
+        assert resolver(tmp_path, name) == tmp_path / name
+    absolute = tmp_path / "assistant.yaml"
+    assert resolver(tmp_path, absolute) == absolute
+
+
+def test_output_guard_preserves_home_assistant_root_alias(tmp_path, environment):
+    actual = tmp_path / "homeassistant"
+    actual.mkdir()
+    alias = tmp_path / "config"
+    alias.symlink_to(actual, target_is_directory=True)
+
+    configured = alias / "google_assistant_entities.yaml"
+    resolver = environment[0].resolve_output_path
+    assert resolver(actual, configured) == configured
+    assert resolver(alias, configured) == configured
+
+
+def test_output_guard_rejects_traversal_and_empty(tmp_path, environment):
+    for value in ("", "   ", "../outside.yaml",
+                  "folder/../../outside.yaml", ".", "..", None):
+        _assert_unsafe_output_path(environment, tmp_path, value)
+    _assert_unsafe_output_path(
+        environment, tmp_path, tmp_path.parent / "outside-hvls.yaml",
+    )
+
+
+def test_output_guard_rejects_symlinked_file(tmp_path, environment):
+    target = tmp_path / "actual.yaml"
+    target.write_text("switch.a: {}\n")
+    alias = tmp_path / "symlink.yaml"
+    alias.symlink_to(target)
+    _assert_unsafe_output_path(environment, tmp_path, alias)
+
+
+def test_output_guard_rejects_internal_directory_symlink(
+    tmp_path, environment,
+):
+    actual = tmp_path / "original"
+    actual.mkdir()
+    alias = tmp_path / "alias"
+    alias.symlink_to(actual, target_is_directory=True)
+    _assert_unsafe_output_path(environment, tmp_path, alias / "out.yaml")
+
+
+def test_output_guard_rejects_external_directory_symlink(
+    tmp_path, environment,
+):
+    outside = tmp_path.parent / "other"
+    outside.mkdir(exist_ok=True)
+    alias = tmp_path / "escape"
+    alias.symlink_to(outside, target_is_directory=True)
+    _assert_unsafe_output_path(environment, tmp_path, alias / "out.yaml")
+
+
+def test_output_guard_rejects_existing_directory(tmp_path, environment):
+    folder = tmp_path / "output.yaml"
+    folder.mkdir()
+    _assert_unsafe_output_path(environment, tmp_path, folder)
