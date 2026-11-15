@@ -83,6 +83,9 @@ def test_review_disables_apply_for_invalid_production(
     assert isinstance(module._read_and_compare, Mock)
     module._read_and_compare = module._read_and_compare_real
     monkeypatch.setattr(module, "analyze_preview", real_compare.analyze_preview)
+    # The isolated WebSocket fixture normally mocks this exception type.
+    # Match the actual parser's exception when testing real malformed YAML.
+    monkeypatch.setattr(module, "PreviewFormatError", real_compare.PreviewFormatError)
 
     result = module._read_and_compare(preview, production)
     assert result["available"] is True
