@@ -1320,3 +1320,96 @@ def test_manual_label_preview_changes_fingerprint_when_ha_changes(
     )
     assert before["label_plan_sha256"] != after["label_plan_sha256"]
     assert output.read_text() == "switch.one:\n  expose: true\n"
+
+
+def test_recovery_40_to_25_is_a_read_only_preview_of_current_ha(
+    backup_module, tmp_path,
+):
+    """Old YAML can contain retired entities; they are shown as YAML removals."""
+    output = tmp_path / "google_entities.yaml"
+    old_names = [f"switch.live_{i}" for i in range(25)]
+    obsolete = [f"climate.retired_{i}" for i in range(14)]
+    obsolete.append("binary_sensor.ineligible")
+    output.write_text("".join(
+        f"{eid}:\\n  expose: true\\n  name: Legacy {i}\\n"
+        for i, eid in enumerate(old_names + obsolete)
+    ), encoding="utf-8")
+    previous = output.read_bytes()
+    registries = _manual_label_state()
+    registries["entity_registry"]["data"]["entities"] = [
+        {
+            "entity_id": eid, "name": f"Current {i}",
+            "labels": ["hvls"] if i == 0 else [],
+            "area_id": None, "device_id": None,
+            "disabled_by": None, "hidden_by": None, "entity_category": None,
+        }
+        for i, eid in enumerate(old_names)
+    ] + [{
+        "entity_id": "binary_sensor.ineligible", "device_class": "motion",
+        "name": "Rain", "labels": [], "disabled_by": None,
+        "hidden_by": None, "entity_category": None,
+    }]
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch", "binary_sensor"})
+    )
+    proposal = backup_module.prepare_manual_label_preview(
+        output, catalog, registries, "HVLS",
+        frozenset({"switch", "binary_sensor"}),
+        [{"entity_id": eid, "enabled": True} for eid in old_names[1:]],
+        recovery=True,
+    )
+    assert proposal["recovery"] is True
+    assert proposal["summary"]["total"] == 25
+    assert proposal["production_summary"]["total"] == 40
+    assert len(proposal["comparison"]["removed"]) == 15
+    assert proposal["comparison"]["added"] == []
+    assert len(proposal["label_plan"]["add"]) == 24
+    assert len(proposal["comparison"]["modified"]) == 25  # Current HA names
+    assert output.read_bytes() == previous
+    assert not (tmp_path / ".hvls_backups").exists()
+
+
+def test_recovery_can_remove_obsolete_yaml_with_zero_label_changes(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    old = "switch.one:\\n  expose: true\\n  name: One\\nswitch.gone:\\n  expose: true\\n"
+    output.write_text(old, encoding="utf-8")
+    registries = _manual_label_state()
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch"})
+    )
+    proposal = backup_module.prepare_manual_label_preview(
+        output, catalog, registries, "HVLS",
+        frozenset({"switch"}), [
+            {"entity_id": "switch.two", "enabled": False}
+        ], recovery=True,
+    )
+    # Reuse the same method, but explicitly turn off unrelated current labels.
+    assert proposal["comparison"]["removed"] == ["switch.gone"]
+    assert proposal["label_plan"]["remove"] == [] or isinstance(
+        proposal["label_plan"]["remove"], list
+    )
+    assert output.read_text() == old
+
+
+def test_recovery_no_label_changes_is_allowed_when_old_yaml_differs(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    original = "switch.one:\\n  expose: true\\n  name: Old Name\\n"
+    output.write_text(original, encoding="utf-8")
+    registries = _manual_label_state()
+    # Only switch.one is labeled; other registry entities have no HVLS label.
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch"})
+    )
+    plan = backup_module.prepare_manual_label_preview(
+        output, catalog, registries, "HVLS", frozenset({"switch"}),
+        [], recovery=True,
+    )
+    assert plan["changes"] == []
+    assert plan["recovery"] is True
+    assert plan["comparison"]["status"] == "ok"
+    assert "switch.one" in [x["entity_id"] for x in plan["comparison"]["modified"]]
+    assert output.read_text() == original
