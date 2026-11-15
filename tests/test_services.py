@@ -49,7 +49,7 @@ def services_module(monkeypatch):
     base = Path(__file__).resolve().parents[1]
     component = base / "custom_components/ha_voice_label_sync"
 
-    for name in ("const", "ha_registries", "workflow_lock", "restore_guard"):
+    for name in ("const", "output_path", "ha_registries", "workflow_lock", "restore_guard"):
         fullname = f"custom_components.ha_voice_label_sync.{name}"
 
         if name == "ha_registries":
@@ -63,7 +63,7 @@ def services_module(monkeypatch):
         else:
             spec = importlib.util.spec_from_file_location(
                 fullname,
-                component / "const.py",
+                component / f"{name}.py",
             )
             module = importlib.util.module_from_spec(spec)
             monkeypatch.setitem(sys.modules, fullname, module)
@@ -179,7 +179,7 @@ def test_preview_write_failure(services_module, tmp_path, monkeypatch):
             )
         )
 
-    assert hass.async_add_executor_job.await_count == 2
+    assert hass.async_add_executor_job.await_count == 3
     hass.services.async_call.assert_not_awaited()
     assert not (tmp_path / "google_assistant_entities.yaml").exists()
 
