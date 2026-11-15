@@ -165,6 +165,56 @@ def prepare_existing_output_takeover(
             if key not in {"output", "registry"}}
 
 
+def _transfer_inactive_owner_compat(
+    registry: OwnershipRegistry, *,
+    previous_entry_id: str, entry_id: str, output_path: str,
+    sha256: str, previous_sha256: str, expected_revision: int,
+) -> None:
+    """Use the pinned PyPI core, which predates the owner-transfer method.
+
+    This fallback reproduces the core's guarded registry transition while
+    the enclosing takeover holds HVLS's cross-process output write lock.
+    Remove when the pinned PyPI package includes transfer_inactive_owner.
+    """
+    native = getattr(registry, "transfer_inactive_owner", None)
+    if callable(native):
+        native(
+            previous_entry_id=previous_entry_id, entry_id=entry_id,
+            output_path=output_path, sha256=sha256,
+            previous_sha256=previous_sha256,
+            expected_revision=expected_revision,
+        )
+        return
+
+    registry._validate_entry(previous_entry_id, output_path)
+    registry._validate_entry(entry_id, output_path)
+    registry._validate_sha(sha256)
+    registry._validate_sha(previous_sha256)
+    if previous_entry_id == entry_id:
+        raise ValueError("Transfer must change owner")
+    if type(expected_revision) is not int or expected_revision < 0:
+        raise ValueError("Invalid ownership revision")
+
+    data = registry._load()
+    if data["revision"] != expected_revision:
+        raise ValueError("Ownership record changed since approval")
+    records = data["records"]
+    previous = records.get(previous_entry_id)
+    if (
+        previous is None or previous.get("state") != "managed"
+        or previous.get("output_path") != output_path
+        or previous.get("sha256") != previous_sha256
+        or entry_id in records
+    ):
+        raise ValueError("Previous ownership state cannot be transferred")
+    registry._ensure_path_not_claimed(records, previous_entry_id, output_path)
+    del records[previous_entry_id]
+    records[entry_id] = {
+        "output_path": output_path, "sha256": sha256, "state": "managed",
+    }
+    registry._save(data)
+
+
 def confirm_existing_output_takeover(
     *, config_dir: str | Path, output_path: str | Path,
     preview_path: str | Path, registry_path: str | Path,
@@ -233,7 +283,8 @@ def confirm_existing_output_takeover(
         registry = OwnershipRegistry(registry_file)
         try:
             if previous_entry_id is not None:
-                registry.transfer_inactive_owner(
+                _transfer_inactive_owner_compat(
+                    registry,
                     previous_entry_id=previous_entry_id,
                     entry_id=entry_id,
                     output_path=str(output),
