@@ -214,6 +214,7 @@ def apply_backup_cleanup(
 def prepare_manual_label_preview(
     output_path: Path, catalog: dict, registries: dict,
     label: str, domains: frozenset[str], changes: list[dict],
+    *, recovery: bool = False,
 ) -> dict:
     """Simulate checked/unchecked HVLS labels before writing ANY HA state.
 
@@ -223,7 +224,7 @@ def prepare_manual_label_preview(
     """
     if (
         not isinstance(changes, list)
-        or not 1 <= len(changes) <= 100
+        or not (0 if recovery else 1) <= len(changes) <= 100
         or any(
             not isinstance(item, dict)
             or set(item) != {"entity_id", "enabled"}
@@ -281,6 +282,8 @@ def prepare_manual_label_preview(
             "No selected entities would remain; production was not modified."
         )
     analysis = analyze_preview(generation.content, production)
+    if (recovery and not changes and production == generation.content):
+        raise BackupRestoreError("Recovered YAML is already up to date.")
     if analysis["comparison"]["status"] not in {"ok", "missing"}:
         raise BackupRestoreError("Cannot compare current production YAML.")
     production_sha = preview_digest(production) if production is not None else None
@@ -292,6 +295,7 @@ def prepare_manual_label_preview(
         "label": label, "domains": sorted(domains),
         "output": str(output_path), "production": production_sha,
         "target": target_sha, "snapshot": snapshot_sha,
+        "recovery": recovery,
         "changes": sorted(
             [{"entity_id": eid, "enabled": enabled}
              for eid, enabled in wanted.items()],
@@ -299,7 +303,7 @@ def prepare_manual_label_preview(
         ),
     }, sort_keys=True, ensure_ascii=False))
     return {
-        "mode": "label_preview", "available": True,
+        "mode": "label_preview", "recovery": recovery, "available": True,
         "content": generation.content, "path": "Proposition HVLS",
         "production_path": str(output_path),
         "production_sha256": production_sha,
