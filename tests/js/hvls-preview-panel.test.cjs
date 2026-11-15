@@ -932,6 +932,29 @@ test("Normal Preview keeps its original title and shows no recovery totals", () 
   assert.doesNotMatch(rendered, /Ancien fichier : 40 entités/);
 });
 
+test("Fresh installation without YAML explains existing HVLS labels and Preview action", () => {
+  assert.match(source, /initialLabelsDetected:.*28|initialLabelsDetected:/);
+  const start = source.indexOf('unavailable.textContent = this._t("productionStatsUnavailable")');
+  const end = source.indexOf("const comparison = result.comparison ||", start);
+  assert.ok(start > 0 && end > start);
+  const block = source.slice(start, end);
+  assert.match(block, /this._onboardingMode === "new"/);
+  assert.match(block, /entity.has_label === true && entity.eligible === true/);
+  assert.match(block, /this._tf\("initialLabelsDetected"/);
+  assert.match(block, /this._generatePreview\(\)/);
+  assert.match(block, /this._activateTab\("preview"\)/);
+  assert.doesNotMatch(block, /apply_preview|set_entity_label|write_owned_output/);
+});
+
+test("The initial YAML Preview remains a reviewed proposal, not an Apply", () => {
+  const start = source.indexOf('  _renderPreviewChanges(result) {');
+  const end = source.indexOf('  _productionStatus(', start);
+  assert.ok(start >= 0 && end > start);
+  const block = source.slice(start, end);
+  assert.match(block, /this._tf\("initialYamlPreview", \{count: result.summary.total\}\)/);
+  assert.doesNotMatch(block, /write_owned_output|set_entity_label/);
+});
+
 test("Preview renders grouped entity changes and modified fields", () => {
   const { panel } = makePanel(async () => preview());
   const container = {
