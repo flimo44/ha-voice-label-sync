@@ -7,6 +7,7 @@ is an alias of /homeassistant.
 
 from __future__ import annotations
 
+import stat
 from pathlib import Path
 
 
@@ -55,6 +56,16 @@ def resolve_output_path(config_dir: str | Path, value: str | Path) -> Path:
             current = current / part
             if current.is_symlink():
                 raise UnsafeOutputPath("Symlink in output path is not allowed.")
+
+        # Existing outputs must be regular files, not directories, devices
+        # or named pipes. A missing file remains valid for first creation.
+        try:
+            metadata = output.lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            if not stat.S_ISREG(metadata.st_mode):
+                raise UnsafeOutputPath("Output path is not a regular YAML file.")
     except (OSError, RuntimeError, ValueError) as exc:
         if isinstance(exc, UnsafeOutputPath):
             raise
