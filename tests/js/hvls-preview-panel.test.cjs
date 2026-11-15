@@ -4124,8 +4124,33 @@ test("Guided setup reports unreferenced YAML without assuming an active setup", 
   assert.match(controls.migrationGuideSafety.textContent, /aucune écriture/);
   assert.deepEqual(requests, []);
   panel._chooseMigrationIntent("new");
-  assert.match(controls.migrationGuideNext.textContent, /Rien n'a été créé ni écrasé/);
+  assert.match(controls.migrationGuideNext.textContent, /étiquettes déjà présentes sont conservées/);
   assert.deepEqual(requests, []);
+});
+
+test("Assistant new-selection button navigates to entity manager without modifying labels", () => {
+  const requests = [];
+  const tabs = [];
+  const {panel} = makePanel(async request => {requests.push(request);});
+  const catalog = {
+    entities: [{entity_id: "switch.existing", has_label: true, eligible: true}],
+    labeled: 1,
+  };
+  panel._entityCatalog = catalog;
+  panel._renderMigrationGuide = () => {};
+  panel._renderAssistantFileStatus = () => {};
+  panel._activateTab = tab => tabs.push(tab);
+
+  panel._startNewSelection();
+
+  assert.deepEqual(tabs, ["entities"]);
+  assert.equal(panel._migrationIntent, "new");
+  assert.strictEqual(panel._entityCatalog, catalog);
+  assert.equal(catalog.entities[0].has_label, true);
+  assert.deepEqual(requests, []);
+  assert.match(source, /migrationIntentNew"\)\.addEventListener\("click", \(\) => this\._startNewSelection\(\)\)/);
+  assert.match(source, /migrationGuideNew: "Choisir mes entités dans HA"/);
+  assert.doesNotMatch(source, /Partir d'une sélection vide/);
 });
 
 test("Guided setup handles absent candidate and unknown intent", () => {
