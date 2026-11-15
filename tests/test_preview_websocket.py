@@ -191,6 +191,16 @@ def websocket_module(monkeypatch):
     lock_module.get_workflow_lock = lambda hass: asyncio.Lock()
     monkeypatch.setitem(sys.modules, f"{prefix}.workflow_lock", lock_module)
 
+    # Load the real path validator in this isolated package.
+    output_name = f"{prefix}.output_path"
+    output_path = path.with_name("output_path.py")
+    output_spec = importlib.util.spec_from_file_location(
+        output_name, output_path,
+    )
+    output_module = importlib.util.module_from_spec(output_spec)
+    monkeypatch.setitem(sys.modules, output_name, output_module)
+    output_spec.loader.exec_module(output_module)
+
     spec.loader.exec_module(module)
 
     module._read_and_compare_real = module._read_and_compare
@@ -1177,7 +1187,7 @@ def test_preview_refuses_apply_from_persistent_restore_hold(websocket_module):
     ))
     ws.read_guard.return_value = {
         "entry_id": "test-installation",
-        "output_path": ws.DEFAULT_OUTPUT,
+        "output_path": "/config/" + ws.DEFAULT_OUTPUT,
         "original_sha256": "c" * 64,
         "restored_sha256": "d" * 64,
     }
