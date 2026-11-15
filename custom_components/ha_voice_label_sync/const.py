@@ -13,6 +13,6 @@ BACKEND_GOOGLE_ASSISTANT = "google_assistant"
 
 DEFAULT_BACKEND = BACKEND_GOOGLE_ASSISTANT
 DEFAULT_LABEL = "google_assistant"
-DEFAULT_OUTPUT = "/config/google_assistant_entities.yaml"
+DEFAULT_OUTPUT = "google_assistant_entities.yaml"  # Resolved via hass.config.path().
 DEFAULT_BACKUP_RETENTION = 10
 DEFAULT_CREATE_BACKUP = True
