@@ -417,7 +417,9 @@ def test_transfer_failure_after_backup_keeps_previous_owner_and_logs_stage(
     def fail_transfer(self, **kwargs):
         raise ValueError("Simulated ownership registry conflict")
 
-    monkeypatch.setattr(OwnershipRegistry, "transfer_inactive_owner", fail_transfer)
+    monkeypatch.setattr(
+        OwnershipRegistry, "transfer_inactive_owner", fail_transfer
+    )
     with caplog.at_level("ERROR"), pytest.raises(
         takeover.ExistingOutputTakeoverError,
         match="ownership_registration_failed_after_backup",
