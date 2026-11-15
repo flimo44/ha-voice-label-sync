@@ -2538,7 +2538,8 @@ class HVLSPreviewPanel extends HTMLElement {
       unavailable.className = "diagnostic-note";
       unavailable.textContent = this._t("productionStatsUnavailable");
       panel.appendChild(unavailable);
-      if (this._onboardingMode === "new" &&
+      if ((this._onboardingMode === "new" ||
+           result.ownership?.reason_code === "managed_output_missing") &&
           this._entityCatalog && !this._recoveryPending) {
         const selected = this._entityCatalog.entities.filter(
           entity => entity.has_label === true && entity.eligible === true
