@@ -506,6 +506,8 @@ const HVLS_TRANSLATIONS = {
     applyReasonOutputChanged: "Le fichier géré par HVLS a été modifié depuis son dernier contrôle SHA-256.",
     applyReasonNotConfigured: "HVLS n'est pas encore configuré.",
     applyVerificationUnavailable: "Impossible de valider Apply : informations de sécurité manquantes ou incohérentes. Actualisez le Preview.",
+    bulkRemovalWarning: "ATTENTION : {removed} entités sur {before} disparaîtront du YAML de production (après Apply : {after}). Vérifiez les suppressions rouges avant de continuer.",
+    bulkRemovalConfirm: "SUPPRESSION IMPORTANTE : {removed} entités sur {before} seront retirées du YAML (nouveau total : {after}). Cette action peut également retirer des étiquettes HA. Confirmez-vous expressément ces suppressions ?",
     applyConfirm: "Appliquer ce Preview à la configuration Google Assistant ?",
     applyWarning: "Le fichier actuel sera sauvegardé si les sauvegardes sont activées. Toute modification détectée depuis l’examen entraînera un refus.",
     previewApplying: "Vérification et application du Preview…",
@@ -1044,6 +1046,8 @@ const HVLS_TRANSLATIONS = {
     applyReasonOutputChanged: "The HVLS-managed file has changed since its last SHA-256 verification.",
     applyReasonNotConfigured: "HVLS is not configured yet.",
     applyVerificationUnavailable: "Cannot validate Apply: missing or inconsistent security information. Refresh the Preview.",
+    bulkRemovalWarning: "WARNING: {removed} of {before} entities will be removed from production YAML (after Apply: {after}). Review the red removals before continuing.",
+    bulkRemovalConfirm: "LARGE REMOVAL: {removed} of {before} entities will be removed from production YAML (new total: {after}). This operation may also remove HA labels. Do you explicitly confirm these removals?",
     applyConfirm: "Apply this Preview to the Google Assistant configuration?",
     applyWarning: "The current file will be backed up if backups are enabled. The operation will be rejected if changes are detected since your review.",
     previewApplying: "Validating and applying Preview…",
@@ -1962,7 +1966,10 @@ class HVLSPreviewPanel extends HTMLElement {
          staged.comparison?.identical_text === true &&
          !(staged.label_plan?.add?.length || staged.label_plan?.remove?.length)) ||
         !/^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "")) return;
-    if (!window.confirm(this._t("backupPreviewConfirm"))) return;
+    const bulkApproved = this._confirmWithBulkRemoval(
+      staged, this._t("backupPreviewConfirm"),
+    );
+    if (bulkApproved === null) return;
 
     this._applying = true;
     this._loadId = (this._loadId || 0) + 1;
@@ -1978,6 +1985,7 @@ class HVLSPreviewPanel extends HTMLElement {
         production_sha256: staged.production_sha256,
         label_plan_sha256: staged.label_plan_sha256,
         ignored_entities: staged.ignored_entities || [],
+        ...(bulkApproved > 0 ? {acknowledged_bulk_removals: bulkApproved} : {}),
       });
       if (applied?.applied !== true || applied?.reconciled !== true) {
         throw new Error("Invalid restore verification response");
@@ -2021,6 +2029,29 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  _bulkRemovalDetails(result) {
+    const comparison = result?.comparison;
+    const removed = comparison?.removed;
+    const added = comparison?.added;
+    const before = result?.production_summary?.total;
+    if (comparison?.status !== "ok" ||
+        !Number.isSafeInteger(before) || before <= 0 ||
+        !Array.isArray(removed) || !Array.isArray(added)) return null;
+    const count = removed.length;
+    if (count < 10 || count * 2 < before) return null;
+    return {removed: count, before, after: before - count + added.length};
+  }
+
+  _confirmWithBulkRemoval(result, regularMessage) {
+    const bulk = this._bulkRemovalDetails(result);
+    const message = bulk
+      ? this._tf("bulkRemovalConfirm", bulk) + "\n\n" + regularMessage
+      : regularMessage;
+    if (!window.confirm(message)) return null;
+    // Exact count is a one-time intent, not a reusable or saved approval.
+    return bulk?.removed || 0;
+  }
+
   async _applyPreview() {
     if (this._stagedRestore?.mode === "label_preview") {
       return this._applyManualLabelPreview();
@@ -2030,11 +2061,13 @@ class HVLSPreviewPanel extends HTMLElement {
 
     const review = {...this._review};
 
-    if (!window.confirm(
+    const bulkApproved = this._confirmWithBulkRemoval(
+      this._lastAnalysis,
       review.rebuild_missing === true
         ? this._t("missingRebuildConfirm")
-        : this._t("applyConfirm") + "\n\n" + this._t("applyWarning")
-    )) return;
+        : this._t("applyConfirm") + "\n\n" + this._t("applyWarning"),
+    );
+    if (bulkApproved === null) return;
 
     this._applying = true;
     this._loadId = (this._loadId || 0) + 1;
@@ -2046,6 +2079,7 @@ class HVLSPreviewPanel extends HTMLElement {
       const result = await this._hass.callWS({
         type: "ha_voice_label_sync/apply_preview",
         ...review,
+        ...(bulkApproved > 0 ? {acknowledged_bulk_removals: bulkApproved} : {}),
       });
       // A successful apply may create a new backup. Invalidate the list
       // immediately so the next Backups visit always reflects disk state.
@@ -2286,25 +2320,28 @@ class HVLSPreviewPanel extends HTMLElement {
     const added = Array.isArray(comparison.added) ? comparison.added : [];
     const removed = Array.isArray(comparison.removed) ? comparison.removed : [];
     const modified = Array.isArray(comparison.modified) ? comparison.modified : [];
-    const total = result.production_summary?.total;
     // Prevent an ordinary label-generated Preview from looking like a
     // successful legacy YAML import. This is only a UI warning: all
     // existing ownership and Apply guards remain in force.
-    if (this._onboardingMode === "existing" &&
-        Number.isSafeInteger(total) && total > 0 &&
-        removed.length >= 10 && removed.length * 2 >= total) {
+    const bulkRemoval = this._bulkRemovalDetails(result);
+    if (bulkRemoval) {
       const caution = document.createElement("p");
       caution.className = "diagnostic-note";
       caution.setAttribute("role", "alert");
-      caution.textContent = this._tf("importPreviewDanger", {
-        count: removed.length, total,
-      });
-      const back = document.createElement("button");
-      back.type = "button";
-      back.className = "secondary";
-      back.textContent = this._t("importPreviewReturn");
-      back.addEventListener("click", () => this._activateTab("migration"));
-      panel.append(caution, back);
+      caution.textContent = this._onboardingMode === "existing"
+        ? this._tf("importPreviewDanger", {
+            count: bulkRemoval.removed, total: bulkRemoval.before,
+          })
+        : this._tf("bulkRemovalWarning", bulkRemoval);
+      panel.appendChild(caution);
+      if (this._onboardingMode === "existing") {
+        const back = document.createElement("button");
+        back.type = "button";
+        back.className = "secondary";
+        back.textContent = this._t("importPreviewReturn");
+        back.addEventListener("click", () => this._activateTab("migration"));
+        panel.appendChild(back);
+      }
     }
     const counters = document.createElement("div");
     counters.className = "metrics";
@@ -4018,8 +4055,11 @@ entity_config: !include google_assistant_entities.yaml</pre>
         !/^[0-9a-f]{64}$/.test(stage.label_plan_sha256 || "") ||
         this._entityWritePending || this._restoring || this._applying ||
         this._generating || this._refreshing) return;
-    if (!window.confirm(this._t(stage.recovery === true
-      ? "assistantRecoveryApplyConfirm" : "manualLabelConfirm"))) return;
+    const bulkApproved = this._confirmWithBulkRemoval(
+      stage, this._t(stage.recovery === true
+        ? "assistantRecoveryApplyConfirm" : "manualLabelConfirm"),
+    );
+    if (bulkApproved === null) return;
 
     this._applying = true;
     this._loadId = (this._loadId || 0) + 1;
@@ -4034,6 +4074,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
         production_sha256: stage.production_sha256,
         label_plan_sha256: stage.label_plan_sha256,
         recovery: stage.recovery === true,
+        ...(bulkApproved > 0 ? {acknowledged_bulk_removals: bulkApproved} : {}),
       });
       if (applied?.applied !== true || applied?.reconciled !== true) {
         throw new Error("Unverified label-Preview Apply response");
