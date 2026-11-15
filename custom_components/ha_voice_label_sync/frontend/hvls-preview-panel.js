@@ -23,10 +23,10 @@ const HVLS_TRANSLATIONS = {
     migrationGuideCandidate: "Un fichier google_assistant_entities.yaml existe. Vous pouvez le reprendre pour initialiser vos labels HVLS, même sans connexion Google Assistant.",
     migrationGuideNoCandidate: "Aucun fichier google_assistant_entities.yaml habituel n'a été détecté. D'autres sources peuvent néanmoins exister.",
     migrationGuideQuestion: "Comment souhaitez-vous démarrer HVLS ?",
-    migrationGuideNew: "Partir d'une sélection vide",
+    migrationGuideNew: "Choisir mes entités dans HA",
     migrationGuideExisting: "Reprendre un fichier d'entités",
     migrationGuideUnsure: "Choisir un autre fichier",
-    migrationGuideNextNew: "Parcours nouvelle configuration choisi pour cet écran. Avant toute génération, vérifiez les fichiers déjà présents. Rien n'a été créé ni écrasé.",
+    migrationGuideNextNew: "Choisissez les entités dans Gestion des entités HVLS. Les étiquettes déjà présentes sont conservées. Le Preview reste obligatoire avant toute modification.",
     migrationGuideNextExisting: "Vérifiez le fichier d'entités, puis examinez les labels à reprendre. Aucune connexion Google Assistant n'est requise.",
     migrationGuideNextUnsure: "Indiquez le chemin relatif du fichier YAML à reprendre, puis vérifiez son contenu.",
     migrationGuideAwaitChoice: "Choisissez : reprendre le fichier, choisir un autre fichier ou repartir de zéro.",
@@ -556,10 +556,10 @@ const HVLS_TRANSLATIONS = {
     migrationGuideCandidate: "A google_assistant_entities.yaml file exists. You can reuse it to initialize HVLS labels, even without a Google Assistant connection.",
     migrationGuideNoCandidate: "No usual google_assistant_entities.yaml file was detected. Other sources may still exist.",
     migrationGuideQuestion: "How would you like to start using HVLS?",
-    migrationGuideNew: "Start with an empty selection",
+    migrationGuideNew: "Select my entities in HA",
     migrationGuideExisting: "Reuse an existing entity file",
     migrationGuideUnsure: "Choose another file",
-    migrationGuideNextNew: "New setup selected for this screen. Check any existing files before generating configuration. Nothing has been created or overwritten.",
+    migrationGuideNextNew: "Select entities under Manage HVLS entities. Existing labels remain unchanged. Preview approval is still required before any write.",
     migrationGuideNextExisting: "Inspect the entity file, then review the labels to import. No Google Assistant connection is needed.",
     migrationGuideNextUnsure: "Enter the relative path of the YAML file to reuse, then inspect it.",
     migrationGuideAwaitChoice: "Choose whether to reuse this file, select another file or start fresh.",
@@ -3591,7 +3591,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       "click", () => this._resolveRestoreReconciliation("cancel_failed")
     );
     this.querySelector("#migrationAnalyze").addEventListener("click", () => this._loadMigrationReview());
-    this.querySelector("#migrationIntentNew").addEventListener("click", () => this._chooseMigrationIntent("new"));
+    this.querySelector("#migrationIntentNew").addEventListener("click", () => this._startNewSelection());
     this.querySelector("#migrationIntentExisting").addEventListener("click", () => this._chooseMigrationIntent("existing"));
     this.querySelector("#migrationIntentUnsure").addEventListener("click", () => this._chooseMigrationIntent("unsure"));
     this.querySelector("#assistantFilePath").addEventListener("input", event => {
@@ -4788,6 +4788,13 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantHistoryBusy = false;
     this._assistantHistoryReport = null;
     this._assistantHistoryError = false;
+  }
+
+  _startNewSelection() {
+    // Starting from the Assistant means choosing exposed entities, not
+    // clearing existing HA labels or silently creating a YAML file.
+    this._chooseMigrationIntent("new");
+    this._activateTab("entities");
   }
 
   _chooseMigrationIntent(intent) {
