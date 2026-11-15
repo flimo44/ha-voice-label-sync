@@ -418,6 +418,91 @@ test("Failed apply requires a fresh Preview review", async () => {
   assert.equal(calls.length, 2);
 });
 
+test("Missing owned production enables reviewed rebuild without changing labels", async () => {
+  const calls = [];
+  let repaired = false;
+  const {panel, controls} = makePanel(async message => {
+    calls.push(message);
+    if (message.type === "ha_voice_label_sync/apply_preview") {
+      assert.equal(message.rebuild_missing, true);
+      assert.equal(message.production_sha256, null);
+      assert.equal(message.preview_sha256, "a".repeat(64));
+      repaired = true;
+      return {
+        output_path: "/config/google_assistant_entities.yaml",
+        bytes_written: 2708, backup_path: null,
+      };
+    }
+    return repaired ? {
+      ...preview(false),
+      ownership: {status: "managed", write_allowed: true},
+      production_sha256: "a".repeat(64),
+      comparison: {status: "ok", added: [], removed: [], modified: []},
+      summary: {total: 28},
+    } : {
+      ...preview(false),
+      onboarding_mode: "new",
+      ownership: {
+        status: "missing", reason_code: "managed_output_missing",
+        write_allowed: false,
+      },
+      summary: {total: 28},
+      comparison: {status: "missing"},
+    };
+  });
+  await panel._loadPreview();
+  assert.equal(panel._review.rebuild_missing, true);
+  assert.equal(controls.apply.disabled, false);
+  assert.match(controls.apply.textContent, /Reconstruire le fichier YAML/);
+  await panel._applyPreview();
+  assert.deepEqual(calls.map(x => x.type), [
+    "ha_voice_label_sync/get_preview", "ha_voice_label_sync/apply_preview",
+    "ha_voice_label_sync/get_preview",
+  ]);
+  assert.match(panel.status, /Fichier YAML reconstruit/);
+});
+
+test("No missing-file rebuild for unowned, foreign or pending outputs", async () => {
+  for (const reason_code of [
+    "unmanaged_output", "owned_by_other_installation", "pending_operation",
+    "registry_invalid", "output_changed",
+  ]) {
+    const calls = [];
+    const {panel, controls} = makePanel(async message => {
+      calls.push(message.type);
+      return {
+        ...preview(false),
+        ownership: {status: "unknown", reason_code, write_allowed: false},
+        summary: {total: 28}, comparison: {status: "missing"},
+      };
+    });
+    await panel._loadPreview();
+    assert.equal(panel._review, null, reason_code);
+    assert.equal(controls.apply.disabled, true, reason_code);
+    await panel._applyPreview();
+    assert.deepEqual(calls, ["ha_voice_label_sync/get_preview"]);
+  }
+});
+
+test("Operator cancellation never attempts missing-file recovery", async () => {
+  const calls = [];
+  const {panel} = makePanel(async message => {
+    calls.push(message.type);
+    return {
+      ...preview(false),
+      ownership: {
+        status: "missing", reason_code: "managed_output_missing",
+        write_allowed: false,
+      },
+      summary: {total: 28}, comparison: {status: "missing"},
+    };
+  }, () => false);
+  await panel._loadPreview();
+  assert.equal(panel._review.rebuild_missing, true);
+  await panel._applyPreview();
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_preview"]);
+});
+
 test("Generate Preview regenerates YAML and refreshes panel", async () => {
   const calls = [];
 
