@@ -71,7 +71,7 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptIntro: "Reprise de l'ancien YAML avec les entités actuellement disponibles dans HA. D'abord sauvegarder et récupérer la gestion, puis préparer le Preview. Aucun changement sans validation.",
     assistantAdoptNoCatalog: "Le catalogue des entités Home Assistant n'est pas chargé. Actualisez la comparaison avant de poursuivre.",
     assistantAdoptRefresh: "Actualiser la comparaison des labels",
-    assistantAdoptCounts: "{total} dans l'ancien YAML · {recoverable} récupérables ({ready} labels à ajouter) · {missing} absentes · {ineligible} non éligible(s) · {review} à vérifier.",
+    assistantAdoptCounts: "{total} dans l'ancien YAML · {recoverable} récupérables · {existingNew} déjà étiquetées en plus dans HA · {nextTotal} proposées au total · {missing} absentes · {ineligible} non éligible(s) · {review} à vérifier.",
     assistantAdoptReview: "Détail des entités et décisions proposées",
     assistantAdoptReasonAdd: "Ajouter le label HVLS",
     assistantAdoptReasonAlready: "Déjà dans HVLS",
@@ -589,7 +589,7 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptIntro: "Recover the previous YAML using entities currently available in HA. First back up and take ownership, then prepare the Preview. No changes without approval.",
     assistantAdoptNoCatalog: "Home Assistant entity catalog is not loaded. Refresh the comparison to continue.",
     assistantAdoptRefresh: "Refresh label comparison",
-    assistantAdoptCounts: "{total} in old YAML · {recoverable} recoverable ({ready} labels to add) · {missing} missing · {ineligible} ineligible · {review} to review.",
+    assistantAdoptCounts: "{total} in old YAML · {recoverable} recoverable · {existingNew} more already labeled in HA · {nextTotal} proposed total · {missing} missing · {ineligible} ineligible · {review} to review.",
     assistantAdoptReview: "Entity details and suggested decisions",
     assistantAdoptReasonAdd: "Add HVLS label",
     assistantAdoptReasonAlready: "Already in HVLS",
@@ -4977,6 +4977,12 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const unlisted = Math.max(0, totals.total - rows.length);
     totals.review += unlisted;
     totals.recoverable = recoverable.length;
+    const recovered = new Set(recoverable);
+    totals.existingNew = this._entityCatalog.entities.filter(
+      entity => entity.eligible === true && entity.has_label === true &&
+        !recovered.has(entity.entity_id)
+    ).length;
+    totals.nextTotal = totals.recoverable + totals.existingNew;
     return {
       candidates, recoverable, rows, totals,
       complete: report.adoption_entries_complete === true &&
@@ -5018,7 +5024,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const action = this.querySelector("#assistantAdoptApply");
     if (action) {
       action.textContent = plan?.recoverable.length
-        ? this._tf("assistantAdoptAction", {count: plan.recoverable.length})
+        ? this._tf("assistantAdoptAction", {count: plan.totals.nextTotal})
         : this._t("assistantAdoptNone");
       action.disabled = this._assistantAdoptBusy === true ||
         this._entityWritePending === true ||
