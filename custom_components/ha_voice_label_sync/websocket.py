@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import logging
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -55,6 +56,8 @@ from .preview_guard import PreviewChangedError, preview_digest
 from .restore_guard import assert_not_guarded, create_guard, read_guard
 from .services import DEFAULT_DOMAINS, async_run_workflow
 from .workflow_lock import get_workflow_lock
+
+_LOGGER = logging.getLogger(__name__)
 
 WS_TYPE_RECOVERY_HISTORY = f"{DOMAIN}/get_migration_investigation_history"
 WS_TYPE_RECOVERY_HISTORY_PREPARE = (
@@ -823,11 +826,28 @@ async def websocket_confirm_existing_output_takeover(
                     active_entry_ids=frozenset(e.entry_id for e in entries),
                 )
             )
-        except Exception:
+        except Exception as exc:
+            _LOGGER.exception(
+                "HVLS recovery: confirmation failed; current YAML is preserved"
+            )
+            from .assistant_output_takeover import ExistingOutputTakeoverError
+
+            if (
+                isinstance(exc, ExistingOutputTakeoverError)
+                and str(exc) == "ownership_registration_failed_after_backup"
+            ):
+                reason = (
+                    "ownership_registration_failed_after_backup: "
+                    "Backup completed, but ownership was not transferred. "
+                    "Inspect Home Assistant logs; do not retry blindly."
+                )
+            else:
+                reason = (
+                    "Takeover incomplete or refused. Inspect ownership and backups; "
+                    "refresh Preview before retrying."
+                )
             connection.send_error(
-                msg["id"], "assistant_takeover_confirm_refused",
-                "Takeover incomplete or refused. Inspect ownership and backups; "
-                "refresh Preview before retrying.",
+                msg["id"], "assistant_takeover_confirm_refused", reason,
             )
             return
     connection.send_result(msg["id"], result)
