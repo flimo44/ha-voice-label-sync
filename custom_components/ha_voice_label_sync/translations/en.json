@@ -12,7 +12,7 @@
       },
       "new": {
         "title": "Create a new configuration",
-        "description": "HVLS creates a new file only after approval in Preview. After setup, open **HA Voice Label Sync** from the sidebar; entity selection will open directly.\n\n{diagnostic}",
+        "description": "HVLS creates a new file only after approval in Preview. After setup, open **HA Voice Label Sync** from the sidebar or choose **Visit** on the integration device page; entity selection will open directly.\n\n{diagnostic}",
         "data": {
           "backend": "Voice assistant",
           "label": "Home Assistant label",
@@ -30,7 +30,7 @@
       },
       "existing": {
         "title": "Reuse an existing configuration",
-        "description": "Your existing YAML will remain unchanged. After saving, finish Home Assistant's standard setup screens (name and area), then open **HA Voice Label Sync** from the sidebar. The panel will guide you directly to the Assistant.\n\n{diagnostic}",
+        "description": "Your existing YAML will remain unchanged. After saving, finish Home Assistant's standard setup screens (name and area), then open **HA Voice Label Sync** from the sidebar or choose **Visit** on the integration device page. The panel will guide you directly to the Assistant.\n\n{diagnostic}",
         "data": {
           "backend": "Voice assistant",
           "label": "Home Assistant label",
