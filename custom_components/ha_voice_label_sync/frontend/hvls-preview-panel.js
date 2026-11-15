@@ -429,6 +429,9 @@ const HVLS_TRANSLATIONS = {
     reasonCategoryFull: "Entité de configuration ou de diagnostic",
     metricEntities: "Entités en production",
     productionStatsUnavailable: "Statistiques de production indisponibles : fichier absent, illisible ou invalide.",
+    initialLabelsDetected: "{count} entités étiquetées HVLS détectées dans Home Assistant. Vous pouvez créer votre premier YAML à partir de cette sélection.",
+    initialLabelsPreview: "Préparer le Preview initial ({count} entités)",
+    initialYamlPreview: "Première configuration : {count} entités proposées depuis les étiquettes HA. Le YAML sera créé uniquement après validation.",
     productionRemoval: "Suppression prévue dans le Preview : entité encore présente en production",
     metricRooms: "Pièces",
     byDomain: "Par domaine",
@@ -949,6 +952,9 @@ const HVLS_TRANSLATIONS = {
     reasonCategoryFull: "Configuration or diagnostic entity",
     metricEntities: "Production entities",
     productionStatsUnavailable: "Production statistics unavailable: file missing, unreadable or invalid.",
+    initialLabelsDetected: "{count} HVLS-labeled entities found in Home Assistant. You can create the first YAML from this selection.",
+    initialLabelsPreview: "Prepare initial Preview ({count} entities)",
+    initialYamlPreview: "First configuration: {count} entities proposed from current HA labels. YAML will be created only after approval.",
     productionRemoval: "Pending removal in Preview: entity is still present in production",
     metricRooms: "Areas",
     byDomain: "By domain",
@@ -1990,7 +1996,9 @@ class HVLSPreviewPanel extends HTMLElement {
       const note = document.createElement("p");
       note.className = "diagnostic-note";
       note.textContent = comparison.status === "missing"
-        ? this._t("firstProduction")
+        ? this._onboardingMode === "new" && result.summary.total > 0
+          ? this._tf("initialYamlPreview", {count: result.summary.total})
+          : this._t("firstProduction")
         : this._tf("comparisonFailed", {
             status: comparison.status,
             reason: comparison.reason || this._t("unreadableFile")
@@ -2479,6 +2487,33 @@ class HVLSPreviewPanel extends HTMLElement {
       unavailable.className = "diagnostic-note";
       unavailable.textContent = this._t("productionStatsUnavailable");
       panel.appendChild(unavailable);
+      if (this._onboardingMode === "new" &&
+          this._entityCatalog && !this._recoveryPending) {
+        const selected = this._entityCatalog.entities.filter(
+          entity => entity.has_label === true && entity.eligible === true
+        ).length;
+        if (selected > 0) {
+          const explanation = document.createElement("p");
+          explanation.className = "diagnostic-note";
+          explanation.textContent = this._tf("initialLabelsDetected", {
+            count: selected,
+          });
+          panel.appendChild(explanation);
+          const prepare = document.createElement("button");
+          prepare.type = "button";
+          prepare.className = "secondary";
+          prepare.textContent = this._tf("initialLabelsPreview", {
+            count: selected,
+          });
+          prepare.disabled = this._generating || this._applying ||
+            this._entityWritePending || this._restoring;
+          prepare.addEventListener("click", async () => {
+            await this._generatePreview();
+            if (this._review) this._activateTab("preview");
+          });
+          panel.appendChild(prepare);
+        }
+      }
     }
 
     const comparison = result.comparison || {status: "missing"};
