@@ -5054,12 +5054,25 @@ entity_config: !include google_assistant_entities.yaml</pre>
     }
   }
 
+  _assistantNeedsOutputTakeover() {
+    const diag = this._migrationReport?.diagnostic;
+    return diag?.mode === "assisted_migration" &&
+      diag?.source?.status === "resolved" &&
+      !this._assistantPackagesDetected() &&
+      ["unmanaged_output", "owned_by_other_installation"].includes(
+        this._applyBlockReasonCode
+      );
+  }
+
   _assistantAdoptionAvailable() {
     const diag = this._migrationReport?.diagnostic;
     const report = this._assistantFileReport;
-    return diag?.mode === "new_configuration" &&
-      diag?.source?.status === "resolved" &&
-      !this._assistantPackagesDetected() &&
+    return (
+      (diag?.mode === "new_configuration" &&
+        diag?.source?.status === "resolved" &&
+        !this._assistantPackagesDetected()) ||
+      this._assistantNeedsOutputTakeover()
+    ) &&
       ["existing", "unsure"].includes(this._migrationIntent) &&
       !this._assistantFileChecking && !this._assistantFileError &&
       ["parsed", "review_required"].includes(report?.status) &&
@@ -5610,7 +5623,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const path = (this._assistantFilePath || "").trim();
     if (!this._hass || this._assistantFileChecking || !path) return;
     const relevant = this._migrationReport?.diagnostic?.mode === "new_configuration" ||
-      this._assistantPackagesDetected();
+      this._assistantPackagesDetected() || this._assistantNeedsOutputTakeover();
     if (!relevant || this._migrationIntent === "new") return;
     const requestId = (this._assistantFileRequestId || 0) + 1;
     this._assistantFileRequestId = requestId;
@@ -5654,7 +5667,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const packages = this._assistantPackagesDetected();
     const isNew = diag?.mode === "new_configuration" &&
       diag?.source?.status === "resolved";
-    const relevant = isNew || packages;
+    const needsTakeover = this._assistantNeedsOutputTakeover();
+    const relevant = isNew || packages || needsTakeover;
     const detected = this.querySelector("#assistantSourceDetected");
     if (detected) {
       const found = diag?.mode === "assisted_migration" &&
@@ -5671,6 +5685,11 @@ entity_config: !include google_assistant_entities.yaml</pre>
       }
     }
     guide.hidden = !relevant;
+    if (needsTakeover && !this._migrationIntent) {
+      // Production YAML already exists but is protected. Open the safe
+      // inspection/takeover path, not the unrelated 6404-entity audit.
+      this._migrationIntent = "existing";
+    }
     if (relevant && !this._migrationIntent && !this._onboardingChoiceApplied &&
         ["new", "existing"].includes(this._onboardingMode) && !packages) {
       // Carry the initial installer choice forward rather than asking again.
@@ -5700,15 +5719,18 @@ entity_config: !include google_assistant_entities.yaml</pre>
       const element = this.querySelector("#" + id);
       if (element) element.textContent = this._t(key);
     }
+    const hasCandidate = diag?.source?.unreferenced_google_entity_file_present === true ||
+      (needsTakeover && (diag.source.locations || []).some(
+        location => location.path === "google_assistant_entities.yaml"
+      ));
     const candidate = this.querySelector("#migrationGuideCandidate");
     if (candidate) candidate.textContent = this._t(packages
       ? "assistantPackagesDetected"
-      : diag.source.unreferenced_google_entity_file_present === true
-        ? "migrationGuideCandidate" : "migrationGuideNoCandidate"
+      : hasCandidate ? "migrationGuideCandidate" : "migrationGuideNoCandidate"
     );
     const detectedNote = this.querySelector("#migrationGuideDetected");
-    if (detectedNote) detectedNote.textContent = packages
-      ? "" : this._t("migrationGuideDetected");
+    if (detectedNote) detectedNote.textContent = isNew && !packages
+      ? this._t("migrationGuideDetected") : "";
     const question = this.querySelector("#migrationGuideQuestion");
     const questionKey = packages ? "assistantPackagesQuestion" :
       this._migrationIntent === "new" ? "migrationGuideSelectedNew" :
@@ -5755,14 +5777,12 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._migrationIntent === "unsure";
     if (fileSection) fileSection.hidden = !showFile;
     if (showFile && this._assistantFilePath == null) {
-      this._assistantFilePath = !packages &&
-        diag.source.unreferenced_google_entity_file_present === true
-          ? "google_assistant_entities.yaml" : "";
+      this._assistantFilePath = !packages && hasCandidate
+        ? "google_assistant_entities.yaml" : "";
     }
     const hint = this.querySelector("#assistantFileHint");
-    if (hint) hint.textContent = this._t(!packages &&
-      diag.source.unreferenced_google_entity_file_present === true
-        ? "assistantFileCandidate" : "assistantFileManual");
+    if (hint) hint.textContent = this._t(!packages && hasCandidate
+      ? "assistantFileCandidate" : "assistantFileManual");
     this._renderAssistantFileStatus();
   }
 
