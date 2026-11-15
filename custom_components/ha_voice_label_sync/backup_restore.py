@@ -24,6 +24,7 @@ from hvls.owned_writer import (
 )
 
 from .label_update import ensure_entity_eligible_for_addition, resolve_unique_label_id
+from .missing_output_rebuild import rebuild_missing_owned_output
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_guard import (
     PreviewChangedError,
@@ -344,28 +345,40 @@ def prepare_manual_label_preview(
     }
 
 
+def _read_optional_production(output_path: Path) -> str | None:
+    """Absence is recoverable; a present unreadable YAML is never treated as absent."""
+    if output_path.is_symlink():
+        raise BackupRestoreError("Production is a symbolic link.")
+    if not output_path.exists():
+        return None
+    production = _read_yaml(output_path)
+    try:
+        analyze_preview(production, None)
+    except PreviewFormatError as exc:
+        raise BackupRestoreError("Current production YAML is invalid.") from exc
+    return production
+
+
 def review_backup(output_path: Path, backup_id: str) -> dict:
-    """Return a semantic diff with immutable tokens for the selected backup."""
+    """Review a snapshot even if HVLS-managed production was deleted."""
     backup_path = _get_backup(output_path, backup_id)
     candidate = _read_yaml(backup_path)
-    try:
-        production = _read_yaml(output_path)
-    except BackupRestoreError as exc:
-        raise BackupRestoreError(
-            "Cannot compare: current production YAML is unavailable."
-        ) from exc
+    production = _read_optional_production(output_path)
     try:
         analysis = analyze_preview(candidate, production)
     except PreviewFormatError as exc:
         raise BackupRestoreError(f"Invalid backup YAML: {exc}") from exc
-    if analysis["comparison"].get("status") != "ok":
-        raise BackupRestoreError("Cannot restore while production YAML is invalid.")
+    if analysis["comparison"].get("status") not in {"ok", "missing"}:
+        raise BackupRestoreError("Cannot compare current production YAML.")
     if not analysis["summary"]["total"]:
         raise BackupRestoreError("Refusing to restore an empty YAML backup.")
     return {
         "backup_id": backup_id,
         "backup_sha256": preview_digest(candidate),
-        "production_sha256": preview_digest(production),
+        "production_sha256": (
+            preview_digest(production) if production is not None else None
+        ),
+        "production_missing": production is None,
         "summary": analysis["summary"],
         "comparison": analysis["comparison"],
     }
@@ -459,7 +472,7 @@ def _compose_reviewed_restore(
 
 def prepare_backup_preview(
     output_path: Path, backup_id: str,
-    backup_sha256: str, production_sha256: str,
+    backup_sha256: str, production_sha256: str | None,
     catalog: dict,
     *,
     ignored_entities: list[str] | None = None,
@@ -473,25 +486,46 @@ def prepare_backup_preview(
     available. Its readiness is informational until the write transaction
     and recovery protocol have been implemented and tested.
     """
-    if not all(
-        isinstance(value, str) and _SHA.fullmatch(value)
-        for value in (backup_sha256, production_sha256)
+    if (
+        not isinstance(backup_sha256, str)
+        or not _SHA.fullmatch(backup_sha256)
+        or (
+            production_sha256 is not None
+            and (
+                not isinstance(production_sha256, str)
+                or not _SHA.fullmatch(production_sha256)
+            )
+        )
     ):
         raise BackupRestoreError("Invalid preview approval fingerprints.")
     review = review_backup(output_path, backup_id)
     if not hmac.compare_digest(review["backup_sha256"], backup_sha256):
         raise PreviewChangedError("Selected backup changed; review it again.")
-    if not hmac.compare_digest(
-        review["production_sha256"], production_sha256
-    ):
+    if review["production_sha256"] != production_sha256:
         raise PreviewChangedError("Production changed; review it again.")
 
     backup_content = _read_yaml(_get_backup(output_path, backup_id))
-    production = _read_yaml(output_path)
+    production = _read_optional_production(output_path)
     if preview_digest(backup_content) != backup_sha256:
         raise PreviewChangedError("Selected backup changed during preparation.")
-    if preview_digest(production) != production_sha256:
+    if (preview_digest(production) if production is not None else None) != (
+        production_sha256
+    ):
         raise PreviewChangedError("Production changed during preparation.")
+
+    # When YAML is missing, the live HA registry is the safe baseline for
+    # ignoring obsolete entries or preserving previously labeled entities.
+    # This is only a simulation, never mislabeled as production statistics.
+    baseline = production
+    if production is None:
+        if registries is None or not isinstance(label, str) or domains is None:
+            raise BackupRestoreError("Live HA registry required for missing YAML.")
+        request = GenerationRequest(
+            label=label, domains=domains, output_path=output_path, dry_run=True,
+        )
+        baseline = run_google_assistant_workflow(
+            request=request, registries=registries,
+        ).generation.content
 
     from .preview_compare import _entities
 
@@ -505,7 +539,10 @@ def prepare_backup_preview(
         for entity in catalog.get("entities", [])
         if isinstance(entity, dict) and isinstance(entity.get("entity_id"), str)
     }
-    original_diff = review["comparison"]
+    original_diff = (
+        analyze_preview(backup_content, baseline)["comparison"]
+        if production is None else review["comparison"]
+    )
     eligible_to_ignore = (
         set(original_diff["added"]) | set(original_diff["removed"]) |
         {row["entity_id"] for row in original_diff["modified"]}
@@ -533,7 +570,7 @@ def prepare_backup_preview(
     ):
         raise BackupRestoreError("Invalid ignored entity selection.")
     ignored = frozenset(ignored_entities)
-    content = _compose_reviewed_restore(backup_content, production, ignored)
+    content = _compose_reviewed_restore(backup_content, baseline, ignored)
     if not _entities(content):
         raise BackupRestoreError("Refusing to restore an empty configuration.")
 
@@ -612,7 +649,10 @@ def prepare_backup_preview(
         "production_path": str(output_path),
         "path": f"Backup: {backup_id}",
         "preview_sha256": preview_digest(content),
-        "production_summary": analyze_preview(production, None)["summary"],
+        "production_summary": (
+            analyze_preview(production, None)["summary"]
+            if production is not None else None
+        ),
         "label_plan": label_plan,
         "label_plan_sha256": approval,
         "projection": projection,
