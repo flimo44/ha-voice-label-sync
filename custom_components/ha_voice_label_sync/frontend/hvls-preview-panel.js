@@ -510,6 +510,8 @@ const HVLS_TRANSLATIONS = {
     absentValue: "(absent)",
     showPreviewYaml: "Afficher le YAML du Preview",
     changesProposed: "Changements proposés à Google Assistant",
+    recoveryDiffTitle: "Différences entre l'ancien et le nouveau YAML",
+    recoveryDiffSummary: "Ancien fichier : {before} entités → Nouveau fichier proposé : {after} entités.",
     changesIntro: "Vérifiez les différences avant d’appliquer la configuration.",
     noChanges: "Aucun changement d’entité à appliquer.",
     removalNote: "Retirer une entité ici ne la supprime pas de Home Assistant : seule sa configuration Google Assistant change.",
@@ -1028,6 +1030,8 @@ const HVLS_TRANSLATIONS = {
     absentValue: "(absent)",
     showPreviewYaml: "Show Preview YAML",
     changesProposed: "Proposed Google Assistant changes",
+    recoveryDiffTitle: "Differences between old and new YAML",
+    recoveryDiffSummary: "Old file: {before} entities → Proposed new file: {after} entities.",
     changesIntro: "Review the differences before applying the configuration.",
     noChanges: "No entity changes to apply.",
     removalNote: "Removing an entity here does not delete it from Home Assistant: only its Google Assistant configuration changes.",
@@ -1945,7 +1949,10 @@ class HVLSPreviewPanel extends HTMLElement {
     panel.replaceChildren();
 
     const heading = document.createElement("h2");
-    heading.textContent = this._t("changesProposed");
+    const isRecoveryPreview = this._stagedRestore?.recovery === true;
+    heading.textContent = this._t(
+      isRecoveryPreview ? "recoveryDiffTitle" : "changesProposed"
+    );
     panel.appendChild(heading);
 
     // An ordinary generation based on old labels is NOT a recovery plan.
@@ -1990,6 +1997,18 @@ class HVLSPreviewPanel extends HTMLElement {
           });
       panel.appendChild(note);
       return;
+    }
+
+    if (isRecoveryPreview &&
+        Number.isSafeInteger(result.production_summary?.total) &&
+        Number.isSafeInteger(result.summary.total)) {
+      const summary = document.createElement("p");
+      summary.className = "diagnostic-note";
+      summary.textContent = this._tf("recoveryDiffSummary", {
+        before: result.production_summary.total,
+        after: result.summary.total,
+      });
+      panel.appendChild(summary);
     }
 
     const added = Array.isArray(comparison.added) ? comparison.added : [];
