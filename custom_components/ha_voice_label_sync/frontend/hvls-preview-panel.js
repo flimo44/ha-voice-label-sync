@@ -2464,6 +2464,19 @@ class HVLSPreviewPanel extends HTMLElement {
     const heading = document.createElement("h2");
     heading.textContent = this._t("comparisonTitle");
     panel.appendChild(heading);
+    if (this._recoveryPending && this._stagedRestore?.recovery !== true) {
+      const counters = document.createElement("div");
+      counters.className = "metrics";
+      for (const key of ["added", "removed", "modified"]) {
+        this._addMetric(counters, this._t(key), 0);
+      }
+      panel.appendChild(counters);
+      const note = document.createElement("p");
+      note.className = "diagnostic-note";
+      note.textContent = this._t("assistantRecoveryNotPrepared");
+      panel.appendChild(note);
+      return;
+    }
     if (comparison.status !== "ok") {
       const warning = document.createElement("p");
       warning.textContent = comparison.status === "missing"
