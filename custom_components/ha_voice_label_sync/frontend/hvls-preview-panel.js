@@ -1506,7 +1506,8 @@ class HVLSPreviewPanel extends HTMLElement {
     // Server recalculates the proposed YAML, label plan and fingerprints.
     // No label/YAML write is performed, and the old review is discarded.
     this._entityWritePending = true;
-    const loadId = ++this._loadId;
+    const loadId = (this._loadId || 0) + 1;
+    this._loadId = loadId;
     this._review = null;
     this._updateApplyButton();
     try {
