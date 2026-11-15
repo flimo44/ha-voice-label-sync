@@ -103,6 +103,9 @@ const HVLS_TRANSLATIONS = {
     assistantRecoveryPreviewFailed: "Préparation du Preview refusée : {error}. Aucune étiquette ni YAML modifié.",
     assistantRecoveryNotPrepared: "Aucun Preview de reprise préparé. Ajouts, suppressions et modifications en attente : zéro. Commencez par l’Assistant.",
     assistantRecoveryPreviewBack: "Ouvrir l’Assistant",
+    assistantRecoveryApply: "Valider la reprise de configuration",
+    assistantRecoveryApplyConfirm: "Appliquer la reprise vérifiée ? Le YAML actuel sera sauvegardé obligatoirement avant la mise à jour des étiquettes et du fichier. Les entités retirées ne seront supprimées que du YAML.",
+    assistantRecoveryApplied: "Reprise terminée : {count} entités dans le nouveau YAML. Sauvegarde : {backup}.",
     assistantReinstallConfirm: "Transférer la gestion de {path} vers cette installation HVLS ?\n\nLa précédente installation doit être absente de Home Assistant. Le YAML actuel et le registre seront vérifiés, puis une sauvegarde sera créée. Aucun Apply ni changement d’étiquette automatique.",
     assistantReinstallChangedConfirm: "ATTENTION : le fichier actuel n’est PLUS celui enregistré par l’ancienne installation.\n\nAncien SHA-256 : {oldSha}\nSHA-256 actuel : {newSha}\nEntités actuelles : {entities}\nPreview ordinaire : {added} ajout(s), {removed} suppression(s), {modified} modification(s).\n\nAutoriser uniquement la récupération de gestion, après sauvegarde vérifiée ? AUCUN YAML ni label modifié. NE PAS appliquer le Preview ordinaire avant d’avoir réconcilié les entités.",
     assistantReinstallChangedSuccess: "Gestion du fichier remplacé récupérée avec sauvegarde vérifiée : {backup}. Les entités et le YAML n’ont pas changé. ATTENTION : le Preview ordinaire reste différent ; ne l’appliquez pas avant une reprise contrôlée des entités.",
@@ -617,6 +620,9 @@ const HVLS_TRANSLATIONS = {
     assistantRecoveryPreviewFailed: "Preview preparation refused: {error}. No YAML or labels changed.",
     assistantRecoveryNotPrepared: "No recovery Preview prepared yet. Pending additions, removals and modifications: zero. Start from Assistant.",
     assistantRecoveryPreviewBack: "Open Assistant",
+    assistantRecoveryApply: "Apply recovered configuration",
+    assistantRecoveryApplyConfirm: "Apply the reviewed recovery? A mandatory backup of the current YAML will be made before updating labels and the file. Retired entities are removed from YAML only.",
+    assistantRecoveryApplied: "Recovery complete: {count} entities in new YAML. Backup: {backup}.",
     assistantReinstallConfirm: "Transfer management of {path} to this HVLS installation?\n\nThe previous installation must be absent from Home Assistant. Both YAML and registry will be verified and a backup will be made. No automatic Apply or HA label changes.",
     assistantReinstallChangedConfirm: "WARNING: the current file is DIFFERENT from the one registered by the old installation.\n\nPrevious SHA-256: {oldSha}\nCurrent SHA-256: {newSha}\nCurrent entities: {entities}\nOrdinary Preview: {added} added, {removed} removed, {modified} changed.\n\nAuthorize ONLY a management takeover after a verified backup? No YAML or labels will be modified. DO NOT apply the ordinary Preview until the entities have been reconciled.",
     assistantReinstallChangedSuccess: "Management of the replaced YAML recovered with verified backup: {backup}. No entities or YAML changed. WARNING: ordinary Preview differs; do not apply it until entity reconciliation.",
@@ -1498,7 +1504,7 @@ class HVLSPreviewPanel extends HTMLElement {
         this._generating === true || this._refreshing === true ||
         this._entityWritePending === true;
       button.textContent = staged?.mode === "label_preview"
-        ? this._t("manualLabelApply")
+        ? this._t(staged.recovery === true ? "assistantRecoveryApply" : "manualLabelApply")
         : staged ? this._t("backupPreviewApply") : this._t("apply");
     }
     const cancel = this.querySelector("#cancelPreview");
@@ -3626,7 +3632,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
         !/^[0-9a-f]{64}$/.test(stage.label_plan_sha256 || "") ||
         this._entityWritePending || this._restoring || this._applying ||
         this._generating || this._refreshing) return;
-    if (!window.confirm(this._t("manualLabelConfirm"))) return;
+    if (!window.confirm(this._t(stage.recovery === true
+      ? "assistantRecoveryApplyConfirm" : "manualLabelConfirm"))) return;
 
     this._applying = true;
     this._loadId = (this._loadId || 0) + 1;
@@ -3657,9 +3664,15 @@ entity_config: !include google_assistant_entities.yaml</pre>
       });
       await this._loadPreview(true);
       await this._loadEntities();
-      this._setStatusKey("manualLabelApplied", {
-        added: applied.label_additions, removed: applied.label_removals,
-      });
+      if (stage.recovery === true) {
+        this._setStatusKey("assistantRecoveryApplied", {
+          count: applied.yaml_entities, backup: applied.safety_backup || "—",
+        });
+      } else {
+        this._setStatusKey("manualLabelApplied", {
+          added: applied.label_additions, removed: applied.label_removals,
+        });
+      }
     } catch (error) {
       // A partial server failure may have installed the durable guard.
       // Always discard the old approval and show the current HA state.
