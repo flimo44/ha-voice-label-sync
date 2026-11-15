@@ -11,6 +11,7 @@ from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 
 from hvls import FileWriterError
 
@@ -122,11 +123,19 @@ async def async_setup_entry(
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {}
 
-    await hass.config_entries.async_forward_entry_setups(
-        entry,
-        ["button"],
+    # Preserve the virtual device formerly supplied by HA button entities,
+    # without restoring either unsafe button. Home Assistant exposes
+    # configuration_url as a "Visit" link on the integration device.
+    registry = dr.async_get(hass)
+    registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, entry.entry_id)},
+        name=PANEL_TITLE,
+        manufacturer="HA Voice Label Sync",
+        model="HVLS integration",
+        entry_type=dr.DeviceEntryType.SERVICE,
+        configuration_url=f"homeassistant://{PANEL_URL_PATH}",
     )
-
     return True
 
 
@@ -136,12 +145,7 @@ async def async_unload_entry(
 ) -> bool:
     """Unload an HVLS config entry."""
 
-    unloaded = await hass.config_entries.async_unload_platforms(
-        entry,
-        ["button"],
-    )
-
-    if unloaded:
-        hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
-
-    return unloaded
+    # No entity platforms are forwarded since the legacy buttons were
+    # retired. Do not attempt to unload a platform that was never set up.
+    hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+    return True
