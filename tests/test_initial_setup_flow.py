@@ -472,3 +472,42 @@ def test_output_guard_rejects_existing_directory(tmp_path, environment):
     folder = tmp_path / "output.yaml"
     folder.mkdir()
     _assert_unsafe_output_path(environment, tmp_path, folder)
+
+
+
+@pytest.mark.parametrize(
+    ("literal", "expected"),
+    [
+        (None, "Activé (valeur par défaut de Home Assistant)"),
+        ("yes", "Activé"),
+        ("ON", "Activé"),
+        ("false", "Désactivé"),
+        ("!secret google_exposure", "Non déterminé"),
+    ],
+)
+def test_google_options_diagnostic_displays_effective_exposure_read_only(
+    tmp_path, environment, literal, expected,
+):
+    from types import SimpleNamespace
+
+    module, labels = environment
+    initial, _ = make_flow(environment, tmp_path)
+    options = module.HVLSOptionsFlow()
+    options.hass = initial.hass
+    options.config_entry = SimpleNamespace(
+        data=values(tmp_path / "google_assistant_entities.yaml"),
+        options={},
+    )
+    yaml_content = "google_assistant:\n  project_id: test-project\n"
+    if literal is not None:
+        yaml_content += f"  expose_by_default: {literal}\n"
+    config = tmp_path / "configuration.yaml"
+    config.write_text(yaml_content, encoding="utf-8")
+
+    result = asyncio.run(options.async_step_google_config())
+
+    assert result["type"] == "form"
+    display = result["description_placeholders"]["configuration"]
+    assert f"Exposition automatique :** {expected}" in display
+    assert config.read_text(encoding="utf-8") == yaml_content
+    assert labels == []
