@@ -1537,7 +1537,7 @@ def test_restore_bulk_removal_refused_before_backup_or_guard(websocket_module):
         make_hass(), connection, request,
     ))
     connection.send_result.assert_not_called()
-    assert connection.send_error.call_args.args[1] == "backup_preview_apply_failed"
+    assert connection.send_error.call_args.args[1] == "backup_preview_apply_refused"
     assert "Bulk removal" in connection.send_error.call_args.args[2]
     ws.restore_reviewed_backup.assert_not_called()
     ws.create_guard.assert_not_called()
