@@ -101,6 +101,8 @@ const HVLS_TRANSLATIONS = {
     assistantRecoveryReady: "Gestion récupérée après sauvegarde vérifiée. Préparez maintenant le Preview de reprise.",
     assistantRecoveryPreviewPrepared: "Preview de reprise prêt. Vérifiez les suppressions et les modifications du YAML avant d'appliquer.",
     assistantRecoveryPreviewFailed: "Préparation du Preview refusée : {error}. Aucune étiquette ni YAML modifié.",
+    assistantRecoveryNotPrepared: "Aucun Preview de reprise préparé. Ajouts, suppressions et modifications en attente : zéro. Commencez par l’Assistant.",
+    assistantRecoveryPreviewBack: "Ouvrir l’Assistant",
     assistantReinstallConfirm: "Transférer la gestion de {path} vers cette installation HVLS ?\n\nLa précédente installation doit être absente de Home Assistant. Le YAML actuel et le registre seront vérifiés, puis une sauvegarde sera créée. Aucun Apply ni changement d’étiquette automatique.",
     assistantReinstallChangedConfirm: "ATTENTION : le fichier actuel n’est PLUS celui enregistré par l’ancienne installation.\n\nAncien SHA-256 : {oldSha}\nSHA-256 actuel : {newSha}\nEntités actuelles : {entities}\nPreview ordinaire : {added} ajout(s), {removed} suppression(s), {modified} modification(s).\n\nAutoriser uniquement la récupération de gestion, après sauvegarde vérifiée ? AUCUN YAML ni label modifié. NE PAS appliquer le Preview ordinaire avant d’avoir réconcilié les entités.",
     assistantReinstallChangedSuccess: "Gestion du fichier remplacé récupérée avec sauvegarde vérifiée : {backup}. Les entités et le YAML n’ont pas changé. ATTENTION : le Preview ordinaire reste différent ; ne l’appliquez pas avant une reprise contrôlée des entités.",
@@ -613,6 +615,8 @@ const HVLS_TRANSLATIONS = {
     assistantRecoveryReady: "Management recovered after a verified backup. Now prepare the recovery Preview.",
     assistantRecoveryPreviewPrepared: "Recovery Preview prepared. Review YAML removals and modifications before applying.",
     assistantRecoveryPreviewFailed: "Preview preparation refused: {error}. No YAML or labels changed.",
+    assistantRecoveryNotPrepared: "No recovery Preview prepared yet. Pending additions, removals and modifications: zero. Start from Assistant.",
+    assistantRecoveryPreviewBack: "Open Assistant",
     assistantReinstallConfirm: "Transfer management of {path} to this HVLS installation?\n\nThe previous installation must be absent from Home Assistant. Both YAML and registry will be verified and a backup will be made. No automatic Apply or HA label changes.",
     assistantReinstallChangedConfirm: "WARNING: the current file is DIFFERENT from the one registered by the old installation.\n\nPrevious SHA-256: {oldSha}\nCurrent SHA-256: {newSha}\nCurrent entities: {entities}\nOrdinary Preview: {added} added, {removed} removed, {modified} changed.\n\nAuthorize ONLY a management takeover after a verified backup? No YAML or labels will be modified. DO NOT apply the ordinary Preview until the entities have been reconciled.",
     assistantReinstallChangedSuccess: "Management of the replaced YAML recovered with verified backup: {backup}. No entities or YAML changed. WARNING: ordinary Preview differs; do not apply it until entity reconciliation.",
@@ -1428,7 +1432,8 @@ class HVLSPreviewPanel extends HTMLElement {
 
       this._updateApplyButton();
       this._renderAssistantAdoption();
-      this._setContent(result.content || "");
+      this._setContent(this._recoveryPending ? "" : result.content || "");
+      if (this._recoveryPending) this._previewContent = "";
       this._renderAnalysis(result);
       // Guide only the initial panel opening. Do not override a user-selected tab.
       if (!this._onboardingAutoNavigated && this._initialized &&
@@ -1935,6 +1940,28 @@ class HVLSPreviewPanel extends HTMLElement {
     heading.textContent = this._t("changesProposed");
     panel.appendChild(heading);
 
+    // An ordinary generation based on old labels is NOT a recovery plan.
+    // Before the first reviewed recovery, show no pending operations.
+    if (this._recoveryPending && this._stagedRestore?.recovery !== true) {
+      const counters = document.createElement("div");
+      counters.className = "metrics";
+      for (const key of ["added", "removed", "modified"]) {
+        this._addMetric(counters, this._t(key), 0);
+      }
+      panel.appendChild(counters);
+      const note = document.createElement("p");
+      note.className = "diagnostic-note";
+      note.textContent = this._t("assistantRecoveryNotPrepared");
+      panel.appendChild(note);
+      const back = document.createElement("button");
+      back.type = "button";
+      back.className = "secondary";
+      back.textContent = this._t("assistantRecoveryPreviewBack");
+      back.addEventListener("click", () => this._activateTab("migration"));
+      panel.appendChild(back);
+      return;
+    }
+
     if (!result.available || !result.summary) {
       const note = document.createElement("p");
       note.className = "diagnostic-note";
@@ -2075,6 +2102,9 @@ class HVLSPreviewPanel extends HTMLElement {
   }
 
   _productionStatus(entityId, result) {
+    if (this._recoveryPending && this._stagedRestore?.recovery !== true) {
+      return "unknown";
+    }
     const comparison = result?.comparison;
     // A missing, invalid or unreviewable comparison is not proof of
     // production presence. Do not show a green badge in that case.
