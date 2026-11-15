@@ -445,3 +445,72 @@ def test_transfer_failure_after_backup_keeps_previous_owner_and_logs_stage(
     assert backups[0].read_bytes() == changed
     assert "ownership registration failed after" in caplog.text
     assert "Simulated ownership registry conflict" in caplog.text
+
+
+def test_pypi_036_without_transfer_method_can_recover_old_owner(
+    takeover, files, monkeypatch,
+):
+    """Home Assistant loads PyPI core 0.3.6, not the repository's src/hvls."""
+    old_sha = _seed_old_owner(files)
+    original = files["output_path"].read_bytes()
+    updated = original + b"# new configuration\n"
+    files["output_path"].write_bytes(updated)
+    prepared = takeover.prepare_existing_output_takeover(
+        **files, active_entry_ids=frozenset({"installation-A"}),
+    )
+    assert prepared["previous_sha256"] == old_sha
+    assert prepared["recorded_sha_mismatch"] is True
+
+    # Simulate exactly the published PyPI 0.3.6 API.
+    monkeypatch.delattr(OwnershipRegistry, "transfer_inactive_owner")
+    result = takeover.confirm_existing_output_takeover(
+        **files, active_entry_ids=frozenset({"installation-A"}),
+        previous_entry_id=prepared["previous_entry_id"],
+        previous_sha256=prepared["previous_sha256"],
+        ownership_revision=prepared["ownership_revision"],
+        production_sha256=prepared["production_sha256"],
+        preview_sha256=prepared["preview_sha256"],
+        acknowledge_changed_output=True, confirmed=True,
+    )
+
+    assert result["taken_over"] is True
+    assert files["output_path"].read_bytes() == updated
+    assert OwnershipRegistry(files["registry_path"]).get_record(
+        "old-installation"
+    ) is None
+    assert OwnershipRegistry(files["registry_path"]).get_record(
+        "installation-A"
+    ) == {
+        "state": "managed",
+        "output_path": str(files["output_path"]),
+        "sha256": hashlib.sha256(updated).hexdigest(),
+    }
+    backup = files["config_dir"] / ".hvls_backups" / result["backup_name"]
+    assert backup.read_bytes() == updated
+
+
+def test_pypi_036_fallback_rejects_stale_ownership_revision(
+    takeover, files, monkeypatch,
+):
+    """A concurrent owner change cannot be bypassed by the compatibility path."""
+    _seed_old_owner(files)
+    prepared = takeover.prepare_existing_output_takeover(
+        **files, active_entry_ids=frozenset({"installation-A"}),
+    )
+    monkeypatch.delattr(OwnershipRegistry, "transfer_inactive_owner")
+    with pytest.raises(takeover.ExistingOutputTakeoverError):
+        takeover.confirm_existing_output_takeover(
+            **files, active_entry_ids=frozenset({"installation-A"}),
+            previous_entry_id=prepared["previous_entry_id"],
+            previous_sha256=prepared["previous_sha256"],
+            ownership_revision=prepared["ownership_revision"] + 1,
+            production_sha256=prepared["production_sha256"],
+            preview_sha256=prepared["preview_sha256"],
+            confirmed=True,
+        )
+    assert OwnershipRegistry(files["registry_path"]).get_record(
+        "old-installation"
+    ) is not None
+    assert OwnershipRegistry(files["registry_path"]).get_record(
+        "installation-A"
+    ) is None
