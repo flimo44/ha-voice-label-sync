@@ -5192,12 +5192,19 @@ entity_config: !include google_assistant_entities.yaml</pre>
       // Start from the old YAML selection but use CURRENT HA eligibility.
       // Any former entity missing from HA is removed from the NEW YAML only.
       const desired = new Set(current.recoverable);
+      // Current HA labels are a newer explicit selection than the old YAML.
+      // A recovery may ADD the missing labels, but never silently REMOVE
+      // existing HVLS labels just because the legacy file omitted them.
+      const extraSelected = this._entityCatalog.entities.filter(
+        entity => entity.eligible === true && entity.has_label === true &&
+          !desired.has(entity.entity_id)
+      );
+      extraSelected.forEach(entity => desired.add(entity.entity_id));
       const changes = this._entityCatalog.entities
         .filter(entity =>
-          (desired.has(entity.entity_id) && entity.has_label === false) ||
-          (!desired.has(entity.entity_id) && entity.has_label === true))
+          desired.has(entity.entity_id) && entity.has_label === false)
         .map(entity => ({
-          entity_id: entity.entity_id, enabled: desired.has(entity.entity_id),
+          entity_id: entity.entity_id, enabled: true,
         }))
         .sort((a, b) => a.entity_id.localeCompare(b.entity_id));
       if (changes.length > 500) throw new Error("too_many_label_changes");
@@ -5210,7 +5217,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
           !Array.isArray(preview.changes) ||
           !/^[a-f0-9]{64}$/.test(preview.label_plan_sha256 || "") ||
           preview.production_sha256 !== original.file_sha256 ||
-          preview.summary?.total !== current.recoverable.length) {
+          preview.summary?.total !== desired.size) {
         throw new Error("recovery_preview_inconsistent");
       }
       this._manualLabelChanges = new Map(changes.map(
