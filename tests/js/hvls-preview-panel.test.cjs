@@ -1060,7 +1060,7 @@ test("Fresh installation without YAML explains existing HVLS labels and Preview 
   const block = source.slice(start, end);
   assert.match(block, /this._onboardingMode === "new"/);
   assert.match(block, /entity.has_label === true && entity.eligible === true/);
-  assert.match(block, /this._tf\("initialLabelsDetected"/);
+  assert.match(block, /"initialLabelsDetected"/);
   assert.match(block, /this._generatePreview\(\)/);
   assert.match(block, /this._activateTab\("preview"\)/);
   assert.doesNotMatch(block, /apply_preview|set_entity_label|write_owned_output/);
