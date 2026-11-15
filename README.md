@@ -16,11 +16,21 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 >
 > HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. Set up and verify Google Assistant before using HVLS.
 
-**Latest version:** `v1.0.0` (stable release candidate; see [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for publication status). **Previous tested beta:** [`v1.0.0-beta.5`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.0-beta.5).  
-**Python core dependency:** `ha-voice-label-sync==0.3.5` (separate from the Home Assistant integration version).
+**Latest published stable:** [`v1.0.1`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.1). **Next beta being prepared:** `v1.1.0-beta.1` (install only after its GitHub pre-release is published).  
+**Python core dependency:** `ha-voice-label-sync==0.3.6` (separate from the Home Assistant integration version).
 
 > [!NOTE]
-> The V1 stable candidate has completed beta development. Install only a **published** release from GitHub/HACS; this README may be updated before the final release is published. Its Home Assistant integration and standalone PyPI core have independent version numbers. Feedback and issue reports are welcome.
+> `v1.1.0-beta.1` introduces setup, migration and disaster-recovery improvements. It is **not** a replacement for Google Assistant's manual Cloud/Google Home setup. Existing installations should make a HA snapshot first, and review every Preview before applying. Beta feedback and issue reports are welcome.
+
+## 🧪 Upcoming v1.1.0-beta.1 — Safer setup and recovery
+
+- **Fresh installation:** select HVLS entities in HA, or rebuild the first YAML from already labeled entities; nothing is written before the reviewed Preview.
+- **Import an older YAML:** inspect the original, detect missing or noneligible entities, preserve new HA labels and validate a proposed updated YAML. The original is protected with a verified backup.
+- **Repair without uninstalling:** reconstruct a missing HVLS-managed file from HA labels, or review and restore a backup even when production YAML is missing.
+- **Safer navigation:** pending label proposals remain protected across tabs, and the Assistant's new-selection button opens Entity Management directly.
+- **Integrity protection:** files owned by other installations, changed output content and incomplete operations stay blocked until explicitly resolved.
+
+The beta is intended for testing, especially existing YAML migrations and restoration. It does not automate Google Cloud, reverse proxy/DNS, or Google Home linking. See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## ✨ V1 stable highlights
 
@@ -268,7 +278,7 @@ An entity is also skipped when it:
 
 The Preview panel shows included-entity counts **by domain and room**. Under **Non-enabled domains**, it groups *labeled* entities excluded because their domain is not enabled; the **Excluded entities** diagnostic lists labeled exclusions and their reasons. Entities without the selected label are not included in these exclusion statistics.
 
-> **Note:** The native integration depends on the separately versioned Python core `ha-voice-label-sync==0.3.5`. Review package and integration rules again when updating eligibility in a future release.
+> **Note:** The native integration depends on the separately versioned Python core `ha-voice-label-sync==0.3.6`. Review package and integration rules again when updating eligibility in a future release.
 
 ## 🏠 Home Assistant integration features
 
