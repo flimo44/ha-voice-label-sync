@@ -6,6 +6,18 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.1.0-beta.3] - 2026-11-15
+
+### Fixed
+- Restore the Assistant's existing-YAML takeover path when Home Assistant already has an active manual Google Assistant configuration.
+- Show the detected YAML, its entity count and a read-only inspection action when the configured output is unmanaged or belongs to an inactive HVLS installation.
+- Keep the takeover workflow hidden for managed or ambiguous configurations; no labels or production YAML are modified by inspection.
+
+### Validation
+- Regression tests cover active manual Google Assistant YAML, the visible takeover path, and safe refusal in other ownership states.
+- Production takeover still requires separate explicit review, verified backup, and guarded Preview Apply. Test on the HA VM before using in production.
+
+
 ## [1.1.0-beta.2] - 2026-11-15
 
 ### Release correction
