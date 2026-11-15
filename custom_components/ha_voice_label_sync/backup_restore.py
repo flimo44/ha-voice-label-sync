@@ -282,6 +282,22 @@ def prepare_manual_label_preview(
             "No selected entities would remain; production was not modified."
         )
     analysis = analyze_preview(generation.content, production)
+    if recovery:
+        # The old file is the selection source; current HA determines
+        # whether each selected entity can still be generated.
+        from .preview_compare import _entities
+
+        if production is None:
+            raise BackupRestoreError("No old YAML to recover.")
+        expected = {
+            entity_id for entity_id, options in _entities(production).items()
+            if options.get("expose") is True
+            and current.get(entity_id, {}).get("eligible") is True
+        }
+        if set(_entities(generation.content)) != expected:
+            raise BackupRestoreError(
+                "Recovery Preview differs from eligible old YAML entities."
+            )
     if analysis["comparison"]["status"] not in {"ok", "missing"}:
         raise BackupRestoreError("Cannot compare current production YAML.")
     production_sha = preview_digest(production) if production is not None else None
