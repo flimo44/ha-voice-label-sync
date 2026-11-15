@@ -22,6 +22,7 @@ from hvls import (
 )
 from hvls.owned_writer import evaluate_registered_output, write_owned_output
 
+from .bulk_removal import require_bulk_removal_approval
 from .backup_restore import (
     BackupRestoreError,
     apply_backup_cleanup,
@@ -1335,6 +1336,7 @@ WS_TYPE_APPLY_PREVIEW = f"{DOMAIN}/apply_preview"
         vol.Required("preview_sha256"): str,
         vol.Required("production_sha256"): vol.Any(None, str),
         vol.Optional("rebuild_missing", default=False): bool,
+        vol.Optional("acknowledged_bulk_removals", default=0): int,
     }
 )
 async def websocket_apply_preview(
@@ -1417,6 +1419,9 @@ async def websocket_apply_preview(
                     entry_id=entries[0].entry_id,
                     ownership_registry_path=ownership_path,
                     rebuild_missing=msg.get("rebuild_missing", False),
+                    acknowledged_bulk_removals=msg.get(
+                        "acknowledged_bulk_removals", 0,
+                    ),
                 )
             )
         except (
@@ -1657,6 +1662,7 @@ async def websocket_prepare_manual_label_preview(
     vol.Required("preview_sha256"): str,
     vol.Required("production_sha256"): vol.Any(None, str),
     vol.Required("label_plan_sha256"): str,
+    vol.Optional("acknowledged_bulk_removals", default=0): int,
 })
 async def websocket_apply_manual_label_preview(
     hass: HomeAssistant,
@@ -1717,6 +1723,13 @@ async def websocket_apply_manual_label_preview(
                 raise PreviewChangedError(
                     "Manual label Preview is stale; review again."
                 )
+            # Bind the confirmation to the freshly regenerated diff, before
+            # installing the durable restore guard or changing labels/YAML.
+            require_bulk_removal_approval(
+                plan["comparison"],
+                (plan.get("production_summary") or {}).get("total"),
+                msg.get("acknowledged_bulk_removals", 0),
+            )
             # Store the approved state before the first filesystem write.
             # Even a failed/partial label operation must remain protected.
             await hass.async_add_executor_job(
@@ -2047,6 +2060,7 @@ async def websocket_prepare_backup_preview(
     vol.Required("production_sha256"): vol.Any(None, str),
     vol.Required("label_plan_sha256"): str,
     vol.Optional("ignored_entities", default=[]): [str],
+    vol.Optional("acknowledged_bulk_removals", default=0): int,
 })
 async def websocket_apply_backup_preview(
     hass: HomeAssistant,
@@ -2116,6 +2130,13 @@ async def websocket_apply_backup_preview(
                     "Restore Preview is stale, empty or contains unresolved entities"
                 )
 
+            # Explicit approval is required for bulk removals from the
+            # freshly recomputed restore plan, before any filesystem writes.
+            require_bulk_removal_approval(
+                review["comparison"],
+                (review.get("production_summary") or {}).get("total"),
+                msg.get("acknowledged_bulk_removals", 0),
+            )
             # This writer creates an independent safety backup and a durable
             # restore guard before touching production. The guard must not be
             # released until the actual HA labels regenerate identical entities.
