@@ -55,7 +55,7 @@ def environment(monkeypatch):
 
     ce = module("homeassistant.config_entries")
     ce.ConfigFlow = FakeConfigFlow
-    ce.OptionsFlow = type("OptionsFlow", (), {})
+    ce.OptionsFlow = type("OptionsFlow", (FakeConfigFlow,), {})
     ce.ConfigEntry = type("ConfigEntry", (), {})
 
     core = module("homeassistant.core")
