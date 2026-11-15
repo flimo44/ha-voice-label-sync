@@ -115,6 +115,11 @@ async def _async_run_workflow_unlocked(
         output_path = Path(hass.config.config_dir) / output_path
 
     if not dry_run:
+        if (settings.get("onboarding_mode") == "existing"
+                and settings.get("recovery_completed") is not True):
+            raise HomeAssistantError(
+                "Complete the reviewed recovery before generating production."
+            )
         assert_not_guarded(
             Path(hass.config.path(".hvls", "ownership.json")),
             entry.entry_id, output_path,
