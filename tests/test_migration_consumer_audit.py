@@ -280,9 +280,9 @@ def test_event_listener_simulation_demonstrates_unbounded_risk(
     assert observed["stage_allowed"] is False
 
 
-def test_v1_code_has_no_automatic_label_event_to_generate_wiring():
-    # Regression contract on the precise V1 integration wiring inspected
-    # during #121. This is code evidence, not an assertion about plugins.
+def test_integration_has_no_registry_event_generation_or_legacy_buttons():
+    # Regression contract after #172: no event-driven generation and no
+    # direct-write HA button platform. The legacy service explicitly refuses.
     setup = (
         ROOT / "custom_components" / "ha_voice_label_sync" / "__init__.py"
     ).read_text(encoding="utf-8")
@@ -290,13 +290,14 @@ def test_v1_code_has_no_automatic_label_event_to_generate_wiring():
     assert "async_listen" not in setup
     assert "async_track" not in setup
     assert "async_run_workflow" not in setup
+    assert "async_forward_entry_setups" not in setup
     services = (
         ROOT / "custom_components" / "ha_voice_label_sync" / "services.py"
     ).read_text(encoding="utf-8")
-    buttons = (
-        ROOT / "custom_components" / "ha_voice_label_sync" / "button.py"
-    ).read_text(encoding="utf-8")
     assert "SERVICE_GENERATE" in services
-    assert "dry_run=False" in services
-    assert "dry_run=False" in buttons
+    assert "DIRECT_GENERATION_DISABLED" in services
+    assert "if not dry_run:" in services
+    assert not (
+        ROOT / "custom_components" / "ha_voice_label_sync" / "button.py"
+    ).exists()
     assert "async_update_entity" not in setup
