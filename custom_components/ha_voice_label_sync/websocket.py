@@ -1566,7 +1566,7 @@ async def websocket_prepare_manual_label_preview(
             settings = {**entry.data, **entry.options}
             pending = (settings.get("onboarding_mode") == "existing"
                        and settings.get("recovery_completed") is not True)
-            if pending != msg["recovery"]:
+            if pending != msg.get("recovery", False):
                 raise BackupRestoreError("Finish the selected recovery Preview first.")
             label = settings.get(CONF_LABEL, DEFAULT_LABEL)
             snapshot = get_live_registries(hass)
@@ -1575,7 +1575,7 @@ async def websocket_prepare_manual_label_preview(
                 partial(
                     prepare_manual_label_preview,
                     output, catalog, snapshot, label, DEFAULT_DOMAINS,
-                    msg["changes"], recovery=msg["recovery"],
+                    msg["changes"], recovery=msg.get("recovery", False),
                 )
             )
         except (
@@ -1621,7 +1621,7 @@ async def websocket_apply_manual_label_preview(
             ownership_path = Path(hass.config.path(".hvls", "ownership.json"))
             pending = (settings.get("onboarding_mode") == "existing"
                        and settings.get("recovery_completed") is not True)
-            if pending != msg["recovery"]:
+            if pending != msg.get("recovery", False):
                 raise BackupRestoreError("Recovery mode is out of date; review again.")
             label = settings.get(CONF_LABEL, DEFAULT_LABEL)
             assert_not_guarded(ownership_path, entry.entry_id, output)
@@ -1642,7 +1642,7 @@ async def websocket_apply_manual_label_preview(
                 partial(
                     prepare_manual_label_preview,
                     output, catalog, registries, label, DEFAULT_DOMAINS,
-                    msg["changes"], recovery=msg["recovery"],
+                    msg["changes"], recovery=msg.get("recovery", False),
                 )
             )
             if (
@@ -1740,7 +1740,7 @@ async def websocket_apply_manual_label_preview(
                     backup_sha256=plan["preview_sha256"],
                 )
             )
-            if msg["recovery"]:
+            if msg.get("recovery", False):
                 # Unlock normal generation only AFTER successful YAML/label verification.
                 hass.config_entries.async_update_entry(
                     entry, data={**entry.data, "recovery_completed": True}
