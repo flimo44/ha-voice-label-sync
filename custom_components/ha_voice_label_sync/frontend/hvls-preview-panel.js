@@ -344,7 +344,10 @@ const HVLS_TRANSLATIONS = {
     manualLabelPending: "À valider",
     manualLabelPreparing: "Simulation des étiquettes et du YAML, sans écriture…",
     manualLabelPrepared: "{count} changement(s) d'étiquette prêt(s) dans le Preview. Aucun label ni YAML modifié.",
-    manualLabelHelp: "Modifications proposées aux étiquettes HA et au YAML de production. Rien ne sera écrit avant votre validation. Ce brouillon n'est pas conservé après un rechargement du navigateur : appliquez-le ou annulez-le avant de quitter.",
+    manualLabelHelp: "Proposition enregistrée dans ce navigateur pour votre compte Home Assistant. Au retour, le Preview sera revérifié. Aucun label ni YAML modifié avant Apply.",
+    savedDraftRestored: "{count} modification(s) provisoire(s) retrouvée(s) et revérifiée(s). Vérifiez le Preview avant Appliquer.",
+    savedDraftBlocked: "Brouillon conservé, mais non applicable : la configuration, les entités ou les protections ont changé. Aucune écriture autorisée. Examinez la situation puis cliquez sur Annuler pour repartir de l'état actuel.",
+    savedDraftStorageUnavailable: "Le navigateur n'a pas pu enregistrer cette proposition. Elle pourrait disparaître si vous quittez HVLS. Appliquez-la ou annulez-la maintenant.",
     pendingDraftProtect: "Une proposition non appliquée est en attente. Examinez-la dans le Preview puis appliquez-la ou annulez-la avant de recharger ou de lancer une autre opération.",
     manualLabelApply: "Appliquer les changements d'étiquettes",
     manualLabelConfirm: "Appliquer les changements d'étiquettes et le YAML proposés dans le Preview ? Une sauvegarde de sécurité sera créée si un fichier de production existe.",
@@ -879,7 +882,10 @@ const HVLS_TRANSLATIONS = {
     manualLabelPending: "Pending review",
     manualLabelPreparing: "Simulating labels and YAML without writing…",
     manualLabelPrepared: "{count} label change(s) prepared in Preview. No labels or YAML modified.",
-    manualLabelHelp: "Proposed HA label and production YAML changes. Nothing is written until you approve. This draft does not survive a browser reload: apply or cancel it before leaving.",
+    manualLabelHelp: "Proposal saved locally in this browser for your Home Assistant account. It will be rechecked on return; no label or YAML is changed before Apply.",
+    savedDraftRestored: "{count} pending change(s) found and revalidated. Review the Preview before Apply.",
+    savedDraftBlocked: "Saved draft retained but cannot be applied: the configuration, entities or safety guards have changed. No writes are allowed. Review the situation, then choose Cancel to start again from the current state.",
+    savedDraftStorageUnavailable: "The browser could not save this proposal. It may disappear when leaving HVLS. Apply or cancel it now.",
     pendingDraftProtect: "An unapplied proposal is still pending. Review it in Preview and apply or cancel it before refreshing or starting another operation.",
     manualLabelApply: "Apply label changes",
     manualLabelConfirm: "Apply the reviewed label changes and YAML? A safety backup will be made when production exists.",
@@ -1283,8 +1289,12 @@ class HVLSPreviewPanel extends HTMLElement {
     if (!this._initialized) {
       this._initialized = true;
       this._render();
-      this._loadPreview();
-      this._loadEntities();
+      // Home Assistant destroys/recreates custom panels on navigation.
+      // Restore only user intent after *both* fresh server snapshots arrive;
+      // never reuse a cached Apply authorization.
+      Promise.all([this._loadPreview(), this._loadEntities()])
+        .then(() => this._resumeSavedLabelDraft())
+        .catch(() => {});
     }
     this._loadBrandIcon();
     this._translateStatic();
@@ -1362,6 +1372,181 @@ class HVLSPreviewPanel extends HTMLElement {
     } catch (error) {
       icon.hidden = true;
       console.warn("HVLS : logo non disponible", error);
+    }
+  }
+
+  _draftStorageKey() {
+    // Scope browser-local drafts to the authenticated HA user. The browser
+    // origin scopes them to this HA instance; never share across users.
+    const userId = this._hass?.user?.id;
+    return typeof userId === "string" && /^[a-zA-Z0-9_-]{8,128}$/.test(userId)
+      ? "hvls:label-draft:v1:" + userId : null;
+  }
+
+  _readSavedLabelDraft() {
+    const key = this._draftStorageKey();
+    if (!key) return null;
+    try {
+      const raw = window.localStorage?.getItem(key);
+      if (!raw) return null;
+      const draft = JSON.parse(raw);
+      if (draft?.version !== 1 ||
+          typeof draft.productionPath !== "string" ||
+          !draft.productionPath.startsWith("/") ||
+          !(draft.productionSha === null ||
+            /^[0-9a-f]{64}$/.test(draft.productionSha)) ||
+          !Array.isArray(draft.changes) ||
+          draft.changes.length < 1 || draft.changes.length > 500) return null;
+      const ids = new Set();
+      for (const item of draft.changes) {
+        if (!item || typeof item.entity_id !== "string" ||
+            !/^[a-z0-9_]+\.[a-z0-9_]+$/.test(item.entity_id) ||
+            typeof item.enabled !== "boolean" ||
+            typeof item.base_label !== "boolean" ||
+            ids.has(item.entity_id)) return null;
+        ids.add(item.entity_id);
+      }
+      return draft;
+    } catch (_error) {
+      return null; // Never trust malformed browser data or grant Apply.
+    }
+  }
+
+  _clearSavedLabelDraft() {
+    const key = this._draftStorageKey();
+    if (!key) return;
+    try {
+      window.localStorage?.removeItem(key);
+    } catch (_error) {
+      this._setStatusKey("savedDraftStorageUnavailable");
+    }
+  }
+
+  _savePendingLabelDraft(choices, stage) {
+    const key = this._draftStorageKey();
+    const catalog = this._entityCatalog?.entities;
+    const productionPath = this._lastAnalysis?.production_path ||
+      stage?.production_path;
+    if (!key || !Array.isArray(catalog) ||
+        typeof productionPath !== "string" ||
+        !(stage?.production_sha256 === null ||
+          /^[0-9a-f]{64}$/.test(stage?.production_sha256))) return false;
+    const entities = new Map(catalog.map(item => [item.entity_id, item]));
+    const changes = [];
+    for (const [entity_id, enabled] of choices) {
+      const entity = entities.get(entity_id);
+      if (!entity || typeof enabled !== "boolean" ||
+          (enabled && entity.eligible !== true) ||
+          entity.has_label === enabled) return false;
+      changes.push({
+        entity_id, enabled, base_label: entity.has_label === true,
+      });
+    }
+    if (!changes.length || changes.length > 500) return false;
+    changes.sort((a, b) => a.entity_id.localeCompare(b.entity_id));
+    try {
+      window.localStorage.setItem(key, JSON.stringify({
+        version: 1, productionPath,
+        productionSha: stage.production_sha256,
+        changes,
+      }));
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  _blockSavedLabelDraft(draft) {
+    // The browser stores *intent*, not a trusted approval. Even if the
+    // server cannot revalidate, preserve the user's list until explicit
+    // Cancel; the synthetic stage can never satisfy the Apply predicates.
+    this._review = null;
+    this._manualLabelChanges = new Map(
+      draft.changes.map(item => [item.entity_id, item.enabled])
+    );
+    this._stagedRestore = {
+      mode: "saved_draft_blocked", changes: draft.changes,
+      projection: {ready: false},
+    };
+    this._applyBlockReason = this._t("savedDraftBlocked");
+    this._applyBlockReasonCode = null;
+    this._updateApplyButton();
+    if (this._entityCatalog) this._renderEntities();
+    if (this._lastAnalysis) this._renderAnalysis(this._lastAnalysis);
+    this._setStatusKey("savedDraftBlocked");
+    this._activateTab("preview");
+  }
+
+  async _resumeSavedLabelDraft() {
+    const draft = this._readSavedLabelDraft();
+    if (!draft || !this._hass || this._stagedRestore ||
+        this._entityWritePending || this._applying) return;
+    const baseline = this._lastAnalysis;
+    const catalog = this._entityCatalog?.entities;
+    const sameProduction = baseline?.production_path === draft.productionPath &&
+      baseline.production_sha256 === draft.productionSha &&
+      baseline.available === true && !baseline.error &&
+      baseline.ownership?.write_allowed === true &&
+      !baseline.recovery_pending && !this._restoreReconcilePending;
+    const entities = new Map((catalog || []).map(entity =>
+      [entity.entity_id, entity]
+    ));
+    const sameLabels = Array.isArray(catalog) &&
+      draft.changes.every(item => {
+        const entity = entities.get(item.entity_id);
+        return entity && entity.has_label === item.base_label &&
+          item.enabled !== item.base_label &&
+          (!item.enabled || entity.eligible === true);
+      });
+    if (!sameProduction || !sameLabels) {
+      this._blockSavedLabelDraft(draft);
+      return;
+    }
+
+    // Server recalculates the proposed YAML, label plan and fingerprints.
+    // No label/YAML write is performed, and the old review is discarded.
+    this._entityWritePending = true;
+    const loadId = ++this._loadId;
+    this._review = null;
+    this._updateApplyButton();
+    try {
+      const requested = draft.changes.map(({entity_id, enabled}) =>
+        ({entity_id, enabled})
+      );
+      const stage = await this._hass.callWS({
+        type: "ha_voice_label_sync/prepare_manual_label_preview",
+        changes: requested,
+      });
+      if (loadId !== this._loadId) return;
+      const returned = stage?.changes?.map(({entity_id, enabled}) =>
+        ({entity_id, enabled})
+      );
+      if (stage?.mode !== "label_preview" ||
+          stage.recovery === true ||
+          stage.projection?.ready !== true ||
+          !/^[a-f0-9]{64}$/.test(stage.label_plan_sha256 || "") ||
+          stage.production_sha256 !== draft.productionSha ||
+          JSON.stringify(returned) !== JSON.stringify(requested)) {
+        throw new Error("stale_draft_preview");
+      }
+      this._manualLabelChanges = new Map(
+        requested.map(item => [item.entity_id, item.enabled])
+      );
+      this._stagedRestore = stage;
+      this._previewContent = stage.content;
+      this._previewPath = stage.path;
+      this._applyBlockReason = this._t("manualLabelHelp");
+      this._applyBlockReasonCode = null;
+      this._renderAnalysis(stage);
+      this._setContent(stage.content);
+      this._setStatusKey("savedDraftRestored", {count: requested.length});
+      this._activateTab("preview");
+    } catch (_error) {
+      if (loadId === this._loadId) this._blockSavedLabelDraft(draft);
+    } finally {
+      this._entityWritePending = false;
+      this._updateApplyButton();
+      if (this._entityCatalog) this._renderEntities();
     }
   }
 
@@ -1693,6 +1878,7 @@ class HVLSPreviewPanel extends HTMLElement {
     this._loadId = (this._loadId || 0) + 1;
     this._stagedRestore = null;
     this._manualLabelChanges = null;
+    this._clearSavedLabelDraft();
     this._review = null;
     this._applyBlockReason = null;
     this._applyBlockReasonCode = null;
@@ -2241,6 +2427,13 @@ class HVLSPreviewPanel extends HTMLElement {
     if (previewNotice) {
       previewNotice.hidden = !this._stagedRestore;
       previewNotice.replaceChildren();
+      if (this._stagedRestore?.mode === "saved_draft_blocked") {
+        const warning = document.createElement("p");
+        warning.className = "diagnostic-note";
+        warning.textContent = this._t("savedDraftBlocked");
+        previewNotice.appendChild(warning);
+        return;
+      }
       if (this._stagedRestore) {
         const plan = this._stagedRestore.label_plan || {};
         const isManual = this._stagedRestore.mode === "label_preview";
@@ -3754,6 +3947,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     try {
       if (!choices.size) {
         this._manualLabelChanges = null;
+        this._clearSavedLabelDraft();
         await this._loadPreview();
         this._activateTab("preview");
         return;
@@ -3779,7 +3973,11 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._applyBlockReasonCode = null;
       this._renderAnalysis(result);
       this._setContent(result.content);
-      this._setStatusKey("manualLabelPrepared", {count: choices.size});
+      // Only a manual-label proposal is durable. Legacy recovery and
+      // backup plans continue through their own explicit recovery guards.
+      const saved = this._savePendingLabelDraft(choices, result);
+      this._setStatusKey(saved ? "manualLabelPrepared" :
+        "savedDraftStorageUnavailable", {count: choices.size});
       this._activateTab("preview");
     } catch (error) {
       this._manualLabelChanges = null;
@@ -3828,6 +4026,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       }
       this._manualLabelChanges = null;
       this._stagedRestore = null;
+      this._clearSavedLabelDraft();
       if (stage.recovery === true) {
         this._assistantFileReport = null;
         this._assistantAdoptMessage = null;
