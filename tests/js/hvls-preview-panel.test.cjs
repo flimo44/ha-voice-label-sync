@@ -4956,19 +4956,19 @@ test("Recovery stage shows 25 entities and never calls direct set_entity_label",
   assert.equal(panel._assistantAdoptBusy, false);
 });
 
-test("Recovery stage includes label removals of entities outside selected legacy YAML", async () => {
+test("Recovery preserves previously labeled entities absent from the old YAML", async () => {
   const {panel} = standardAdoptionFixture(async req => {
     if (req.type === "ha_voice_label_sync/inspect_assistant_entity_file") {
       return cloneAdoptionReport(panel._assistantFileReport);
     }
     assert.equal(req.type, "ha_voice_label_sync/prepare_manual_label_preview");
-    assert.ok(req.changes.some(x => x.entity_id === "light.extra" && x.enabled === false));
+    assert.ok(!req.changes.some(x => x.entity_id === "light.extra"));
     assert.ok(req.changes.some(x => x.entity_id === "light.custom" && x.enabled === true));
     return {mode: "label_preview", recovery: true,
       projection: {ready: true}, changes: req.changes,
       preview_sha256: "c".repeat(64), label_plan_sha256: "b".repeat(64),
       production_sha256: "a".repeat(64), path: "Recovery",
-      content: "light.new:\n  expose: true\n", summary: {total: 3}};
+      content: "light.new:\n  expose: true\n", summary: {total: 4}};
   });
   panel._entityCatalog.entities.push({
     entity_id: "light.extra", eligible: true, has_label: true,
