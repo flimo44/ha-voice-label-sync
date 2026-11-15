@@ -96,7 +96,10 @@ def test_rebuild_refuses_foreign_and_pending_ownership(repair, owned):
             output_path=output, content="switch.new: {}\n",
             entry_id="other-installation", ownership_registry_path=registry_path,
         )
-    assert OwnershipRegistry(registry_path).get_record("installation-live") == old_record
+    assert (
+        OwnershipRegistry(registry_path).get_record("installation-live")
+        == old_record
+    )
 
     registry = OwnershipRegistry(registry_path)
     data = registry._load()
@@ -119,7 +122,10 @@ def test_rebuild_refuses_unsafe_symlink(repair, owned):
     with pytest.raises(FileWriterError):
         rebuild(repair, owned)
     assert original.read_text(encoding="utf-8") == "switch.old:\n  expose: true\n"
-    assert OwnershipRegistry(registry).get_record("installation-live")["state"] == "managed"
+    assert (
+        OwnershipRegistry(registry).get_record("installation-live")["state"]
+        == "managed"
+    )
 
 
 def test_rebuild_refuses_restore_hold_and_preserves_ownership(repair, owned):
