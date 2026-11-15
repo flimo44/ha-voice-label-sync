@@ -1320,6 +1320,7 @@ WS_TYPE_APPLY_PREVIEW = f"{DOMAIN}/apply_preview"
         vol.Required("type"): WS_TYPE_APPLY_PREVIEW,
         vol.Required("preview_sha256"): str,
         vol.Required("production_sha256"): vol.Any(None, str),
+        vol.Optional("rebuild_missing", default=False): bool,
     }
 )
 async def websocket_apply_preview(
@@ -1355,10 +1356,25 @@ async def websocket_apply_preview(
         preview_path = Path(hass.config.path(".hvls", "preview.yaml"))
 
         try:
-            assert_not_guarded(
-                Path(hass.config.path(".hvls", "ownership.json")),
-                entries[0].entry_id, output_path,
+            ownership_path = Path(
+                hass.config.path(".hvls", "ownership.json")
             )
+            assert_not_guarded(
+                ownership_path, entries[0].entry_id, output_path,
+            )
+            if msg.get("rebuild_missing", False):
+                ownership = await hass.async_add_executor_job(
+                    evaluate_registered_output,
+                    output_path, entries[0].entry_id, ownership_path,
+                )
+                if (
+                    ownership.reason_code != "managed_output_missing"
+                    or msg["production_sha256"] is not None
+                ):
+                    raise FileWriterError(
+                        "Missing-file recovery no longer applies. "
+                        "Refresh Preview and inspect production."
+                    )
             registries = get_live_registries(hass)
             result = await hass.async_add_executor_job(
                 partial(
@@ -1376,9 +1392,8 @@ async def websocket_apply_preview(
                     settings.get(CONF_CREATE_BACKUP, DEFAULT_CREATE_BACKUP),
                     expected_production_digest=msg["production_sha256"],
                     entry_id=entries[0].entry_id,
-                    ownership_registry_path=Path(
-                        hass.config.path(".hvls", "ownership.json")
-                    ),
+                    ownership_registry_path=ownership_path,
+                    rebuild_missing=msg.get("rebuild_missing", False),
                 )
             )
         except (
