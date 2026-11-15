@@ -4806,286 +4806,212 @@ function cloneAdoptionReport(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
-test("Unreferenced YAML offers HVLS label reuse, not a Google connectivity blocker", () => {
+test("Recovery identifies eligible old entities, independent of existing HVLS labels", () => {
   const {panel, nodes} = standardAdoptionFixture(async () => {
-    throw Error("No requests expected");
+    throw Error("Read-only comparison must not write");
   });
   const plan = panel._assistantAdoptionPlan();
-  assert.deepEqual(Array.from(plan.candidates), ["light.new"]);
-  assert.equal(plan.totals.ready, 1);
+  assert.deepEqual(Array.from(plan.candidates), ["light.new", "light.custom"]);
+  assert.deepEqual(Array.from(plan.recoverable), ["light.new", "light.already", "light.custom"]);
+  assert.equal(plan.totals.total, 5);
+  assert.equal(plan.totals.recoverable, 3);
+  assert.equal(plan.totals.ready, 2);
   assert.equal(plan.totals.already, 1);
   assert.equal(plan.totals.excluded, 1);
-  assert.equal(plan.totals.review, 2);
+  assert.equal(plan.totals.review, 1); // Missing expose: no implicit exposure.
   panel._renderAssistantAdoption();
-  assert.equal(nodes.assistantAdoption.hidden, false);
-  assert.match(nodes.assistantAdoptSummary.textContent, /1 à ajouter/);
-  assert.match(nodes.assistantAdoptIntro.textContent, /sans configurer Google Assistant/);
+  assert.match(nodes.assistantAdoptSummary.textContent, /3 récupérables/);
+  assert.equal(nodes.assistantAdoptApply.disabled, true); // Ownership first.
+  panel._ownershipManaged = true;
+  panel._recoveryPending = true;
+  panel._renderAssistantAdoption();
   assert.equal(nodes.assistantAdoptApply.disabled, false);
-  assert.equal(nodes.assistantAdoptRows.children.length, 5);
-  assert.match(nodes.assistantAdoptRows.children[2].textContent, /aucun ajout/);
-  assert.equal(panel._migrationBaselineEligible(), false);
 });
 
-test("Confirmed existing file takeover shows diff, calls only prepare/confirm and never Apply", async () => {
-  const calls = [];
-  const confirmations = [];
+test("40 old entities result in 25 recoverable, 14 absent and 1 ineligible", () => {
+  const {panel} = standardAdoptionFixture(async () => {});
+  panel._assistantFileReport.adoption_entries = [
+    ...Array.from({length: 25}, (_, i) => ({
+      entity_id: "light.item_" + i, exposure: "expose",
+      has_customizations: true, reasons: [],
+    })),
+    ...Array.from({length: 14}, (_, i) => ({
+      entity_id: "climate.old_" + i, exposure: "expose",
+      has_customizations: false, reasons: [],
+    })),
+    {entity_id: "binary_sensor.rain", exposure: "expose",
+      has_customizations: false, reasons: []},
+  ];
+  panel._assistantFileReport.counts.entries = 40;
+  panel._entityCatalog.entities = [
+    ...Array.from({length: 25}, (_, i) => ({
+      entity_id: "light.item_" + i, eligible: true, has_label: i === 0,
+    })),
+    {entity_id: "binary_sensor.rain", eligible: false, has_label: false},
+  ];
+  const plan = panel._assistantAdoptionPlan();
+  assert.deepEqual({...plan.totals}, {
+    total: 40, ready: 24, already: 1, recoverable: 25,
+    missing: 14, ineligible: 1, excluded: 0, review: 0,
+  });
+  assert.equal(plan.complete, true);
+  assert.equal(plan.recoverable.length, 25);
+});
+
+test("Taking over a former YAML saves it first and displays recovery counts, not ordinary Preview", async () => {
+  const calls = [], confirmations = [];
   const {panel, nodes} = standardAdoptionFixture(async request => {
     calls.push(request);
     if (request.type === "ha_voice_label_sync/prepare_existing_output_takeover") {
-      assert.equal(request.path, "google_assistant_entities.yaml");
       return {
-        eligible: true, selected_path: request.path,
+        eligible: true, selected_path: request.path, entities: 5,
         production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
-        entities: 4, issues: 0,
-        changes: {added: 0, removed: 1, modified: 2},
+        recorded_sha_mismatch: true, previous_sha256: "c".repeat(64),
+        previous_entry_id: "old", ownership_revision: 1,
+        changes: {added: 2, removed: 4, modified: 1},
       };
     }
     if (request.type === "ha_voice_label_sync/confirm_existing_output_takeover") {
       assert.equal(request.confirmed, true);
-      assert.equal(request.production_sha256, "a".repeat(64));
-      assert.equal(request.preview_sha256, "b".repeat(64));
+      assert.equal(request.acknowledge_changed_output, true);
       return {
-        taken_over: true, backup_name: "google_assistant_entities.yaml.safety.bak",
+        taken_over: true, backup_name: "old.safety.bak",
         production_unchanged: true, apply_performed: false,
       };
     }
-    throw Error("No other operation expected");
-  }, message => { confirmations.push(message); return true; });
-  panel._applyBlockReasonCode = "unmanaged_output";
-  let previewReloads = 0;
+    throw Error("No automatic Apply or label write allowed");
+  }, message => {confirmations.push(message);return true;});
+  panel._applyBlockReasonCode = "owned_by_other_installation";
   panel._loadPreview = async () => {
-    previewReloads += 1;
     panel._applyBlockReasonCode = null;
+    panel._ownershipManaged = true;
+    panel._recoveryPending = true;
   };
-  panel._renderAssistantAdoption();
-  assert.equal(nodes.assistantTakeoverSection.hidden, false);
-  assert.equal(nodes.assistantTakeoverButton.disabled, false);
   await panel._takeOverAssistantFile();
-  assert.equal(previewReloads, 1);
-  assert.deepEqual(calls.map(r => r.type), [
+  assert.deepEqual(calls.map(x => x.type), [
     "ha_voice_label_sync/prepare_existing_output_takeover",
     "ha_voice_label_sync/confirm_existing_output_takeover",
   ]);
-  assert.match(confirmations[0], /1 suppression/);
-  assert.match(confirmations[0], /2 modification/);
-  assert.match(confirmations[0], /aucun Apply/i);
-  assert.match(confirmations[0], /\?\n\nEntités actuelles/);
-  assert.match(confirmations[0], /\nDifférences proposées par le Preview/);
-  assert.doesNotMatch(confirmations[0], /\\n/);
-  assert.match(nodes.assistantTakeoverResult.textContent, /Sauvegarde vérifiée/);
-  assert.equal(nodes.assistantTakeoverButton.hidden, true);
+  assert.match(confirmations[0], /5 entités/);
+  assert.match(confirmations[0], /3\./);
+  assert.doesNotMatch(confirmations[0], /SHA-256|Preview ordinaire|4 suppression/);
+  assert.match(nodes.assistantTakeoverResult.textContent, /sauvegarde vérifiée/i);
+  assert.equal(nodes.assistantAdoptApply.disabled, false);
 });
 
-test("English takeover confirmation has real line breaks", async () => {
-  const confirmations = [];
-  const {panel} = standardAdoptionFixture(async request => {
-    assert.equal(request.type, "ha_voice_label_sync/prepare_existing_output_takeover");
-    return {
-      eligible: true, selected_path: "google_assistant_entities.yaml",
-      production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
-      entities: 4, issues: 0,
-      changes: {added: 0, removed: 0, modified: 0},
-    };
-  }, message => { confirmations.push(message); return false; });
-  panel._language = "en";
-  panel._applyBlockReasonCode = "unmanaged_output";
-  await panel._takeOverAssistantFile();
-  assert.equal(confirmations.length, 1);
-  assert.match(confirmations[0], /\?\n\nCurrent entities/);
-  assert.match(confirmations[0], /\nPreview differences:/);
-  assert.doesNotMatch(confirmations[0], /\\n/);
-});
-
-test("Existing file takeover rejects stale source, cancellation and unsupported status", async () => {
-  for (const testCase of ["cancel", "stale", "not_unmanaged"]) {
+test("Takeover cancellation and source digest mismatch never transfer ownership", async () => {
+  for (const mode of ["cancel", "stale"]) {
     const calls = [];
-    const {panel, nodes} = standardAdoptionFixture(async request => {
-      calls.push(request.type);
+    const {panel} = standardAdoptionFixture(async req => {
+      calls.push(req.type);
       return {
-        eligible: true, selected_path: "google_assistant_entities.yaml",
-        production_sha256: testCase === "stale"
-          ? "f".repeat(64) : "a".repeat(64),
-        preview_sha256: "b".repeat(64), entities: 4, issues: 0,
-        changes: {added: 0, removed: 0, modified: 0},
+        eligible: true, selected_path: req.path, entities: 5,
+        production_sha256: mode === "stale" ? "f".repeat(64) : "a".repeat(64),
+        preview_sha256: "b".repeat(64),
       };
     }, () => false);
-    panel._applyBlockReasonCode = testCase === "not_unmanaged"
-      ? "registry_invalid" : "unmanaged_output";
+    panel._applyBlockReasonCode = "unmanaged_output";
     panel._loadPreview = async () => {};
     await panel._takeOverAssistantFile();
-    if (testCase === "not_unmanaged") {
-      assert.deepEqual(calls, []);
-    } else {
-      assert.deepEqual(calls, ["ha_voice_label_sync/prepare_existing_output_takeover"]);
-    }
-    assert.equal(nodes.assistantTakeoverResult.textContent.includes("Fichier repris"), false);
+    assert.deepEqual(calls, ["ha_voice_label_sync/prepare_existing_output_takeover"]);
   }
 });
 
-test("Already labeled entities with generated name/room are recognized without any write", () => {
-  const {panel, nodes} = standardAdoptionFixture(async () => {
-    throw Error("No write requests expected");
-  });
-  const ids = [
-    "switch.sonoff_10007b6160_1", "switch.sonoff_10007b6160_2",
-    "switch.piscine_chauffage", "switch.pompe_piscine_prise",
-  ];
-  panel._assistantFileReport.adoption_entries = ids.map(entity_id => ({
-    entity_id, exposure: "expose", has_customizations: true, reasons: [],
-  }));
-  panel._assistantFileReport.counts.entries = 4;
-  panel._entityCatalog.entities = ids.map(entity_id => ({
-    entity_id, eligible: true, has_label: true,
-  }));
-  const plan = panel._assistantAdoptionPlan();
-  assert.equal(plan.totals.ready, 0);
-  assert.equal(plan.totals.already, 4);
-  assert.equal(plan.totals.excluded, 0);
-  assert.equal(plan.totals.review, 0);
-  assert.deepEqual(Array.from(plan.candidates), []);
-  panel._renderAssistantAdoption();
-  assert.equal(nodes.assistantAdoptApply.disabled, true);
-  assert.equal(nodes.assistantAdoptNeedsReview.hidden, false);
-  assert.equal(nodes.assistantAdoptRows.children.length, 4);
-  for (const row of nodes.assistantAdoptRows.children) {
-    assert.match(row.textContent, /Déjà dans HVLS/);
-    assert.match(row.textContent, /non comparés/);
-    assert.doesNotMatch(row.textContent, /À examiner manuellement/);
-  }
-  assert.equal(panel._migrationBaselineEligible(), false);
-});
-
-test("Entity review shows the specific reason and never auto-adds risky entries", () => {
-  const {panel, nodes} = standardAdoptionFixture(async () => {
-    throw Error("No write requests expected");
-  });
-  const extra = [
-    ["switch.conflict", "exclude", false, []],
-    ["light.absent", "expose", false, []],
-    ["light.ineligible", "expose", false, []],
-    ["light.invalid", "invalid", false, ["invalid_expose"]],
-  ];
-  for (const [entity_id, exposure, has_customizations, reasons] of extra) {
-    panel._assistantFileReport.adoption_entries.push({
-      entity_id, exposure, has_customizations, reasons,
-    });
-  }
-  panel._assistantFileReport.counts.entries += extra.length;
-  panel._entityCatalog.entities.push(
-    {entity_id: "switch.conflict", eligible: true, has_label: true},
-    {entity_id: "light.ineligible", eligible: false, has_label: false},
-    {entity_id: "light.invalid", eligible: true, has_label: false},
-  );
-  panel._renderAssistantAdoption();
-  const rows = nodes.assistantAdoptRows.children.map(row => row.textContent);
-  assert.match(rows.find(row => row.startsWith("light.custom")), /personnalisations YAML/);
-  assert.match(rows.find(row => row.startsWith("light.unknown")), /Directive expose absente/);
-  assert.match(rows.find(row => row.startsWith("switch.conflict")), /expose: false mais label/);
-  assert.match(rows.find(row => row.startsWith("light.absent")), /absente du catalogue/);
-  assert.match(rows.find(row => row.startsWith("light.ineligible")), /non éligible/);
-  assert.match(rows.find(row => row.startsWith("light.invalid")), /Anomalie dans la déclaration/);
-  assert.deepEqual(Array.from(panel._assistantAdoptionPlan().candidates), ["light.new"]);
-});
-
-test("Confirmed reuse only updates an explicit compatible entity using existing API", async () => {
-  const calls = [];
-  const {panel, nodes} = standardAdoptionFixture(async req => {
-    calls.push(req);
-    if (req.type === "ha_voice_label_sync/inspect_assistant_entity_file") {
-      return cloneAdoptionReport(panel._assistantFileReport);
-    }
-    if (req.type === "ha_voice_label_sync/set_entity_label") {
-      assert.equal(req.entity_id, "light.new");
-      assert.equal(req.enabled, true);
-      assert.equal(req.expected_enabled, false);
-      panel._entityCatalog.entities[0].has_label = true;
-      return {entity_id: req.entity_id, has_label: true, changed: true};
-    }
-    throw Error("Unexpected operation");
-  });
-  let previews = 0;
-  panel._loadEntities = async () => true;
-  panel._generatePreview = async () => { previews++; };
-  await panel._adoptAssistantFile();
-  assert.deepEqual(calls.map(req => req.type), [
-    "ha_voice_label_sync/inspect_assistant_entity_file",
-    "ha_voice_label_sync/set_entity_label",
-  ]);
-  assert.equal(previews, 1);
-  assert.match(nodes.assistantAdoptResult.textContent, /1 label/);
-  assert.deepEqual(Array.from(panel._assistantAdoptionPlan().candidates), []);
-});
-
-test("Reuse cancel sends nothing; changed YAML rejects writes before labels", async () => {
-  const requests = [];
+test("Recovery stage shows 25 entities and never calls direct set_entity_label", async () => {
+  const calls = [], navigated = [];
   const {panel} = standardAdoptionFixture(async req => {
-    requests.push(req);
-  }, () => false);
-  await panel._adoptAssistantFile();
-  assert.equal(requests.length, 0);
-  const {panel: current, nodes} = standardAdoptionFixture(async req => {
-    requests.push(req);
-    return {...cloneAdoptionReport(current._assistantFileReport),
-      file_sha256: "b".repeat(64)};
-  });
-  current._loadEntities = async () => true;
-  await current._adoptAssistantFile();
-  assert.deepEqual(requests.map(req => req.type),
-    ["ha_voice_label_sync/inspect_assistant_entity_file"]);
-  assert.match(nodes.assistantAdoptResult.textContent, /Fichier ou catalogue modifié/);
-});
-
-test("Reuse rejects forged authority, incomplete inventory or ambiguous label", async () => {
-  const {panel, nodes} = standardAdoptionFixture(async () => {
-    throw Error("No WebSocket allowed");
-  });
-  panel._assistantFileReport.stage_allowed = true;
-  assert.equal(panel._assistantAdoptionPlan(), null);
-  panel._renderAssistantAdoption();
-  assert.equal(nodes.assistantAdoption.hidden, true);
-  panel._assistantFileReport.stage_allowed = false;
-  panel._assistantFileReport.adoption_entries_complete = false;
-  panel._renderAssistantAdoption();
-  assert.equal(nodes.assistantAdoptApply.disabled, true);
-  panel._assistantFileReport.adoption_entries_complete = true;
-  panel._entityCatalog.label_ids = ["one", "two"];
-  panel._renderAssistantAdoption();
-  assert.equal(nodes.assistantAdoptApply.disabled, true);
-  await panel._adoptAssistantFile();
-});
-
-test("An uncertain second label update stops without hiding first success", async () => {
-  const calls = [];
-  const {panel, nodes} = standardAdoptionFixture(async req => {
     calls.push(req);
     if (req.type === "ha_voice_label_sync/inspect_assistant_entity_file") {
       return cloneAdoptionReport(panel._assistantFileReport);
     }
-    if (req.type === "ha_voice_label_sync/set_entity_label") {
-      if (req.entity_id === "light.new") {
-        return {entity_id: req.entity_id, has_label: true, changed: true};
-      }
-      throw Error("Simulated failure");
+    if (req.type === "ha_voice_label_sync/prepare_manual_label_preview") {
+      assert.equal(req.recovery, true);
+      assert.deepEqual(Array.from(req.changes), [
+        {entity_id: "light.custom", enabled: true},
+        {entity_id: "light.new", enabled: true},
+      ]);
+      return {
+        mode: "label_preview", recovery: true,
+        projection: {ready: true}, changes: req.changes,
+        preview_sha256: "f".repeat(64), label_plan_sha256: "b".repeat(64),
+        production_sha256: "a".repeat(64), path: "Recovery Preview",
+        content: "light.new:\n  expose: true\n",
+        summary: {total: 3},
+      };
     }
-    throw Error("Unexpected operation");
+    throw Error("Unexpected WS mutation");
   });
-  panel._assistantFileReport.adoption_entries.push({
-    entity_id: "light.second", exposure: "expose",
-    has_customizations: false, reasons: [],
-  });
-  panel._assistantFileReport.counts.entries = 6;
-  panel._entityCatalog.entities.push({
-    entity_id: "light.second", eligible: true, has_label: false,
-  });
+  panel._ownershipManaged = true;
+  panel._recoveryPending = true;
   panel._loadEntities = async () => true;
-  panel._generatePreview = async () => {};
+  panel._activateTab = tab => navigated.push(tab);
+  panel._renderAnalysis = () => {};
   await panel._adoptAssistantFile();
-  assert.deepEqual(calls.map(req => req.type), [
+  assert.deepEqual(calls.map(x => x.type), [
     "ha_voice_label_sync/inspect_assistant_entity_file",
-    "ha_voice_label_sync/set_entity_label",
-    "ha_voice_label_sync/set_entity_label",
+    "ha_voice_label_sync/prepare_manual_label_preview",
   ]);
-  assert.match(nodes.assistantAdoptResult.textContent, /1 label/);
-  assert.match(nodes.assistantAdoptResult.textContent, /interruption/);
+  assert.equal(panel._stagedRestore.recovery, true);
+  assert.deepEqual(navigated, ["preview"]);
   assert.equal(panel._assistantAdoptBusy, false);
+});
+
+test("Recovery stage includes label removals of entities outside selected legacy YAML", async () => {
+  const {panel} = standardAdoptionFixture(async req => {
+    if (req.type === "ha_voice_label_sync/inspect_assistant_entity_file") {
+      return cloneAdoptionReport(panel._assistantFileReport);
+    }
+    assert.equal(req.type, "ha_voice_label_sync/prepare_manual_label_preview");
+    assert.ok(req.changes.some(x => x.entity_id === "light.extra" && x.enabled === false));
+    assert.ok(req.changes.some(x => x.entity_id === "light.custom" && x.enabled === true));
+    return {mode: "label_preview", recovery: true,
+      projection: {ready: true}, changes: req.changes,
+      preview_sha256: "c".repeat(64), label_plan_sha256: "b".repeat(64),
+      production_sha256: "a".repeat(64), path: "Recovery",
+      content: "light.new:\n  expose: true\n", summary: {total: 3}};
+  });
+  panel._entityCatalog.entities.push({
+    entity_id: "light.extra", eligible: true, has_label: true,
+  });
+  panel._ownershipManaged = true;
+  panel._recoveryPending = true;
+  panel._loadEntities = async () => true;
+  panel._activateTab = () => {};
+  await panel._adoptAssistantFile();
+  assert.equal(panel._stagedRestore?.recovery, true);
+});
+
+test("Recovery stage fails closed when the original YAML has changed", async () => {
+  const calls = [];
+  const {panel,nodes} = standardAdoptionFixture(async req => {
+    calls.push(req.type);
+    return {...cloneAdoptionReport(panel._assistantFileReport),
+      file_sha256: "f".repeat(64)};
+  });
+  panel._ownershipManaged = true;
+  panel._recoveryPending = true;
+  panel._loadEntities = async () => true;
+  await panel._adoptAssistantFile();
+  assert.deepEqual(calls, ["ha_voice_label_sync/inspect_assistant_entity_file"]);
+  assert.equal(panel._stagedRestore, null);
+  assert.match(nodes.assistantAdoptResult.textContent, /refusée/);
+});
+
+test("Unmanaged file cannot stage a recovery even with a forged click", async () => {
+  const {panel} = standardAdoptionFixture(async () => {
+    throw Error("No WS call accepted");
+  });
+  panel._recoveryPending = true;
+  await panel._adoptAssistantFile();
+  assert.equal(panel._stagedRestore, undefined);
+});
+
+test("Empty label changes can still Apply a recovery cleanup of obsolete YAML", () => {
+  const {panel, controls} = makePanel(async () => {});
+  panel._stagedRestore = {mode: "label_preview", recovery: true,
+    changes: [], projection: {ready: true},
+    label_plan: {review: []}, label_plan_sha256: "a".repeat(64),
+    comparison: {status: "ok"},};
+  panel._updateApplyButton();
+  assert.equal(controls.apply.disabled, false);
 });
