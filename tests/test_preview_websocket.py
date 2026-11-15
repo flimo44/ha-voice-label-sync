@@ -1260,6 +1260,8 @@ def _manual_ws_plan(ws, changes, snapshot, *, digest="c" * 64):
         },
         "changes": changes, "content": "switch.new:\n  expose: true\n",
         "summary": {"total": 2},
+        "production_summary": {"total": 1},
+        "comparison": {"status": "ok", "removed": [], "added": ["switch.new"]},
     }
     ws.prepare_manual_label_preview.return_value = plan
     ws.evaluate_registered_output = Mock(return_value=SimpleNamespace(
