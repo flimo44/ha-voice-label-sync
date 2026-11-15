@@ -151,6 +151,10 @@ test("Unapplied checkbox selection survives leaving and reopening the HA panel",
   reopened.panel._entityCatalog = {entities: [entity]};
   reopened.panel._lastAnalysis = baseline;
   reopened.panel._activateTab = tab => {reopened.panel.openedTab = tab;};
+  assert.equal(reopened.panel._draftStorageKey(),
+    "hvls:label-draft:v1:" + userId);
+  assert.notEqual(reopened.panel._readSavedLabelDraft(), null,
+    JSON.stringify([...store.items]));
   await reopened.panel._resumeSavedLabelDraft();
   assert.equal(reopened.panel._manualLabelChanges.get(entity.entity_id), true);
   assert.equal(reopened.panel._stagedRestore.mode, "label_preview");
@@ -245,6 +249,8 @@ test("Saved draft never reuses previous Preview approval when backend rejects", 
     ownership: {status: "managed", write_allowed: true},
   };
   panel._activateTab = () => {};
+  assert.notEqual(panel._readSavedLabelDraft(), null,
+    JSON.stringify([...storage.items]));
   await panel._resumeSavedLabelDraft();
   assert.deepEqual(calls, ["ha_voice_label_sync/prepare_manual_label_preview"]);
   assert.equal(panel._stagedRestore.mode, "saved_draft_blocked");
