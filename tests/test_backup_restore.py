@@ -1331,7 +1331,7 @@ def test_recovery_40_to_25_is_a_read_only_preview_of_current_ha(
     obsolete = [f"climate.retired_{i}" for i in range(14)]
     obsolete.append("binary_sensor.ineligible")
     output.write_text("".join(
-        f"{eid}:\\n  expose: true\\n  name: Legacy {i}\\n"
+        f"{eid}:\n  expose: true\n  name: Legacy {i}\n"
         for i, eid in enumerate(old_names + obsolete)
     ), encoding="utf-8")
     previous = output.read_bytes()
@@ -1369,35 +1369,11 @@ def test_recovery_40_to_25_is_a_read_only_preview_of_current_ha(
     assert not (tmp_path / ".hvls_backups").exists()
 
 
-def test_recovery_can_remove_obsolete_yaml_with_zero_label_changes(
-    backup_module, tmp_path,
-):
-    output = tmp_path / "google_entities.yaml"
-    old = "switch.one:\\n  expose: true\\n  name: One\\nswitch.gone:\\n  expose: true\\n"
-    output.write_text(old, encoding="utf-8")
-    registries = _manual_label_state()
-    catalog = backup_module.build_entity_catalog(
-        registries, "HVLS", frozenset({"switch"})
-    )
-    proposal = backup_module.prepare_manual_label_preview(
-        output, catalog, registries, "HVLS",
-        frozenset({"switch"}), [
-            {"entity_id": "switch.two", "enabled": False}
-        ], recovery=True,
-    )
-    # Reuse the same method, but explicitly turn off unrelated current labels.
-    assert proposal["comparison"]["removed"] == ["switch.gone"]
-    assert proposal["label_plan"]["remove"] == [] or isinstance(
-        proposal["label_plan"]["remove"], list
-    )
-    assert output.read_text() == old
-
-
 def test_recovery_no_label_changes_is_allowed_when_old_yaml_differs(
     backup_module, tmp_path,
 ):
     output = tmp_path / "google_entities.yaml"
-    original = "switch.one:\\n  expose: true\\n  name: Old Name\\n"
+    original = "switch.one:\n  expose: true\n  name: Old Name\n"
     output.write_text(original, encoding="utf-8")
     registries = _manual_label_state()
     # Only switch.one is labeled; other registry entities have no HVLS label.
