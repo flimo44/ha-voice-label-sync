@@ -489,6 +489,12 @@ const HVLS_TRANSLATIONS = {
     applyReasonOutputPathMismatch: "Le chemin de sortie ne correspond plus au chemin enregistré par HVLS.",
     applyReasonPendingOperation: "Une opération HVLS est incomplète. Une reprise contrôlée est nécessaire avant Apply.",
     applyReasonManagedOutputMissing: "Le fichier précédemment géré par HVLS est introuvable.",
+    missingRebuildAction: "Reconstruire le fichier YAML",
+    missingRebuildReview: "Le fichier de production géré par HVLS a disparu. {count} entités peuvent être reconstruites à partir des étiquettes HA actuelles. Contrôlez le YAML avant de confirmer.",
+    missingRebuildConfirm: "Le fichier de production HVLS a disparu. Le recréer à partir du Preview vérifié et des étiquettes HA actuelles ? Aucun label ne sera modifié. Les sauvegardes existantes seront conservées. Si le fichier réapparaît, cette opération sera refusée.",
+    missingRebuildApplied: "Fichier YAML reconstruit : {path} — {bytes} octets écrits. Étiquettes HA inchangées.",
+    missingRebuildBackups: "Examiner les sauvegardes",
+    missingRebuildDetected: "Fichier de production HVLS manquant. Vous pouvez restaurer une sauvegarde ou le reconstruire depuis les {count} entités étiquetées dans HA, après contrôle du Preview.",
     applyReasonOutputChanged: "Le fichier géré par HVLS a été modifié depuis son dernier contrôle SHA-256.",
     applyReasonNotConfigured: "HVLS n'est pas encore configuré.",
     applyVerificationUnavailable: "Impossible de valider Apply : informations de sécurité manquantes ou incohérentes. Actualisez le Preview.",
@@ -1013,6 +1019,12 @@ const HVLS_TRANSLATIONS = {
     applyReasonOutputPathMismatch: "The output path no longer matches the path registered by HVLS.",
     applyReasonPendingOperation: "An HVLS operation is incomplete. Controlled recovery is required before Apply.",
     applyReasonManagedOutputMissing: "The previously HVLS-managed output file is missing.",
+    missingRebuildAction: "Rebuild missing YAML",
+    missingRebuildReview: "The YAML previously managed by HVLS is missing. {count} entities can be rebuilt from current HA labels. Review the YAML before confirming.",
+    missingRebuildConfirm: "The HVLS production file is missing. Recreate it from the verified Preview and current HA labels? No labels will be changed and existing backups are preserved. If the file reappears, this operation is refused.",
+    missingRebuildApplied: "YAML rebuilt: {path} — {bytes} bytes written. HA labels unchanged.",
+    missingRebuildBackups: "Review backups",
+    missingRebuildDetected: "HVLS production file is missing. You can restore a backup or rebuild from {count} entities labeled in HA, after Preview review.",
     applyReasonOutputChanged: "The HVLS-managed file has changed since its last SHA-256 verification.",
     applyReasonNotConfigured: "HVLS is not configured yet.",
     applyVerificationUnavailable: "Cannot validate Apply: missing or inconsistent security information. Refresh the Preview.",
@@ -1413,11 +1425,22 @@ class HVLSPreviewPanel extends HTMLElement {
         ownershipConsistent &&
         validHash(result.preview_sha256);
       const canReview = allowedBySafety && !hasNoChanges;
+      const canRebuildMissing =
+        result.available === true &&
+        result.error == null &&
+        validHash(result.preview_sha256) &&
+        result.production_sha256 === null &&
+        result.comparison?.status === "missing" &&
+        Number.isSafeInteger(result.summary?.total) &&
+        result.summary.total > 0 &&
+        ownership?.status === "missing" &&
+        ownership?.reason_code === "managed_output_missing";
 
-      this._review = canReview && !this._recoveryPending
+      this._review = (canReview || canRebuildMissing) && !this._recoveryPending
         ? {
             preview_sha256: result.preview_sha256,
             production_sha256: result.production_sha256,
+            ...(canRebuildMissing ? {rebuild_missing: true} : {}),
           }
         : null;
 
@@ -1431,6 +1454,7 @@ class HVLSPreviewPanel extends HTMLElement {
       const shouldExplain =
         result.available === true &&
         !canReview &&
+        !canRebuildMissing &&
         (
           result.can_apply === true ||
           ownership?.write_allowed === false
@@ -1519,7 +1543,9 @@ class HVLSPreviewPanel extends HTMLElement {
         this._entityWritePending === true;
       button.textContent = staged?.mode === "label_preview"
         ? this._t(staged.recovery === true ? "assistantRecoveryApply" : "manualLabelApply")
-        : staged ? this._t("backupPreviewApply") : this._t("apply");
+        : staged ? this._t("backupPreviewApply")
+        : this._review?.rebuild_missing === true
+          ? this._t("missingRebuildAction") : this._t("apply");
     }
     const cancel = this.querySelector("#cancelPreview");
     if (cancel) {
@@ -1796,7 +1822,9 @@ class HVLSPreviewPanel extends HTMLElement {
     const review = {...this._review};
 
     if (!window.confirm(
-      this._t("applyConfirm") + "\n\n" + this._t("applyWarning")
+      review.rebuild_missing === true
+        ? this._t("missingRebuildConfirm")
+        : this._t("applyConfirm") + "\n\n" + this._t("applyWarning")
     )) return;
 
     this._applying = true;
@@ -1821,10 +1849,13 @@ class HVLSPreviewPanel extends HTMLElement {
       this._backupRestoreCompleted = false;
       this._renderRestoreWarning();
       await this._loadPreview(true);
-      this._setStatusKey("previewApplied", {
-        path: result.output_path, bytes: result.bytes_written,
-        backupPath: result.backup_path || null, backup: ""
-      });
+      this._setStatusKey(
+        review.rebuild_missing === true ? "missingRebuildApplied" : "previewApplied",
+        {
+          path: result.output_path, bytes: result.bytes_written,
+          backupPath: result.backup_path || null, backup: "",
+        },
+      );
     } catch (error) {
       this._setStatusKey("previewApplyFailed", {error: error.message || String(error)});
     } finally {
@@ -2003,15 +2034,27 @@ class HVLSPreviewPanel extends HTMLElement {
     if (comparison.status !== "ok") {
       const note = document.createElement("p");
       note.className = "diagnostic-note";
+      const managedMissing = result.ownership?.reason_code ===
+        "managed_output_missing";
       note.textContent = comparison.status === "missing"
-        ? this._onboardingMode === "new" && result.summary.total > 0
-          ? this._tf("initialYamlPreview", {count: result.summary.total})
-          : this._t("firstProduction")
+        ? managedMissing
+          ? this._tf("missingRebuildReview", {count: result.summary.total})
+          : this._onboardingMode === "new" && result.summary.total > 0
+            ? this._tf("initialYamlPreview", {count: result.summary.total})
+            : this._t("firstProduction")
         : this._tf("comparisonFailed", {
             status: comparison.status,
             reason: comparison.reason || this._t("unreadableFile")
           });
       panel.appendChild(note);
+      if (managedMissing) {
+        const backups = document.createElement("button");
+        backups.type = "button";
+        backups.className = "secondary";
+        backups.textContent = this._t("missingRebuildBackups");
+        backups.addEventListener("click", () => this._activateTab("backups"));
+        panel.appendChild(backups);
+      }
       return;
     }
 
@@ -2503,9 +2546,11 @@ class HVLSPreviewPanel extends HTMLElement {
         if (selected > 0) {
           const explanation = document.createElement("p");
           explanation.className = "diagnostic-note";
-          explanation.textContent = this._tf("initialLabelsDetected", {
-            count: selected,
-          });
+          explanation.textContent = this._tf(
+            result.ownership?.reason_code === "managed_output_missing"
+              ? "missingRebuildDetected" : "initialLabelsDetected",
+            {count: selected},
+          );
           panel.appendChild(explanation);
           const prepare = document.createElement("button");
           prepare.type = "button";
