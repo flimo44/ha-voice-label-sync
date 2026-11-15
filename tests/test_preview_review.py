@@ -71,8 +71,9 @@ def test_review_disables_apply_for_invalid_production(
     websocket_module, tmp_path, monkeypatch,
 ):
     """An invalid production YAML cannot receive an Apply authorization."""
-    from test_preview_compare import module as real_compare
     from unittest.mock import Mock
+
+    from test_preview_compare import module as real_compare
 
     preview = tmp_path / "preview.yaml"
     production = tmp_path / "production.yaml"
