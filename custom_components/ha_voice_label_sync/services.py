@@ -33,7 +33,6 @@ from .const import (
 )
 from .ha_registries import get_live_registries
 from .output_path import UnsafeOutputPath, resolve_output_path
-from .restore_guard import assert_not_guarded
 from .workflow_lock import get_workflow_lock
 
 _LOGGER = logging.getLogger(__name__)
