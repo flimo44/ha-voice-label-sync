@@ -61,6 +61,24 @@ def _display_value(field: str, node: Any) -> str:
     return node.value
 
 
+def _exposure_state(node: Any) -> str:
+    """Classify explicit YAML booleans without following any !include/!secret.
+
+    Home Assistant defaults expose_by_default to true when it is omitted,
+    but that default only applies to a directly parsed google_assistant block.
+    """
+    if node is None:
+        return "enabled_default"
+    if not isinstance(node, ScalarNode) or node.tag.startswith("!"):
+        return "unknown"
+    normalized = node.value.strip().lower()
+    if normalized in {"true", "yes", "on", "y"}:
+        return "enabled"
+    if normalized in {"false", "no", "off", "n"}:
+        return "disabled"
+    return "unknown"
+
+
 def read_google_config(config_file: str | Path) -> dict[str, Any]:
     """Read the Google Assistant section from configuration.yaml.
 
@@ -122,13 +140,23 @@ def read_google_config(config_file: str | Path) -> dict[str, Any]:
 
         result["status"] = "found"
 
-        expose = settings.get("expose_by_default")
-        if isinstance(expose, ScalarNode):
-            if expose.value.lower() == "true":
-                result["warnings"].append(
-                    "expose_by_default is enabled: entities may be "
-                    "exposed independently of HVLS labels."
-                )
+        exposure = _exposure_state(settings.get("expose_by_default"))
+        result["expose_by_default_state"] = exposure
+        if exposure == "enabled_default":
+            result["warnings"].append(
+                "expose_by_default is omitted (Home Assistant defaults to "
+                "true): entities may be exposed independently of HVLS labels."
+            )
+        elif exposure == "enabled":
+            result["warnings"].append(
+                "expose_by_default is enabled: entities may be "
+                "exposed independently of HVLS labels."
+            )
+        elif exposure == "unknown":
+            result["warnings"].append(
+                "expose_by_default could not be determined from this "
+                "configuration: verify its effective Home Assistant value."
+            )
 
         return result
 
