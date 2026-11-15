@@ -369,6 +369,59 @@ def test_apply_websocket_success(websocket_module, tmp_path):
     )
 
 
+def test_apply_websocket_requires_missing_owned_output_for_rebuild(
+    websocket_module,
+):
+    ws = websocket_module.websocket
+    ws.evaluate_registered_output = Mock(return_value=SimpleNamespace(
+        status="missing", reason_code="managed_output_missing",
+        write_allowed=False,
+    ))
+    ws.apply_reviewed_preview.return_value = SimpleNamespace(
+        output_path=Path("/config/google_assistant_entities.yaml"),
+        backup_path=None, bytes_written=2708,
+    )
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    request = {
+        "id": 218, "preview_sha256": "a" * 64,
+        "production_sha256": None, "rebuild_missing": True,
+    }
+    asyncio.run(ws.websocket_apply_preview(
+        make_hass(), connection, request,
+    ))
+    connection.send_error.assert_not_called()
+    assert connection.send_result.call_args.args[1]["applied"] is True
+    assert ws.apply_reviewed_preview.call_args.kwargs["rebuild_missing"] is True
+
+
+@pytest.mark.parametrize(
+    ("reason", "prior_digest"),
+    [
+        ("unmanaged_output", None),
+        ("owned_by_other_installation", None),
+        ("pending_operation", None),
+        ("verified_owned_output", None),
+        ("managed_output_missing", "b" * 64),
+    ],
+)
+def test_apply_websocket_rejects_unsafe_rebuild_state_before_writing(
+    websocket_module, reason, prior_digest,
+):
+    ws = websocket_module.websocket
+    ws.evaluate_registered_output = Mock(return_value=SimpleNamespace(
+        status="unknown", reason_code=reason, write_allowed=False,
+    ))
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_preview(
+        make_hass(), connection, {
+            "id": 219, "preview_sha256": "a" * 64,
+            "production_sha256": prior_digest, "rebuild_missing": True,
+        },
+    ))
+    assert connection.send_error.call_args.args[1] == "apply_failed"
+    ws.apply_reviewed_preview.assert_not_called()
+
+
 def test_apply_websocket_rejects_changed_preview(websocket_module):
     PreviewChangedError = websocket_module.websocket.PreviewChangedError
 
