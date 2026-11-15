@@ -3865,8 +3865,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const area = document.createElement("span");
     area.className = "entity-hvls-control-area";
     const control = document.createElement("label");
-    control.className = "entity-hvls-control";
-    if (pending) control.classList.add("pending");
+    control.className = pending
+      ? "entity-hvls-control pending" : "entity-hvls-control";
     const text = document.createElement("span");
     text.textContent = "HVLS";
     control.append(checkbox, text);
