@@ -49,7 +49,9 @@ def services_module(monkeypatch):
     base = Path(__file__).resolve().parents[1]
     component = base / "custom_components/ha_voice_label_sync"
 
-    for name in ("const", "output_path", "ha_registries", "workflow_lock", "restore_guard"):
+    for name in (
+        "const", "output_path", "ha_registries", "workflow_lock", "restore_guard",
+    ):
         fullname = f"custom_components.ha_voice_label_sync.{name}"
 
         if name == "ha_registries":
