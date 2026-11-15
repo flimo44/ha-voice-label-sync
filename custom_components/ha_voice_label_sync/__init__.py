@@ -122,11 +122,10 @@ async def async_setup_entry(
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {}
 
-    await hass.config_entries.async_forward_entry_setups(
-        entry,
-        ["button"],
-    )
-
+    # Legacy button entities have been retired: they bypass the required
+    # reviewed Preview -> Apply workflow. No button platform is forwarded.
+    # Existing HA entity-registry rows may remain unavailable until cleaned
+    # up by the administrator; never remove user registry entries silently.
     return True
 
 
