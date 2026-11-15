@@ -1421,3 +1421,51 @@ def test_recovery_apply_unlocks_only_after_guarded_yaml_and_labels(
     hass.config_entries.async_update_entry.assert_called_once_with(
         entry, data={**entry.data, "recovery_completed": True},
     )
+
+
+
+def test_get_preview_refuses_unsafe_configured_path(websocket_module):
+    ws = websocket_module.websocket
+    hass = make_hass()
+    hass.config_entries.async_entries = lambda domain: [
+        SimpleNamespace(
+            data={"output": "../outside.yaml", "label": "google_assistant"},
+            options={},
+            entry_id="test-installation",
+        )
+    ]
+    connection = SimpleNamespace(send_error=Mock(), send_result=Mock())
+
+    asyncio.run(ws.websocket_get_preview(hass, connection, {"id": 1301}))
+
+    connection.send_error.assert_called_once()
+    assert connection.send_error.call_args.args[1] == "unsafe_output_path"
+    connection.send_result.assert_not_called()
+    ws._read_and_compare.assert_not_called()
+
+
+def test_apply_refuses_unsafe_configured_path_without_writer(websocket_module):
+    ws = websocket_module.websocket
+    hass = make_hass()
+    hass.config_entries.async_entries = lambda domain: [
+        SimpleNamespace(
+            data={"output": "../outside.yaml", "label": "google_assistant"},
+            options={},
+            entry_id="test-installation",
+        )
+    ]
+    connection = SimpleNamespace(send_error=Mock(), send_result=Mock())
+    ws.apply_reviewed_preview = Mock()
+
+    asyncio.run(ws.websocket_apply_preview(
+        hass, connection, {
+            "id": 1302,
+            "preview_sha256": "a" * 64,
+            "production_sha256": None,
+        },
+    ))
+
+    connection.send_error.assert_called_once()
+    assert connection.send_error.call_args.args[1] == "unsafe_output_path"
+    connection.send_result.assert_not_called()
+    ws.apply_reviewed_preview.assert_not_called()
