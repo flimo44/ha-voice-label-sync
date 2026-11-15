@@ -16,7 +16,7 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 >
 > HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. Set up and verify Google Assistant before using HVLS.
 
-**Latest published stable:** [`v1.0.1`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.1). **Next beta being prepared:** `v1.1.0-beta.2` (publish from `feat/reinstall-recovery-via-preview` only).  
+**Latest published stable:** [`v1.0.1`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.1). **Previous beta:** [`v1.1.0-beta.2`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.1.0-beta.2). **Beta being prepared:** `v1.1.0-beta.3` (tag from `release/v1.1.0-beta.3` only).  
 **Python core dependency:** `ha-voice-label-sync==0.3.6` (separate from the Home Assistant integration version).
 
 > **Release correction:** GitHub `v1.1.0-beta.1` was accidentally tagged from `main` and contains integration version `1.0.1`, not the intended beta changes. Do not use that tag to test the migration features. The corrected beta will be published as `v1.1.0-beta.2` **from this recovery branch**.
@@ -24,7 +24,7 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 > [!NOTE]
 > `v1.1.0-beta.2` introduces setup, migration and disaster-recovery improvements. It is **not** a replacement for Google Assistant's manual Cloud/Google Home setup. Existing installations should make a HA snapshot first, and review every Preview before applying. Beta feedback and issue reports are welcome.
 
-## 🧪 Upcoming v1.1.0-beta.2 — Safer setup and recovery
+## 🧪 v1.1.0-beta.2 — Safer setup and recovery
 
 - **Fresh installation:** select HVLS entities in HA, or rebuild the first YAML from already labeled entities; nothing is written before the reviewed Preview.
 - **Import an older YAML:** inspect the original, detect missing or noneligible entities, preserve new HA labels and validate a proposed updated YAML. The original is protected with a verified backup.
@@ -32,7 +32,7 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 - **Safer navigation:** pending label proposals remain protected across tabs, and the Assistant's new-selection button opens Entity Management directly.
 - **Integrity protection:** files owned by other installations, changed output content and incomplete operations stay blocked until explicitly resolved.
 
-The beta is intended for testing, especially existing YAML migrations and restoration. It does not automate Google Cloud, reverse proxy/DNS, or Google Home linking. See [CHANGELOG.md](CHANGELOG.md) for details.
+**Beta.3 validation:** the Assistant once again offers read-only inspection and guarded takeover of an existing YAML even when manual Google Assistant configuration is already active. Verify this flow on a test VM before any production takeover; do not apply unreviewed changes. The beta is intended for testing, especially existing YAML migrations and restoration. It does not automate Google Cloud, reverse proxy/DNS, or Google Home linking. See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## ✨ V1 stable highlights
 
