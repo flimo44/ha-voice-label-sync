@@ -32,6 +32,7 @@ from .const import (
     DOMAIN,
 )
 from .ha_registries import get_live_registries
+from .output_path import UnsafeOutputPath, resolve_output_path
 from .restore_guard import assert_not_guarded
 from .workflow_lock import get_workflow_lock
 
@@ -119,28 +120,19 @@ async def _async_run_workflow_unlocked(
     backup_retention = int(backup_retention)
     create_backup_enabled = settings.get(CONF_CREATE_BACKUP, DEFAULT_CREATE_BACKUP)
 
-    output_path = Path(output_value)
-
-    if not output_path.is_absolute():
-        output_path = Path(hass.config.config_dir) / output_path
-
-    if not dry_run:
-        if (settings.get("onboarding_mode") == "existing"
-                and settings.get("recovery_completed") is not True):
-            raise HomeAssistantError(
-                "Complete the reviewed recovery before generating production."
-            )
-        assert_not_guarded(
-            Path(hass.config.path(".hvls", "ownership.json")),
-            entry.entry_id, output_path,
-        )
-
     # Snapshot native HA registries on the event-loop thread.
     try:
         registries = get_live_registries(hass)
     except (KeyError, AttributeError, TypeError, ValueError) as exc:
         _LOGGER.exception("HVLS registry snapshot failed")
         raise HomeAssistantError(f"HVLS registry snapshot failed: {exc}") from exc
+
+    try:
+        output_path = await hass.async_add_executor_job(
+            resolve_output_path, hass.config.config_dir, output_value,
+        )
+    except UnsafeOutputPath as exc:
+        raise HomeAssistantError("Unsafe HVLS output path; no files changed.") from exc
 
     request = GenerationRequest(
         label=label,
