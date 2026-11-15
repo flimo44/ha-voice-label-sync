@@ -16,10 +16,10 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 >
 > HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. Set up and verify Google Assistant before using HVLS.
 
-**Latest published stable:** [`v1.0.1`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.1). **Previous beta:** [`v1.1.0-beta.3`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.1.0-beta.3). **Beta being prepared:** `v1.1.0-beta.4` (tag from `release/v1.1.0-beta.4` only).  
+**Latest published stable:** [`v1.0.1`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.1). **Previous beta:** [`v1.1.0-beta.4`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.1.0-beta.4). **Next beta candidate:** `v1.1.0-beta.5` (tag from `release/v1.1.0-beta.5` only).  
 **Python core dependency:** `ha-voice-label-sync==0.3.6` (separate from the Home Assistant integration version).
 
-> **Release correction:** GitHub `v1.1.0-beta.1` was accidentally tagged from `main` and contains integration version `1.0.1`, not the intended beta changes. Do not use that tag to test the migration features. The corrected beta will be published as `v1.1.0-beta.2` **from this recovery branch**.
+> **Release history:** `v1.1.0-beta.1` was tagged from the wrong branch and carried the `1.0.1` integration; use the latest correctly tagged pre-release for migration tests.
 
 > [!NOTE]
 > `v1.1.0-beta.2` introduces setup, migration and disaster-recovery improvements. It is **not** a replacement for Google Assistant's manual Cloud/Google Home setup. Existing installations should make a HA snapshot first, and review every Preview before applying. Beta feedback and issue reports are welcome.
@@ -385,3 +385,8 @@ Bug reports, feature requests and pull requests are welcome. Please use [GitHub 
 See the repository's license file for the applicable terms.
 
 MIT
+
+
+### Beta.5 changes and migration note
+
+The two legacy HA integration buttons are intentionally removed. The old `ha_voice_label_sync.generate` service now raises an explicit error, so automations referencing it must be reviewed; it no longer writes production YAML without approval. Open the HVLS panel from Home Assistant's sidebar or the **Visit** link in the integration's service-device details. Use **Select → Preview → Apply** for all output changes. The native Preview/Apply flow and safeguards are unchanged. Unapplied UI drafts should be applied or canceled before upgrades, browser reloads or migration; see [issue #170](https://github.com/flimo44/ha-voice-label-sync/issues/170).
