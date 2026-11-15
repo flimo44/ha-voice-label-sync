@@ -86,3 +86,11 @@ def test_rejects_symlinked_subfolder_outside(tmp_path):
 def test_rejects_non_path_value(tmp_path):
     with pytest.raises(module.UnsafeOutputPath):
         module.resolve_output_path(tmp_path, None)
+
+
+
+def test_rejects_existing_directory_as_output(tmp_path):
+    folder = tmp_path / "output.yaml"
+    folder.mkdir()
+    with pytest.raises(module.UnsafeOutputPath):
+        module.resolve_output_path(tmp_path, folder)
