@@ -4357,6 +4357,89 @@ test("Assistant proposes detected file and inspects it without migration writes"
   assert.match(controls.assistantFileSafety.textContent, /Aucun label ni YAML/);
 });
 
+test("Existing active Google Assistant YAML offers safe takeover when HVLS does not own it", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {
+      read_only: true, source_active_verified: false,
+      migration_authorized: false, stage_allowed: false,
+      apply_allowed: false, cutover_allowed: false,
+      status: "parsed", file_sha256: "a".repeat(64),
+      adoption_entries_complete: true,
+      adoption_entries: [{entity_id: "switch.existing", exposure: "expose",
+        has_customizations: false, reasons: []}],
+      counts: {entries: 1, entries_with_anomalies: 0},
+    };
+  });
+  const ids = [
+    "migrationGuide", "migrationGuideCandidate", "migrationGuideDetected",
+    "migrationGuideQuestion", "assistantSourceDetected",
+    "assistantSourceTitle", "assistantSourceSummary",
+    "assistantFileSection", "assistantFilePath", "assistantFileCheck",
+    "assistantFileResult", "assistantFileSafety", "assistantFileHint",
+    "migrationGuideNext",
+  ];
+  const nodes = Object.fromEntries(ids.map(id => [id, {
+    hidden: true, textContent: "", value: "", disabled: false,
+    setAttribute() {},
+  }]));
+  panel.querySelector = selector => nodes[selector.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "assisted_migration", source: {
+      status: "resolved",
+      locations: [
+        {path: "configuration.yaml"},
+        {path: "google_assistant_entities.yaml"},
+      ],
+    }, counts: {explicit_yaml_entries: 40},
+  }};
+  panel._assistantFilePath = null;
+  panel._applyBlockReasonCode = "unmanaged_output";
+  panel._renderMigrationGuide();
+  assert.equal(nodes.migrationGuide.hidden, false);
+  assert.equal(nodes.assistantSourceDetected.hidden, false);
+  assert.equal(nodes.assistantFileSection.hidden, false);
+  assert.equal(panel._migrationIntent, "existing");
+  assert.equal(nodes.assistantFilePath.value, "google_assistant_entities.yaml");
+  assert.equal(nodes.assistantFileCheck.disabled, false);
+  assert.match(nodes.assistantSourceSummary.textContent, /40 entité/);
+  assert.equal(nodes.migrationGuideDetected.textContent, "");
+  assert.equal(calls.length, 0);
+  await panel._checkAssistantEntityFile();
+  assert.deepEqual(calls.map(x => x.type), [
+    "ha_voice_label_sync/inspect_assistant_entity_file",
+  ]);
+  assert.equal(calls[0].path, "google_assistant_entities.yaml");
+  assert.equal(panel._assistantAdoptionAvailable(), true);
+  assert.match(nodes.assistantFileResult.textContent, /1 entité/);
+});
+
+test("Assistant takeover appears only for unmanaged or former-owner YAML", () => {
+  const {panel} = makePanel(async () => {
+    throw Error("No WS operation should run");
+  });
+  const guide = {hidden: true, setAttribute() {}};
+  panel.querySelector = selector => selector === "#migrationGuide" ? guide : null;
+  panel._migrationReport = {diagnostic: {
+    mode: "assisted_migration", source: {status: "resolved", locations: []},
+  }};
+  for (const reason of ["unmanaged_output", "owned_by_other_installation"]) {
+    panel._applyBlockReasonCode = reason;
+    panel._renderMigrationGuide();
+    assert.equal(guide.hidden, false, reason);
+  }
+  for (const reason of [null, "managed_output_missing", "no_changes"]) {
+    panel._applyBlockReasonCode = reason;
+    panel._renderMigrationGuide();
+    assert.equal(guide.hidden, true, String(reason));
+  }
+  panel._applyBlockReasonCode = "unmanaged_output";
+  panel._migrationReport.diagnostic.source.status = "ambiguous";
+  panel._renderMigrationGuide();
+  assert.equal(guide.hidden, true);
+});
+
 test("Assistant offers packages as unsupported other configuration", () => {
   const {panel} = makePanel(async () => {});
   const ids = [
