@@ -1741,7 +1741,8 @@ async def websocket_apply_manual_label_preview(
                 )
             )
             if msg.get("recovery", False):
-                # Unlock normal generation only AFTER successful YAML/label verification.
+                # Unlock normal generation only after verification of
+                # the updated YAML and all HA labels.
                 hass.config_entries.async_update_entry(
                     entry, data={**entry.data, "recovery_completed": True}
                 )
