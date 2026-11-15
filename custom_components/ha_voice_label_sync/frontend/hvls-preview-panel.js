@@ -1307,7 +1307,7 @@ class HVLSPreviewPanel extends HTMLElement {
       const count = tab === "exclusions" && this._excludedCount != null
         ? ` (${this._excludedCount})`
         : tab === "preview" && pending > 0 ? ` (${pending})` : "";
-      button.classList.toggle("has-pending", tab === "preview" && pending > 0);
+      button.classList?.toggle("has-pending", tab === "preview" && pending > 0);
       button.textContent = `${number} · ${this._t(key)}${count}`;
     }
   }
