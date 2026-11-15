@@ -7,18 +7,22 @@ from functools import partial
 from hashlib import sha256
 from pathlib import Path
 
-from hvls import FileWriterError
-
 from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
+from hvls import FileWriterError
+
 from .const import (
-    CONF_LABEL, CONF_OUTPUT, DEFAULT_LABEL, DEFAULT_OUTPUT, DOMAIN,
+    CONF_LABEL,
+    CONF_OUTPUT,
+    DEFAULT_LABEL,
+    DEFAULT_OUTPUT,
+    DOMAIN,
 )
-from .orphaned_new_install import retire_missing_inactive_owner
 from .label_setup import ensure_configured_label
+from .orphaned_new_install import retire_missing_inactive_owner
 from .services import async_register_services
 from .websocket import async_register_websocket_api
 
