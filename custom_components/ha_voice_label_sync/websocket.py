@@ -1282,6 +1282,11 @@ async def websocket_get_preview(
     # to adopt, label, or write an existing file.
     mode = settings.get("onboarding_mode")
     result["onboarding_mode"] = mode if mode in {"new", "existing"} else None
+    result["recovery_pending"] = (
+        mode == "existing" and settings.get("recovery_completed") is not True
+    )
+    if result["recovery_pending"]:
+        result["can_apply"] = False  # Old YAML must not be replaced by a normal Apply.
     connection.send_result(msg["id"], result)
 
 
@@ -1312,6 +1317,11 @@ async def websocket_apply_preview(
             return
 
         settings = {**entries[0].data, **entries[0].options}
+        if (settings.get("onboarding_mode") == "existing"
+                and settings.get("recovery_completed") is not True):
+            connection.send_error(msg["id"], "recovery_pending",
+                                  "Complete reviewed recovery before ordinary Apply.")
+            return
         output_path = Path(settings.get(CONF_OUTPUT, DEFAULT_OUTPUT))
         if not output_path.is_absolute():
             output_path = Path(hass.config.config_dir) / output_path
@@ -1529,6 +1539,7 @@ _MANUAL_LABEL_CHANGES_SCHEMA = [{
 @websocket_api.websocket_command({
     vol.Required("type"): WS_TYPE_PREPARE_MANUAL_LABEL_PREVIEW,
     vol.Required("changes"): _MANUAL_LABEL_CHANGES_SCHEMA,
+    vol.Optional("recovery", default=False): bool,
 })
 async def websocket_prepare_manual_label_preview(
     hass: HomeAssistant,
@@ -1553,13 +1564,19 @@ async def websocket_prepare_manual_label_preview(
                     "Production ownership is not verified; labels unchanged."
                 )
             settings = {**entry.data, **entry.options}
+            pending = (settings.get("onboarding_mode") == "existing"
+                       and settings.get("recovery_completed") is not True)
+            if pending != msg["recovery"]:
+                raise BackupRestoreError("Finish the selected recovery Preview first.")
             label = settings.get(CONF_LABEL, DEFAULT_LABEL)
             snapshot = get_live_registries(hass)
             catalog = build_entity_catalog(snapshot, label, DEFAULT_DOMAINS)
             result = await hass.async_add_executor_job(
-                prepare_manual_label_preview,
-                output, catalog, snapshot, label, DEFAULT_DOMAINS,
-                msg["changes"],
+                partial(
+                    prepare_manual_label_preview,
+                    output, catalog, snapshot, label, DEFAULT_DOMAINS,
+                    msg["changes"], recovery=msg["recovery"],
+                )
             )
         except (
             BackupRestoreError, FileWriterError, LabelUpdateError,
@@ -1578,6 +1595,7 @@ async def websocket_prepare_manual_label_preview(
 @websocket_api.websocket_command({
     vol.Required("type"): WS_TYPE_APPLY_MANUAL_LABEL_PREVIEW,
     vol.Required("changes"): _MANUAL_LABEL_CHANGES_SCHEMA,
+    vol.Optional("recovery", default=False): bool,
     vol.Required("preview_sha256"): str,
     vol.Required("production_sha256"): vol.Any(None, str),
     vol.Required("label_plan_sha256"): str,
@@ -1601,6 +1619,10 @@ async def websocket_apply_manual_label_preview(
             settings = {**entry.data, **entry.options}
             output = _configured_output(hass)
             ownership_path = Path(hass.config.path(".hvls", "ownership.json"))
+            pending = (settings.get("onboarding_mode") == "existing"
+                       and settings.get("recovery_completed") is not True)
+            if pending != msg["recovery"]:
+                raise BackupRestoreError("Recovery mode is out of date; review again.")
             label = settings.get(CONF_LABEL, DEFAULT_LABEL)
             assert_not_guarded(ownership_path, entry.entry_id, output)
             ownership = await hass.async_add_executor_job(
@@ -1617,9 +1639,11 @@ async def websocket_apply_manual_label_preview(
             registries = get_live_registries(hass)
             catalog = build_entity_catalog(registries, label, DEFAULT_DOMAINS)
             plan = await hass.async_add_executor_job(
-                prepare_manual_label_preview,
-                output, catalog, registries, label, DEFAULT_DOMAINS,
-                msg["changes"],
+                partial(
+                    prepare_manual_label_preview,
+                    output, catalog, registries, label, DEFAULT_DOMAINS,
+                    msg["changes"], recovery=msg["recovery"],
+                )
             )
             if (
                 plan["production_sha256"] != msg["production_sha256"]
@@ -1716,6 +1740,11 @@ async def websocket_apply_manual_label_preview(
                     backup_sha256=plan["preview_sha256"],
                 )
             )
+            if msg["recovery"]:
+                # Unlock normal generation only AFTER successful YAML/label verification.
+                hass.config_entries.async_update_entry(
+                    entry, data={**entry.data, "recovery_completed": True}
+                )
         except (
             BackupRestoreError, PreviewChangedError, FileWriterError,
             LabelUpdateError, RegistryError, WorkflowError, PreviewFormatError,
