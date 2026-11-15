@@ -16,7 +16,7 @@ from hvls.models import FileWriteResult
 from hvls.output_ownership_registry import OwnershipRegistry
 from hvls.owned_writer import _operation_lock, _safe_path
 
-from .restore_guard import assert_not_guarded
+from .restore_guard import assert_not_guarded, read_guard
 
 
 def rebuild_missing_owned_output(
@@ -25,6 +25,7 @@ def rebuild_missing_owned_output(
     content: str,
     entry_id: str,
     ownership_registry_path: str | Path,
+    restore_backup_id: str | None = None,
 ) -> FileWriteResult:
     """Recreate ONLY a disappeared managed output following reviewed Apply.
 
@@ -52,7 +53,21 @@ def rebuild_missing_owned_output(
     with _operation_lock(registry_file):
         _safe_path(output)
         _safe_path(registry_file)
-        assert_not_guarded(registry_file, entry_id, output)
+        if restore_backup_id is None:
+            assert_not_guarded(registry_file, entry_id, output)
+        else:
+            # The dedicated backup restoration established its durable hold
+            # before this exclusive creation. Do not accept unrelated holds.
+            guard = read_guard(registry_file)
+            if (
+                guard is None
+                or guard["entry_id"] != entry_id
+                or guard["output_path"] != str(output)
+                or guard["backup_id"] != restore_backup_id
+                or guard["original_sha256"] != hashlib.sha256(b"").hexdigest()
+                or guard["restored_sha256"] != digest
+            ):
+                raise FileWriterError("Backup restoration guard does not match.")
 
         if output.exists() or output.is_symlink():
             raise FileWriterError(
