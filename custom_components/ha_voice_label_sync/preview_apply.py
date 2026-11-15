@@ -10,8 +10,9 @@ from typing import Any
 from hvls import GenerationRequest, run_google_assistant_workflow
 from hvls.owned_writer import write_owned_output
 
+from .bulk_removal import require_bulk_removal_approval
 from .missing_output_rebuild import rebuild_missing_owned_output
-from .preview_compare import PreviewFormatError, validate_entity_yaml
+from .preview_compare import PreviewFormatError, analyze_preview, validate_entity_yaml
 from .preview_guard import (
     PreviewChangedError,
     preview_digest,
@@ -32,6 +33,7 @@ def apply_reviewed_preview(
     entry_id: str,
     ownership_registry_path: Path,
     rebuild_missing: bool = False,
+    acknowledged_bulk_removals: int = 0,
 ):
     """Regenerate, verify and write exactly the approved YAML."""
     if not isinstance(reviewed_digest, str) or not re.fullmatch(
@@ -88,6 +90,14 @@ def apply_reviewed_preview(
             raise PreviewChangedError(
                 "Production YAML is invalid. Repair or restore it before Apply."
             ) from exc
+
+        # The UI check alone is insufficient: a WebSocket caller must not
+        # silently replace most of a managed production entity selection.
+        current = analyze_preview(generated.content, current_production)
+        prior = analyze_preview(current_production, None)["summary"]["total"]
+        require_bulk_removal_approval(
+            current["comparison"], prior, acknowledged_bulk_removals,
+        )
 
     # Missing-file recovery is deliberately NOT a normal overwrite: it
     # requires a distinct explicit Apply action, a null prior digest and
