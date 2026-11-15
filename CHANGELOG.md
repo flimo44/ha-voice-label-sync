@@ -6,7 +6,13 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
-## [1.1.0-beta.1] - 2026-11-15
+## [1.1.0-beta.2] - 2026-11-15
+
+### Release correction
+- The `v1.1.0-beta.1` tag was accidentally created from `main`; it contained integration version `1.0.1` and not the recovery changes.
+- `v1.1.0-beta.2` is the intended first public test build for the features listed below. Its tag **must** target `feat/reinstall-recovery-via-preview`, and its manifest must say `1.1.0-beta.2`.
+
+
 
 ### Added
 - Guided initial setup: choose whether to select current Home Assistant entities or review an existing YAML file, without silently overwriting production.
