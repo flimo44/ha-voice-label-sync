@@ -12,6 +12,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify release tag matches Home Assistant manifest
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          tag = os.environ["RELEASE_TAG"]
+          if not tag.startswith("v") or len(tag) < 2:
+              raise SystemExit(f"Invalid release tag: {tag!r}")
+          expected = tag[1:]
+          manifest = json.loads(
+              Path("custom_components/ha_voice_label_sync/manifest.json").read_text()
+          )
+          actual = manifest.get("version")
+          if actual != expected:
+              raise SystemExit(
+                  f"REFUSING RELEASE: tag {tag} does not match "
+                  f"integration manifest version {actual!r}. "
+                  "Create the tag from the correct branch."
+              )
+          print(f"Release verified: {tag}, integration version {actual}")
+          PY
       - name: Zip integration
         run: |
           cd custom_components/ha_voice_label_sync
