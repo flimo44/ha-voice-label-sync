@@ -401,3 +401,45 @@ def test_reinstallation_changed_yaml_rejects_stale_old_owner_sha(
     assert OwnershipRegistry(files["registry_path"]).get_record(
         "old-installation"
     )["sha256"] == old_sha
+
+
+def test_transfer_failure_after_backup_keeps_previous_owner_and_logs_stage(
+    takeover, files, monkeypatch, caplog,
+):
+    """A completed safety backup must not be mistaken for successful takeover."""
+    old_sha = _seed_old_owner(files)
+    original = files["output_path"].read_bytes()
+    changed = original + b"# later edition\n"
+    files["output_path"].write_bytes(changed)
+    proposed = takeover.prepare_existing_output_takeover(
+        **files, active_entry_ids=frozenset({"installation-A"}),
+    )
+    def fail_transfer(self, **kwargs):
+        raise ValueError("Simulated ownership registry conflict")
+
+    monkeypatch.setattr(OwnershipRegistry, "transfer_inactive_owner", fail_transfer)
+    with caplog.at_level("ERROR"), pytest.raises(
+        takeover.ExistingOutputTakeoverError,
+        match="ownership_registration_failed_after_backup",
+    ):
+        takeover.confirm_existing_output_takeover(
+            **files, active_entry_ids=frozenset({"installation-A"}),
+            previous_entry_id=proposed["previous_entry_id"],
+            previous_sha256=proposed["previous_sha256"],
+            ownership_revision=proposed["ownership_revision"],
+            production_sha256=proposed["production_sha256"],
+            preview_sha256=proposed["preview_sha256"],
+            acknowledge_changed_output=True, confirmed=True,
+        )
+    assert files["output_path"].read_bytes() == changed
+    assert OwnershipRegistry(files["registry_path"]).get_record(
+        "old-installation"
+    )["sha256"] == old_sha
+    assert OwnershipRegistry(files["registry_path"]).get_record(
+        "installation-A"
+    ) is None
+    backups = list((files["config_dir"] / ".hvls_backups").glob("*.safety.bak"))
+    assert len(backups) == 1
+    assert backups[0].read_bytes() == changed
+    assert "ownership registration failed after" in caplog.text
+    assert "Simulated ownership registry conflict" in caplog.text
