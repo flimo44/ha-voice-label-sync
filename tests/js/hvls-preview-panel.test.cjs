@@ -1669,6 +1669,89 @@ test("Restore Preview shows individual HA label operations and exceptional entit
   assert.deepEqual(notice.children, []);
 });
 
+test("Selected backup stays reviewable when production YAML is missing", () => {
+  const {panel} = makePanel(async () => ({}));
+  const diff = {
+    children: [], replaceChildren() {this.children = [];},
+    appendChild(item) {this.children.push(item);},
+  };
+  const restore = {disabled: true, textContent: ""};
+  panel.querySelector = selector => selector === "#backupDiff" ? diff :
+    selector === "#restoreBackup" ? restore : null;
+  panel._backupReview = {
+    backup_id: "historical.safety.bak",
+    production_sha256: null, production_missing: true,
+    summary: {total: 40}, comparison: {status: "missing"},
+  };
+  panel._renderBackupDiff();
+  assert.equal(restore.disabled, false);
+  assert.match(diff.children[0].textContent, /production est absent/);
+  assert.match(diff.children[0].textContent, /40 entités/);
+});
+
+test("Missing-production backup stages a read-only Preview with unresolved labels", async () => {
+  const requests = [], tabs = [];
+  const {panel, controls} = makePanel(async request => {
+    requests.push(request);
+    return {
+      mode: "restore_preview", available: true, can_apply: false,
+      production_missing: true, content: "switch.test: {}\n",
+      comparison: {status: "missing"}, summary: {total: 40},
+      projection: {ready: false},
+      label_plan: {review: [{entity_id: "switch.absent", reason: "missing_ha_entity"}],
+        add: [], remove: []},
+      label_plan_sha256: "c".repeat(64),
+    };
+  });
+  panel._activateTab = tab => tabs.push(tab);
+  panel._backupReview = {
+    backup_id: "historical.safety.bak", backup_sha256: "b".repeat(64),
+    production_sha256: null, comparison: {status: "missing"},
+  };
+  await panel._restoreBackup();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].type, "ha_voice_label_sync/prepare_backup_preview");
+  assert.equal(requests[0].production_sha256, null);
+  assert.equal(panel._stagedRestore.mode, "restore_preview");
+  assert.deepEqual(tabs, ["preview"]);
+  assert.equal(controls.apply.disabled, true);
+  assert.match(panel.status, /Restauration préparée/);
+});
+
+test("Reviewed missing-YAML backup restores only with aligned labels", async () => {
+  const requests = [];
+  const {panel, controls} = makePanel(async request => {
+    requests.push(request);
+    if (request.type === "ha_voice_label_sync/apply_backup_preview") {
+      return {applied: true, reconciled: true, yaml_entities: 28,
+        label_additions: 0, label_removals: 0, safety_backup: null};
+    }
+    if (request.type === "ha_voice_label_sync/generate_preview") {
+      return {entity_count: 28};
+    }
+    throw new Error("Unexpected request");
+  });
+  panel._stagedRestore = {
+    mode: "restore_preview", production_missing: true,
+    backup_id: "historical.safety.bak", backup_sha256: "b".repeat(64),
+    production_sha256: null, label_plan_sha256: "c".repeat(64),
+    label_plan: {add: [], remove: [], review: []},
+    comparison: {status: "missing"}, projection: {ready: true},
+  };
+  panel._loadPreview = async () => {};
+  panel._loadEntities = async () => {};
+  panel._updateApplyButton();
+  assert.equal(controls.apply.disabled, false);
+  await panel._applyPreview();
+  assert.deepEqual(requests.map(x => x.type), [
+    "ha_voice_label_sync/apply_backup_preview",
+    "ha_voice_label_sync/generate_preview",
+  ]);
+  assert.equal(requests[0].production_sha256, null);
+  assert.match(panel.status, /Restauration validée/);
+  assert.match(panel.status, /fichier de production était absent/);
+});
+
 test("Confirmed restoration applies reviewed YAML and labels then refreshes", async () => {
   const calls = [];
   const {panel, controls} = makePanel(async request => {
