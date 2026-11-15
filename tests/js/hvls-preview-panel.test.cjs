@@ -4853,6 +4853,7 @@ test("40 old entities result in 25 recoverable, 14 absent and 1 ineligible", () 
   assert.deepEqual({...plan.totals}, {
     total: 40, ready: 24, already: 1, recoverable: 25,
     missing: 14, ineligible: 1, excluded: 0, review: 0,
+    existingNew: 0, nextTotal: 25,
   });
   assert.equal(plan.complete, true);
   assert.equal(plan.recoverable.length, 25);
