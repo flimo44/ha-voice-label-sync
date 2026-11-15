@@ -39,6 +39,7 @@ from .google_config import (
 )
 from .label_setup import ensure_configured_label
 from .label_update import LabelUpdateError
+from .output_path import UnsafeOutputPath, resolve_output_path
 
 
 def build_schema(
@@ -103,7 +104,7 @@ class HVLSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         report = await self.hass.async_add_executor_job(
             inspect_initial_setup,
             self.hass.config.path(),
-            DEFAULT_OUTPUT,
+            self.hass.config.path(DEFAULT_OUTPUT),
         )
         existing = report["output_status"] == "existing"
         french = str(
@@ -148,12 +149,12 @@ class HVLSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         original = await self.hass.async_add_executor_job(
             inspect_initial_setup,
             self.hass.config.path(),
-            DEFAULT_OUTPUT,
+            self.hass.config.path(DEFAULT_OUTPUT),
         )
         suggested_output = (
             self.hass.config.path("google_assistant_entities_hvls.yaml")
             if mode == "new" and original["output_status"] == "existing"
-            else DEFAULT_OUTPUT
+            else self.hass.config.path(DEFAULT_OUTPUT)
         )
         values = user_input or {CONF_OUTPUT: suggested_output}
         output = values.get(CONF_OUTPUT, suggested_output)
@@ -246,6 +247,19 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Manage HVLS options."""
         if user_input is not None:
+            # Options must obey the same path boundary as onboarding and Apply.
+            try:
+                await self.hass.async_add_executor_job(
+                    resolve_output_path,
+                    self.hass.config.path(),
+                    user_input[CONF_OUTPUT],
+                )
+            except UnsafeOutputPath:
+                return self.async_show_form(
+                    step_id="settings",
+                    data_schema=build_schema(user_input),
+                    errors={"base": "unsafe_output_path"},
+                )
             try:
                 ensure_configured_label(self.hass, user_input[CONF_LABEL])
             except (LabelUpdateError, ValueError, OSError):
@@ -266,6 +280,9 @@ class HVLSOptionsFlow(config_entries.OptionsFlow):
             **self.config_entry.data,
             **self.config_entry.options,
         }
+        current_values.setdefault(
+            CONF_OUTPUT, self.hass.config.path(DEFAULT_OUTPUT),
+        )
 
         return self.async_show_form(
             step_id="settings",
