@@ -350,20 +350,27 @@ def inspect_initial_setup(
             else base / requested
         )
 
-        # Generated output must remain inside the HA config directory.
-        relative = candidate.relative_to(base)
+        # Check the real destination, but keep legal HA root aliases
+        # (/config may point to /homeassistant).
+        resolved = candidate.resolve(strict=False)
+        if not resolved.is_relative_to(base):
+            return result
+        alias_root = next(
+            (
+                parent for parent in reversed(candidate.parents)
+                if parent.resolve(strict=False) == base
+            ),
+            None,
+        )
+        if alias_root is None:
+            return result
 
-        # Refuse symbolic links in any output path component.
-        current = base
-        for component in relative.parts:
+        # A link inside the config tree (unlike the root alias) is unsafe.
+        current = alias_root
+        for component in candidate.relative_to(alias_root).parts:
             current = current / component
             if current.is_symlink():
                 return result
-
-        resolved = candidate.resolve(strict=False)
-
-        if not resolved.is_relative_to(base):
-            return result
 
         try:
             metadata = candidate.lstat()
