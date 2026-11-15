@@ -282,8 +282,6 @@ def prepare_manual_label_preview(
             "No selected entities would remain; production was not modified."
         )
     analysis = analyze_preview(generation.content, production)
-    if (recovery and not changes and production == generation.content):
-        raise BackupRestoreError("Recovered YAML is already up to date.")
     if analysis["comparison"]["status"] not in {"ok", "missing"}:
         raise BackupRestoreError("Cannot compare current production YAML.")
     production_sha = preview_digest(production) if production is not None else None
