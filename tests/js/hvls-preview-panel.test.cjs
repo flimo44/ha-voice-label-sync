@@ -36,7 +36,7 @@ function makePanel(callWS, confirm = () => true, storage = undefined) {
     document: {
       createElement(tag) {
         return {
-          tag, children: [], textContent: "", className: "",
+          tag, children: [], textContent: "", className: "", dataset: {},
           appendChild(child) { this.children.push(child); },
           append(...children) { this.children.push(...children); },
           replaceChildren(...children) { this.children = children; },
@@ -1201,7 +1201,7 @@ test("Entity label click stages YAML and HA labels without writing either one", 
     "ha_voice_label_sync/prepare_manual_label_preview",
   ]);
   assert.equal(panel._stagedRestore.mode, "label_preview");
-  assert.equal(panel.openedTab, "preview");
+  assert.equal(panel.openedTab, undefined, "Selection must stay on current tab");
   assert.equal(panel._manualLabelChanges.get("light.salon"), true);
   assert.equal(controls.apply.disabled, false);
   assert.equal(calls.includes("ha_voice_label_sync/set_entity_label"), false);
@@ -2712,13 +2712,14 @@ test("Statistics lists the unassigned room bucket last without changing domain o
 });
 
 
-test("Statistics signals only actionable pending Preview changes", () => {
-  const start = source.indexOf('const pendingCount = comparison.added.length +');
+test("Statistics signals prepared manual or reviewed normal changes", () => {
+  const start = source.indexOf('const pendingCount = this._pendingChangeCount();');
   const end = source.indexOf('const counters = document.createElement("div");', start);
   assert.ok(start >= 0 && end > start);
   const block = source.slice(start, end);
-  assert.match(block, /comparison\.removed\.length \+ comparison\.modified\.length/);
-  assert.match(block, /pendingCount > 0 && this\._review/);
+  assert.match(block, /pendingCount > 0 && \(this\._review/);
+  assert.match(block, /this\._stagedRestore/);
+  assert.match(block, /saved_draft_blocked/);
   assert.match(block, /preview-pending-alert/);
   assert.match(block, /this\._activateTab\("preview"\)/);
   assert.doesNotMatch(block, /_applyPreview\(/);
@@ -5936,4 +5937,195 @@ test("Large removal from backup restoration includes approval count", async () =
   await panel._applyPreview();
   assert.equal(calls[0].type, "ha_voice_label_sync/apply_backup_preview");
   assert.equal(calls[0].acknowledged_bulk_removals, 77);
+});
+
+
+
+function attachPreviewTab(panel) {
+  const original = panel.querySelector.bind(panel);
+  const tabNames = ["summary", "exclusions", "entities", "preview",
+    "backups", "migration"];
+  const buttons = Object.fromEntries(tabNames.map(name => {
+    const classes = new Set();
+    return [name, {
+      hidden: false, dataset: {tab: name}, textContent: "",
+      classList: {
+        toggle(token, enabled) {
+          if (enabled) classes.add(token); else classes.delete(token);
+        },
+        contains(token) {return classes.has(token);},
+      },
+    }];
+  }));
+  panel.querySelector = selector => {
+    const tabName = selector.match(/^\.hvls-tab\[data-tab="([^"]+)"\]$/)?.[1];
+    return tabName ? buttons[tabName] : original(selector);
+  };
+  panel._updateTabLabels();
+  return buttons;
+}
+
+test("Selecting multiple entities stays in Statistics or Entity Management and updates Preview badge", async () => {
+  for (const startingTab of ["summary", "entities"]) {
+    const calls = [], navigations = [];
+    const entities = [
+      {entity_id: "switch.one", has_label: false, eligible: true},
+      {entity_id: "switch.two", has_label: false, eligible: true},
+      {entity_id: "switch.three", has_label: false, eligible: true},
+    ];
+    const {panel, controls} = makePanel(async request => {
+      calls.push(request.type);
+      if (request.type === "ha_voice_label_sync/prepare_manual_label_preview")
+        return manualStage(request.changes);
+      if (request.type === "ha_voice_label_sync/get_preview") return preview();
+      throw Error("Unexpected API call");
+    });
+    const tabs = attachPreviewTab(panel);
+    panel._activateTab = name => navigations.push(name);
+    panel._entityCatalog = {entities};
+    for (const entity of entities) {
+      await panel._setEntityLabel(entity, {checked: true});
+    }
+    assert.deepEqual(navigations, [],
+      startingTab + " should not redirect on checkbox change");
+    assert.equal(tabs.preview.textContent, "4 · Preview (3)");
+    assert.equal(tabs.preview.classList.contains("has-pending"), true);
+    assert.equal(tabs.summary.classList.contains("has-pending"), false);
+    assert.equal(tabs.entities.classList.contains("has-pending"), false);
+    assert.equal(controls.apply.disabled, false);
+    assert.equal(panel._manualLabelChanges.size, 3);
+
+    // Undo an item while staying in the same tab: this is a net-count.
+    await panel._setEntityLabel(entities[0], {checked: false});
+    assert.equal(tabs.preview.textContent, "4 · Preview (2)");
+    await panel._setEntityLabel(entities[1], {checked: false});
+    assert.equal(tabs.preview.textContent, "4 · Preview (1)");
+    await panel._setEntityLabel(entities[2], {checked: false});
+    assert.equal(tabs.preview.textContent, "4 · Preview");
+    assert.equal(tabs.preview.classList.contains("has-pending"), false);
+    assert.deepEqual(navigations, []);
+    assert.equal(panel._manualLabelChanges, null);
+    assert.ok(calls.every(type => [
+      "ha_voice_label_sync/prepare_manual_label_preview",
+      "ha_voice_label_sync/get_preview",
+    ].includes(type)));
+    assert.ok(!calls.some(type => /apply|set_entity_label/.test(type)));
+  }
+});
+
+test("Pending Preview badge reflects reviewed diff and clears when approval disappears", () => {
+  const {panel} = makePanel(async () => preview());
+  const tabs = attachPreviewTab(panel);
+  panel._lastAnalysis = {
+    comparison: {status: "ok", added: ["switch.a"], removed: ["switch.b"],
+      modified: [{entity_id: "switch.c"}]},
+  };
+  panel._review = {preview_sha256: "a".repeat(64)};
+  panel._updateTabLabels();
+  assert.equal(tabs.preview.textContent, "4 · Preview (3)");
+  assert.equal(tabs.preview.classList.contains("has-pending"), true);
+  panel._review = null;
+  panel._updateTabLabels();
+  assert.equal(tabs.preview.textContent, "4 · Preview");
+  assert.equal(tabs.preview.classList.contains("has-pending"), false);
+});
+
+test("Restoration badge counts distinct YAML and HA-label changes", () => {
+  const {panel} = makePanel(async () => ({}));
+  const tabs = attachPreviewTab(panel);
+  panel._stagedRestore = {
+    mode: "restore_preview",
+    comparison: {status: "ok", added: ["light.a"], removed: ["switch.b"],
+      modified: []},
+    label_plan: {add: ["light.a", "light.c"], remove: ["switch.b"]},
+  };
+  panel._updateTabLabels();
+  assert.equal(tabs.preview.textContent, "4 · Preview (3)");
+  panel._stagedRestore = {mode: "restore_preview",
+    comparison: {status: "missing"}, summary: {total: 7}};
+  panel._updateTabLabels();
+  assert.equal(tabs.preview.textContent, "4 · Preview (7)");
+});
+
+test("Blocked draft remains visible but never grants Apply authorization", () => {
+  const {panel,controls} = makePanel(async () => ({}));
+  const tabs = attachPreviewTab(panel);
+  panel._manualLabelChanges = new Map([["switch.a", true]]);
+  panel._stagedRestore = {mode: "saved_draft_blocked", changes: [
+    {entity_id: "switch.a", enabled: true}
+  ], projection: {ready: false}};
+  panel._updateApplyButton();
+  assert.equal(tabs.preview.textContent, "4 · Preview (1)");
+  assert.equal(tabs.preview.classList.contains("has-pending"), true);
+  assert.equal(controls.apply.disabled, true);
+  panel._manualLabelChanges = null;
+  panel._stagedRestore = null;
+  panel._updateApplyButton();
+  assert.equal(tabs.preview.textContent, "4 · Preview");
+});
+
+test("Changing language recomputes translated Preview badge but retains count", () => {
+  const {panel} = makePanel(async () => ({}));
+  const tabs = attachPreviewTab(panel);
+  panel._stagedRestore = manualStage([
+    {entity_id: "switch.a", enabled: true},
+    {entity_id: "switch.b", enabled: true},
+  ]);
+  panel._updateTabLabels();
+  assert.equal(tabs.preview.textContent, "4 · Preview (2)");
+  panel._language = "en";
+  panel._updateTabLabels();
+  assert.equal(tabs.preview.textContent, "4 · Preview (2)");
+});
+
+test("Statistics keeps expanded room and domain lists during analysis refresh", () => {
+  const {panel} = makePanel(async () => ({}));
+  const controls = {};
+  const makeContainer = () => ({
+    children: [],
+    replaceChildren(...children) {this.children = children;},
+    appendChild(child) {this.children.push(child);},
+    querySelectorAll(selector) {
+      assert.equal(selector, "details[data-stats-group]");
+      const result = [];
+      function walk(node) {
+        if (!node || typeof node !== "object") return;
+        if (node.tag === "details" && node.dataset?.statsGroup) result.push(node);
+        for (const child of node.children || []) walk(child);
+      }
+      for (const child of this.children) walk(child);
+      return result;
+    },
+  });
+  controls["#analysis"] = makeContainer();
+  for (const id of ["#exclusions", "#previewChanges"]) {
+    controls[id] = makeContainer();
+  }
+  controls["#unifiedDiff"] = {textContent: ""};
+  controls["#rawDiffDetails"] = {hidden: true};
+  panel.querySelector = selector => controls[selector] || null;
+  panel._renderPreviewChanges = () => {};
+  panel._renderRestoreWarning = () => {};
+  panel._renderRestoreReconciliation = () => {};
+  panel._renderStagedRestorePlan = () => {};
+  const snapshot = {
+    available: true, production_summary: {
+      total: 1, rooms: 1, without_room: 0,
+      domains: {switch: 1}, by_room: {"Bureau": 1},
+      entities: [{entity_id: "switch.lampe", domain: "switch", room: "Bureau"}],
+    },
+    comparison: {status: "ok", added: [], removed: [], modified: [],
+      unchanged: 1},
+    exclusions: {entities: []},
+  };
+  panel._renderAnalysis(snapshot);
+  const groups = controls["#analysis"].querySelectorAll("details[data-stats-group]");
+  assert.equal(groups.length, 2);
+  groups[0].open = true;
+  groups[1].open = true;
+  panel._renderAnalysis(snapshot);
+  const refreshed = controls["#analysis"].querySelectorAll("details[data-stats-group]");
+  assert.equal(refreshed.length, 2);
+  assert.ok(refreshed.every(group => group.open),
+    "Expanded domain and room groups should remain open");
 });
