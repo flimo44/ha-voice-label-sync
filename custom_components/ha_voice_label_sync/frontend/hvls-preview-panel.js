@@ -3935,7 +3935,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
       return;
     }
 
-    const choices = new Map(this._manualLabelChanges || []);
+    const previousStage = this._stagedRestore;
+    const previousChoices = this._manualLabelChanges;
+    const choices = new Map(previousChoices || []);
     if (wanted === current) choices.delete(entity.entity_id);
     else choices.set(entity.entity_id, wanted);
 
@@ -3981,11 +3983,22 @@ entity_config: !include google_assistant_entities.yaml</pre>
         "savedDraftStorageUnavailable", {count: choices.size});
       this._activateTab("preview");
     } catch (error) {
-      this._manualLabelChanges = null;
-      this._stagedRestore = null;
-      checkbox.checked = current;
-      await this._loadPreview();
-      this._review = null;  // Do not revive a previous Apply approval.
+      // A failed second proposal must not silently destroy the first valid
+      // draft, its cached user intent, or the last approved Preview plan.
+      checkbox.checked = previousChoices?.get(entity.entity_id) ?? current;
+      if (previousStage?.mode === "label_preview") {
+        this._manualLabelChanges = previousChoices;
+        this._stagedRestore = previousStage;
+        this._previewContent = previousStage.content;
+        this._previewPath = previousStage.path;
+        this._renderAnalysis(previousStage);
+        this._setContent(previousStage.content);
+      } else {
+        this._manualLabelChanges = null;
+        this._stagedRestore = null;
+        await this._loadPreview();
+      }
+      this._review = null; // Never reuse a normal Apply approval.
       this._setStatusKey("manualLabelFailed", {
         error: error.message || String(error),
       });
