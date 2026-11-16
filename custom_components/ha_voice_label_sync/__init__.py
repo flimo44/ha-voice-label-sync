@@ -35,6 +35,11 @@ PANEL_TITLE = "HA Voice Label Sync"
 PANEL_ICON = "mdi:file-search-outline"
 
 
+def _panel_js_version(js_path: Path) -> str:
+    """Hash the panel asset in the executor, not on the HA event loop."""
+    return sha256(js_path.read_bytes()).hexdigest()[:12]
+
+
 async def async_setup(
     hass: HomeAssistant,
     config: dict,
@@ -49,7 +54,7 @@ async def async_setup(
 
     # Change the resource URL whenever its content changes.
     js_path = frontend_path / "hvls-preview-panel.js"
-    js_version = sha256(js_path.read_bytes()).hexdigest()[:12]
+    js_version = await hass.async_add_executor_job(_panel_js_version, js_path)
 
     await hass.http.async_register_static_paths(
         [
