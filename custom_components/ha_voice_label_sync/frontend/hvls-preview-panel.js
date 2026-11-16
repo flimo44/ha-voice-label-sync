@@ -402,6 +402,7 @@ const HVLS_TRANSLATIONS = {
     filterWith: "Avec HVLS",
     filterWithout: "Sans HVLS",
     filterEligibleWithout: "Sans HVLS — éligibles",
+    assistantReportIssue: "Signaler un problème sur GitHub",
     filterIneligible: "Non éligibles",
     actionAdd: "AJOUTER",
     actionRemove: "RETIRER",
@@ -944,6 +945,7 @@ const HVLS_TRANSLATIONS = {
     filterWith: "With HVLS",
     filterWithout: "Without HVLS",
     filterEligibleWithout: "Without HVLS — eligible",
+    assistantReportIssue: "Report an issue on GitHub",
     filterIneligible: "Ineligible",
     actionAdd: "ADD",
     actionRemove: "REMOVE",
@@ -1172,6 +1174,9 @@ class HVLSPreviewPanel extends HTMLElement {
       "#entityManager .entity-manager-header h2"
     );
     if (heading) heading.textContent = this._t("tabEntities");
+
+    const issueLink = this.querySelector("#assistantReportIssue");
+    if (issueLink) issueLink.textContent = this._t("assistantReportIssue");
 
     const search = this.querySelector("#entitySearch");
     if (search) {
@@ -3630,6 +3635,11 @@ class HVLSPreviewPanel extends HTMLElement {
         <section id="tab-migration" class="hvls-tab-panel" role="tabpanel" hidden>
           <h2>${this._t("tabMigration")}</h2>
           <p id="migrationIntro" class="diagnostic-note">${this._t("migrationIntro")}</p>
+          <p class="diagnostic-note">
+            <a id="assistantReportIssue"
+              href="https://github.com/flimo44/ha-voice-label-sync/issues/new"
+              target="_blank" rel="noopener noreferrer">${this._t("assistantReportIssue")}</a>
+          </p>
           <p id="assistantGoogleConnectionHint" class="diagnostic-note" role="status" hidden></p>
           <details id="assistantFileExamples">
             <summary>${this._t("assistantFileHelp")}</summary>
