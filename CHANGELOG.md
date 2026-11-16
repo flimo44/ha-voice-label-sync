@@ -6,6 +6,24 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.1.0-beta.5] - 2026-11-15
+
+### Security
+- Remove the two legacy Home Assistant button entities (`Generate configuration`, `Preview configuration`), avoiding direct writes and accidental Preview replacement outside HVLS.
+- Keep the legacy `ha_voice_label_sync.generate` service registered but make it **fail explicitly**, including in existing automations. The legacy direct workflow rejects any `dry_run=False` call before accessing HA registries or writing files.
+- The native HVLS Preview -> explicit reviewed Apply WebSocket path is unchanged. Existing unused button entities can remain unavailable in HA; they are not silently deleted from the registry.
+
+### Fixed
+- `À valider` is now an independent accessible Preview action rather than part of the HVLS checkbox label; clicking it no longer deselects the pending entity. Fixed in both entity management and statistics.
+- Register the integration's existing virtual device as a service with a native **Visit** link to `homeassistant://hvls-preview`. It remains available without the legacy buttons.
+- Correct entry unload after removing the button platform, avoiding an unnecessary attempt to unload an unregistered platform.
+
+### Validation
+- Python/JavaScript regressions test direct-write refusal, unfinished setup safety, independent pending-label review, and native device navigation.
+- Run the VM installation, upgrade and restoration tests before promoting a stable release.
+- **Known limitation:** unapproved UI drafts are not durable across all refresh/migration paths (see issue #170); production writes continue to require explicit Apply.
+
+
 ## [1.1.0-beta.4] - 2026-11-15
 
 ### Fixed

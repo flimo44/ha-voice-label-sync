@@ -1,3 +1,5 @@
 generate:
-  name: Generate configuration
-  description: Generate the voice assistant configuration.
+  name: Generate configuration (disabled)
+  description: >-
+    Deprecated direct generation is disabled for safety. Open the
+    HA Voice Label Sync panel, review the Preview, and use Apply.

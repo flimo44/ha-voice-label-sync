@@ -102,6 +102,62 @@ function preview(canApply = true) {
   };
 }
 
+test("À valider opens Preview without toggling pending HVLS selection", () => {
+  const ws = [];
+  const {panel} = makePanel(async request => {
+    ws.push(request);
+    return {};
+  });
+  panel._manualLabelChanges = new Map([
+    ["climate.thermostat_sejour_2_2", true],
+  ]);
+  const navigated = [];
+  panel._activateTab = tab => navigated.push(tab);
+  const checkbox = {tag: "input", type: "checkbox", checked: true};
+  const area = panel._createEntityHVLSControl(checkbox, true);
+  assert.equal(area.className, "entity-hvls-control-area");
+  assert.equal(area.children.length, 2);
+  const [label, review] = area.children;
+  assert.equal(label.tag, "label");
+  assert.equal(label.children[0], checkbox);
+  assert.equal(label.children[1].textContent, "HVLS");
+  assert.equal(review.tag, "button");
+  assert.equal(review.type, "button");
+  assert.equal(review.textContent, "À valider");
+  assert.equal(review["aria-label"], "Ouvrir le Preview");
+  assert.equal(label.children.includes(review), false,
+    "Review action cannot be inside the checkbox label");
+  review.on_click();
+  assert.deepEqual(navigated, ["preview"]);
+  assert.equal(checkbox.checked, true);
+  assert.equal(panel._manualLabelChanges.get("climate.thermostat_sejour_2_2"), true);
+  assert.deepEqual(ws, []);
+});
+
+test("Entity HVLS control without pending change has no review action", () => {
+  const {panel} = makePanel(async () => {});
+  const area = panel._createEntityHVLSControl(
+    {tag: "input", checked: false}, false
+  );
+  assert.equal(area.children.length, 1);
+  assert.equal(area.children[0].tag, "label");
+  assert.equal(area.children[0].children[1].textContent, "HVLS");
+  assert.equal(area.children[0].className, "entity-hvls-control");
+});
+
+test("Both management and Statistics use an independent pending Preview action", () => {
+  const block = source.slice(
+    source.indexOf("_createEntityHVLSControl(checkbox, pending)"),
+    source.indexOf("  _renderEntities()")
+  );
+  assert.match(block, /review\.addEventListener\("click", \(\) => this\._activateTab\("preview"\)\)/);
+  assert.match(block, /control\.append\(checkbox, text\)/);
+  assert.doesNotMatch(block, /control\.append\([^\n]*review/);
+  const uses = [...source.matchAll(/this\._createEntityHVLSControl\(/g)];
+  assert.equal(uses.length, 2);
+  assert.doesNotMatch(source, /"HVLS · " \+ this\._t\("manualLabelPending"\)/);
+});
+
 test("Onboarding setup choice is read-only guidance in preview response", async () => {
   const {panel} = makePanel(async () => ({
     ...preview(false),

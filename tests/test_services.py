@@ -182,3 +182,87 @@ def test_preview_write_failure(services_module, tmp_path, monkeypatch):
     assert hass.async_add_executor_job.await_count == 2
     hass.services.async_call.assert_not_awaited()
     assert not (tmp_path / "google_assistant_entities.yaml").exists()
+
+
+
+@pytest.mark.parametrize("existing_file", [False, True])
+def test_legacy_direct_generation_refused_before_any_write(
+    services_module, tmp_path, monkeypatch, existing_file
+):
+    """An old button or direct caller must not modify production YAML."""
+    output = tmp_path / "google_assistant_entities.yaml"
+    if existing_file:
+        output.write_bytes(b"light.original:\n  expose: true\n")
+    original = output.read_bytes() if existing_file else None
+
+    registry_read = Mock()
+    generation = Mock()
+    monkeypatch.setattr(services_module, "get_live_registries", registry_read)
+    monkeypatch.setattr(services_module, "run_google_assistant_workflow", generation)
+    hass = make_hass(tmp_path)
+
+    with pytest.raises(
+        services_module.HomeAssistantError,
+        match="Direct YAML generation is disabled",
+    ):
+        asyncio.run(
+            services_module.async_run_workflow(
+                hass, make_entry(), dry_run=False,
+            )
+        )
+
+    registry_read.assert_not_called()
+    generation.assert_not_called()
+    hass.async_add_executor_job.assert_not_awaited()
+    hass.services.async_call.assert_not_awaited()
+    assert output.read_bytes() == original if existing_file else not output.exists()
+
+
+def test_registered_legacy_service_fails_explicitly_without_writing(
+    services_module, tmp_path, monkeypatch
+):
+    """Existing automations get a clear refusal, not a silent write."""
+    hass = make_hass(tmp_path)
+    hass.services.has_service = Mock(return_value=False)
+    hass.services.async_register = Mock()
+    hass.config_entries = SimpleNamespace(
+        async_entries=Mock(return_value=[make_entry()])
+    )
+    generator = Mock()
+    monkeypatch.setattr(services_module, "run_google_assistant_workflow", generator)
+
+    asyncio.run(services_module.async_register_services(hass))
+    hass.services.async_register.assert_called_once()
+    domain, service_name, handler = hass.services.async_register.call_args.args
+    assert (domain, service_name) == ("ha_voice_label_sync", "generate")
+
+    with pytest.raises(
+        services_module.HomeAssistantError,
+        match="review the Preview",
+    ):
+        asyncio.run(handler(SimpleNamespace(context=object())))
+
+    generator.assert_not_called()
+    hass.config_entries.async_entries.assert_not_called()
+    assert not (tmp_path / "google_assistant_entities.yaml").exists()
+
+
+def test_legacy_button_platform_not_forwarded():
+    """Neither old HA button is active after a fresh integration setup."""
+    import ast
+
+    code = Path(
+        "custom_components/ha_voice_label_sync/__init__.py"
+    ).read_text(encoding="utf-8")
+    module = ast.parse(code)
+    setup_entry = next(
+        node for node in module.body
+        if isinstance(node, ast.AsyncFunctionDef)
+        and node.name == "async_setup_entry"
+    )
+    assert not any(
+        isinstance(node, ast.Attribute)
+        and node.attr == "async_forward_entry_setups"
+        for node in ast.walk(setup_entry)
+    )
+    assert not Path("custom_components/ha_voice_label_sync/button.py").exists()
