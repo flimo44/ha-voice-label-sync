@@ -37,10 +37,11 @@ const HVLS_TRANSLATIONS = {
     assistantPackagesDetected: "Configuration par packages détectée : classée « Autre configuration », non analysée automatiquement.",
     assistantPackagesQuestion: "Indiquez manuellement le fichier YAML contenant les entités à examiner.",
     assistantFileHelp: "ⓘ Voir les exemples de syntaxe YAML",
+    assistantGoogleConnectionHint: "Raccordement Google Assistant non détecté dans la configuration analysée. Consultez les exemples ci-dessous pour vérifier configuration.yaml. HVLS peut gérer les entités sans ce raccordement.",
     assistantExampleDirect: "Dans configuration.yaml :",
     assistantExampleInclude: "Variante avec fichier inclus dans configuration.yaml :",
     assistantExampleIncludedContent: "Dans google_assistant.yaml :",
-    assistantExampleNote: "Exemples structurels seulement : d'autres paramètres sont nécessaires. Ne les ajoutez pas à une configuration active sans vérifier les effets Google Home.",
+    assistantExampleNote: "Adaptez project_id au projet Google et SERVICE_ACCOUNT.json à votre fichier de compte de service (sans afficher son contenu). project_id et service_account sont obligatoires pour la configuration manuelle ; report_state est facultatif. Vérifiez la configuration avant toute modification d'une installation active : ces exemples ne prouvent pas la connexion Google Home.",
     assistantFileTitle: "Fichier des entités",
     assistantFileCandidate: "Fichier détecté proposé ; vous pouvez modifier ce chemin.",
     assistantFileManual: "Indiquez le chemin du fichier YAML des entités.",
@@ -577,10 +578,11 @@ const HVLS_TRANSLATIONS = {
     assistantPackagesDetected: "Packages configuration detected: classified as « Other configuration », not automatically inspected.",
     assistantPackagesQuestion: "Enter the entity YAML file path to inspect manually.",
     assistantFileHelp: "ⓘ Show YAML syntax examples",
+    assistantGoogleConnectionHint: "No Google Assistant connection detected in the inspected configuration. Review the examples below to check configuration.yaml. HVLS can still manage entities without this connection.",
     assistantExampleDirect: "In configuration.yaml:",
     assistantExampleInclude: "Alternative with an included file in configuration.yaml:",
     assistantExampleIncludedContent: "In google_assistant.yaml:",
-    assistantExampleNote: "Structural examples only: additional settings are required. Do not add these to an active configuration without checking Google Home effects.",
+    assistantExampleNote: "Replace project_id with your Google project and SERVICE_ACCOUNT.json with your service-account file (never display its contents). project_id and service_account are required for manual setup; report_state is optional. Review active settings before changing them: these examples do not establish a working Google Home connection.",
     assistantFileTitle: "Entity file",
     assistantFileCandidate: "Suggested detected file; you can edit this path.",
     assistantFileManual: "Enter the path to the entity YAML file.",
@@ -3616,6 +3618,26 @@ class HVLSPreviewPanel extends HTMLElement {
         <section id="tab-migration" class="hvls-tab-panel" role="tabpanel" hidden>
           <h2>${this._t("tabMigration")}</h2>
           <p id="migrationIntro" class="diagnostic-note">${this._t("migrationIntro")}</p>
+          <p id="assistantGoogleConnectionHint" class="diagnostic-note" role="status" hidden></p>
+          <details id="assistantFileExamples">
+            <summary>${this._t("assistantFileHelp")}</summary>
+            <p>${this._t("assistantExampleDirect")}</p>
+            <pre>google_assistant:
+  project_id: VOTRE_PROJECT_ID
+  service_account: !include SERVICE_ACCOUNT.json
+  report_state: true
+  expose_by_default: false
+  entity_config: !include google_assistant_entities.yaml</pre>
+            <p>${this._t("assistantExampleInclude")}</p>
+            <pre>google_assistant: !include google_assistant.yaml</pre>
+            <p>${this._t("assistantExampleIncludedContent")}</p>
+            <pre>project_id: VOTRE_PROJECT_ID
+service_account: !include SERVICE_ACCOUNT.json
+report_state: true
+expose_by_default: false
+entity_config: !include google_assistant_entities.yaml</pre>
+            <p class="diagnostic-note">${this._t("assistantExampleNote")}</p>
+          </details>
           <div id="migrationGuide" class="migration-review-note" role="group"
             aria-label="${this._t("migrationGuideTitle")}" hidden>
             <h3 id="migrationGuideTitle">${this._t("migrationGuideTitle")}</h3>
@@ -3638,19 +3660,6 @@ class HVLSPreviewPanel extends HTMLElement {
             </details>
             <p id="migrationGuideNext" role="status"></p>
             <div id="assistantFileSection" hidden>
-              <details id="assistantFileExamples">
-                <summary>${this._t("assistantFileHelp")}</summary>
-                <p>${this._t("assistantExampleDirect")}</p>
-                <pre>google_assistant:
-  expose_by_default: false
-  entity_config: !include google_assistant_entities.yaml</pre>
-                <p>${this._t("assistantExampleInclude")}</p>
-                <pre>google_assistant: !include google_assistant.yaml</pre>
-                <p>${this._t("assistantExampleIncludedContent")}</p>
-                <pre>expose_by_default: false
-entity_config: !include google_assistant_entities.yaml</pre>
-                <p class="diagnostic-note">${this._t("assistantExampleNote")}</p>
-              </details>
               <h4 id="assistantFileTitle">${this._t("assistantFileTitle")}</h4>
               <p id="assistantFileHint"></p>
               <label id="assistantFilePathLabel" for="assistantFilePath">
@@ -6059,6 +6068,19 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const isNew = diag?.mode === "new_configuration" &&
       diag?.source?.status === "resolved";
     const needsTakeover = this._assistantNeedsOutputTakeover();
+    // The YAML connection help remains available outside entity-file import.
+    // Do not interpret an unknown diagnosis as a missing declaration.
+    const connectionHint = this.querySelector("#assistantGoogleConnectionHint");
+    if (connectionHint) {
+      connectionHint.hidden = !isNew;
+      connectionHint.textContent = isNew
+        ? this._t("assistantGoogleConnectionHint") : "";
+    }
+    const examples = this.querySelector("#assistantFileExamples");
+    if (examples && diag && !this._assistantExamplesInitialized) {
+      examples.open = isNew;
+      this._assistantExamplesInitialized = true;
+    }
     const relevant = isNew || packages || needsTakeover;
     const detected = this.querySelector("#assistantSourceDetected");
     if (detected) {
