@@ -1240,7 +1240,56 @@ class HVLSPreviewPanel extends HTMLElement {
     if (nav) nav.setAttribute("aria-label", this._t("tabsLabel"));
   }
 
+  _pendingChangeCount() {
+    const staged = this._stagedRestore;
+
+    // A blocked browser draft still represents an unresolved user selection,
+    // not an authorization to Apply. Keep it discoverable in Preview.
+    if (staged?.mode === "saved_draft_blocked") {
+      return this._manualLabelChanges?.size || staged.changes?.length || 0;
+    }
+    // In ordinary manual selection, each net checkbox change is one action.
+    // Comparing the YAML alone can miss a necessary HA-label change.
+    if (staged?.mode === "label_preview" && staged.recovery !== true) {
+      return staged.changes?.length || 0;
+    }
+
+    // Normal Preview is actionable only after its server-side review.
+    const active = staged || (this._review ? this._lastAnalysis : null);
+    if (!active) return 0;
+    const comparison = active.comparison;
+    if (!["ok", "missing"].includes(comparison?.status)) return 0;
+
+    // Recovery/backup proposals may change both the YAML and HA labels.
+    // Count each affected entity once, even when both need updating.
+    const entities = new Set();
+    const addEntities = items => {
+      if (!Array.isArray(items)) return;
+      for (const item of items) {
+        const id = typeof item === "string" ? item : item?.entity_id;
+        if (typeof id === "string") entities.add(id);
+      }
+    };
+    for (const operation of ["added", "removed", "modified"]) {
+      addEntities(comparison[operation]);
+    }
+    if (staged) {
+      addEntities(staged.label_plan?.add);
+      addEntities(staged.label_plan?.remove);
+    }
+    const diffCount = comparison.status === "ok"
+      ? ["added", "removed", "modified"].reduce(
+          (count, operation) => count + (comparison[operation]?.length || 0), 0
+        )
+      : 0;
+    const missingCount = comparison.status === "missing" &&
+      Number.isSafeInteger(active.summary?.total)
+        ? active.summary.total : 0;
+    return Math.max(entities.size, diffCount, missingCount);
+  }
+
   _updateTabLabels() {
+    const pending = this._pendingChangeCount();
     const tabs = [
       ["summary", "tabStats"],
       ["exclusions", "tabExclusions"],
@@ -1256,7 +1305,9 @@ class HVLSPreviewPanel extends HTMLElement {
       if (button.hidden) continue;
       number += 1;
       const count = tab === "exclusions" && this._excludedCount != null
-        ? ` (${this._excludedCount})` : "";
+        ? ` (${this._excludedCount})`
+        : tab === "preview" && pending > 0 ? ` (${pending})` : "";
+      button.classList?.toggle("has-pending", tab === "preview" && pending > 0);
       button.textContent = `${number} · ${this._t(key)}${count}`;
     }
   }
@@ -1725,6 +1776,7 @@ class HVLSPreviewPanel extends HTMLElement {
   }
 
   _updateApplyButton() {
+    this._updateTabLabels();
     const button = this.querySelector("#apply");
     if (button) {
       const staged = this._stagedRestore;
@@ -2586,11 +2638,19 @@ class HVLSPreviewPanel extends HTMLElement {
 
   _renderAnalysis(result) {
     const panel = this.querySelector("#analysis");
+    // Statistics may contain expanded domain/room lists with checkboxes.
+    // Preserve them while a proposal refreshes its counters and statuses.
+    const openGroups = new Set(
+      Array.from(panel.querySelectorAll?.("details[data-stats-group]") || [])
+        .filter(group => group.open)
+        .map(group => group.dataset.statsGroup)
+    );
     panel.replaceChildren();
     this.querySelector("#exclusions").replaceChildren();
     this.querySelector("#unifiedDiff").textContent = "";
     this.querySelector("#rawDiffDetails").hidden = true;
     this._lastAnalysis = result;
+    this._updateTabLabels();
     this._syncExclusionsTab(result.exclusions);
     this._renderExclusions(this.querySelector("#exclusions"), result.exclusions);
     this._renderPreviewChanges(result);
@@ -2642,6 +2702,8 @@ class HVLSPreviewPanel extends HTMLElement {
         {
           const details = document.createElement("details");
           details.className = "domain-details";
+          details.dataset.statsGroup = JSON.stringify([type, name]);
+          details.open = openGroups.has(details.dataset.statsGroup);
 
           const summary = document.createElement("summary");
           summary.className = "breakdown-row";
@@ -2844,19 +2906,13 @@ class HVLSPreviewPanel extends HTMLElement {
       panel.appendChild(note);
       return;
     }
-    if (comparison.status !== "ok") {
-      const warning = document.createElement("p");
-      warning.textContent = comparison.status === "missing"
-        ? this._t("comparisonMissing")
-        : this._tf("comparisonFailed", {status: comparison.status, reason: comparison.reason || this._t("unreadableFile")});
-      panel.appendChild(warning);
-      return;
-    }
-    const pendingCount = comparison.added.length +
-      comparison.removed.length + comparison.modified.length;
-    // A visible alert is shown only for a valid, actionable Preview.
-    // No notification is emitted or applied automatically.
-    if (pendingCount > 0 && this._review) {
+    const pendingCount = this._pendingChangeCount();
+    // The Statistics hint reflects the same pending proposal as the Preview
+    // tab, whether it originated here or in Entity Management. It is only
+    // a navigation hint: no auto-Apply or automatic tab switching.
+    if (pendingCount > 0 && (this._review ||
+        (this._stagedRestore &&
+         this._stagedRestore.mode !== "saved_draft_blocked"))) {
       const alert = document.createElement("div");
       alert.className = "preview-pending-alert";
       alert.setAttribute("role", "status");
@@ -2869,6 +2925,14 @@ class HVLSPreviewPanel extends HTMLElement {
       action.addEventListener("click", () => this._activateTab("preview"));
       alert.append(message, action);
       panel.appendChild(alert);
+    }
+    if (comparison.status !== "ok") {
+      const warning = document.createElement("p");
+      warning.textContent = comparison.status === "missing"
+        ? this._t("comparisonMissing")
+        : this._tf("comparisonFailed", {status: comparison.status, reason: comparison.reason || this._t("unreadableFile")});
+      panel.appendChild(warning);
+      return;
     }
     const counters = document.createElement("div");
     counters.className = "metrics";
@@ -3161,6 +3225,12 @@ class HVLSPreviewPanel extends HTMLElement {
           color: var(--primary-color);
           border-bottom-color: var(--primary-color);
           font-weight: 600;
+        }
+        .hvls-tab.has-pending,
+        .hvls-tab.has-pending.active {
+          color: var(--error-color, #d32f2f);
+          border-bottom-color: var(--error-color, #d32f2f);
+          font-weight: 700;
         }
         .hvls-tab-panel[hidden] { display: none !important; }
         #entityManager { margin-top: 0; }
@@ -3989,7 +4059,6 @@ entity_config: !include google_assistant_entities.yaml</pre>
         this._manualLabelChanges = null;
         this._clearSavedLabelDraft();
         await this._loadPreview();
-        this._activateTab("preview");
         return;
       }
       const changes = [...choices.entries()]
@@ -4018,7 +4087,6 @@ entity_config: !include google_assistant_entities.yaml</pre>
       const saved = this._savePendingLabelDraft(choices, result);
       this._setStatusKey(saved ? "manualLabelPrepared" :
         "savedDraftStorageUnavailable", {count: choices.size});
-      this._activateTab("preview");
     } catch (error) {
       // A failed second proposal must not silently destroy the first valid
       // draft, its cached user intent, or the last approved Preview plan.

@@ -9,6 +9,7 @@ on:
       - main
       - 'release/**'
       - 'fix/**'
+      - 'feat/**'
   workflow_dispatch:
 
 permissions:
