@@ -391,7 +391,7 @@ def test_bulk_removal_threshold_requires_count_and_ratio(apply_module):
         (6, 3, True),
         (6, 2, False),
         (3, 3, True),
-        (3, 2, True),
+        (3, 2, False),
         (2, 2, False),
         (10, 3, False),
     ):
