@@ -1463,19 +1463,53 @@ def test_manual_label_preview_refuses_invalid_or_stale_selections(
     assert output.read_text() == "switch.one:\n  expose: true\n"
 
 
-def test_manual_label_preview_refuses_to_remove_last_exposure(
+def test_manual_label_preview_allows_removing_last_exposure_without_writes(
     backup_module, tmp_path,
 ):
     output = tmp_path / "google_entities.yaml"
-    output.write_text("switch.one:\n  expose: true\n")
+    original = "switch.one:\n  expose: true\n"
+    output.write_text(original)
     registries = _manual_label_state()
     catalog = backup_module.build_entity_catalog(
         registries, "HVLS", frozenset({"switch"})
     )
+    proposal = backup_module.prepare_manual_label_preview(
+        output, catalog, registries, "HVLS", frozenset({"switch"}),
+        [{"entity_id": "switch.one", "enabled": False}],
+    )
+    assert proposal["mode"] == "label_preview"
+    assert proposal["summary"]["total"] == 0
+    assert proposal["production_summary"]["total"] == 1
+    assert proposal["comparison"]["removed"] == ["switch.one"]
+    assert proposal["label_plan"]["remove"] == ["switch.one"]
+    assert proposal["label_plan"]["add"] == []
+    assert proposal["projection"]["ready"] is True
+    assert len(proposal["label_plan_sha256"]) == 64
+    assert output.read_text() == original
+    assert registries["entity_registry"]["data"]["entities"][0]["labels"] == [
+        "hvls", "other"
+    ]
+
+
+def test_manual_label_preview_refuses_empty_recovery_and_missing_production(
+    backup_module, tmp_path,
+):
+    registries = _manual_label_state()
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch"})
+    )
+    missing = tmp_path / "not-created.yaml"
+    with pytest.raises(backup_module.BackupRestoreError, match="No selected"):
+        backup_module.prepare_manual_label_preview(
+            missing, catalog, registries, "HVLS", frozenset({"switch"}),
+            [{"entity_id": "switch.one", "enabled": False}],
+        )
+    output = tmp_path / "google_entities.yaml"
+    output.write_text("switch.one:\n  expose: true\n")
     with pytest.raises(backup_module.BackupRestoreError, match="No selected"):
         backup_module.prepare_manual_label_preview(
             output, catalog, registries, "HVLS", frozenset({"switch"}),
-            [{"entity_id": "switch.one", "enabled": False}],
+            [{"entity_id": "switch.one", "enabled": False}], recovery=True,
         )
 
 
