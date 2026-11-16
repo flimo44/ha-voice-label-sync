@@ -386,6 +386,14 @@ def test_bulk_removal_threshold_requires_count_and_ratio(apply_module):
         (100, 20, False),
         (40, 12, False),
         (10, 10, True),
+        (10, 9, True),
+        (8, 7, True),
+        (6, 3, True),
+        (6, 2, False),
+        (3, 3, True),
+        (3, 2, True),
+        (2, 2, False),
+        (10, 3, False),
     ):
         comparison = {
             "status": "ok",
