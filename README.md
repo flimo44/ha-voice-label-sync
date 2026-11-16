@@ -16,7 +16,7 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 >
 > HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. You can select entities, inspect a Preview and manage the YAML **without Google Assistant being connected**; configure Google Assistant separately only when you want to expose the selected entities to Google Home.
 
-**Latest published stable:** [`v1.0.1`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.1). **Previous beta:** [`v1.1.0-beta.4`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.1.0-beta.4). **Next beta candidate:** `v1.1.0-beta.5` (tag from `release/v1.1.0-beta.5` only).  
+**Latest published stable before v1.1.0:** [`v1.0.1`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.1). **v1.1.0 stable release candidate:** see the [releases page](https://github.com/flimo44/ha-voice-label-sync/releases) for publication status. Do not install from an unreleased tag.  
 **Python core dependency:** `ha-voice-label-sync==0.3.6` (separate from the Home Assistant integration version).
 
 > **Release history:** `v1.1.0-beta.1` was tagged from the wrong branch and carried the `1.0.1` integration; use the latest correctly tagged pre-release for migration tests.
@@ -83,7 +83,7 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 - 🗃️ Browse, compare and safely restore previous production YAML backups
 - ✅ Apply a reviewed Preview with SHA-256 change detection
 - 💾 Preserve the previous configuration with optional automatic backups and retention
-- ⚡ Trigger Preview or direct generation through native Home Assistant actions
+- 🔒 Apply production changes only after explicit review in HVLS Preview; legacy direct generation is disabled
 - 🔌 Keep the architecture open for future voice assistant backends
 - 📦 Install from the HACS/Marketplace catalog using the release ZIP asset
 - 🧹 Use a content-based SHA-256 fingerprint in the panel JavaScript URL to reduce stale browser caching (available since v0.3.10)
@@ -204,7 +204,7 @@ The panel displays entity counts, expandable breakdowns by domain and area, excl
 
 ### Native Home Assistant actions
 
-The integration also exposes **Generate configuration** and **Preview configuration** actions. The former can write directly to the configured output and is useful for existing automations; the latter generates a Preview without a production write. For manual changes, the panel's reviewed Apply workflow is recommended.
+The legacy **Generate configuration** and **Preview configuration** Home Assistant button entities are retired. The legacy `ha_voice_label_sync.generate` service remains registered only to return an explicit error: direct generation is disabled. Use the HVLS panel's **Preview → Apply** workflow for all production changes. Existing automations using the legacy service must be updated.
 
 ## 🔍 Check Google Assistant
 
