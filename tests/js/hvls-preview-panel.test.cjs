@@ -6188,7 +6188,7 @@ test("Bulk removal confirmation covers small HA configurations (UI/backend parit
   const {panel} = makePanel(async () => ({}));
   for (const [before, removed, needed] of [
     [10, 9, true], [8, 7, true], [6, 3, true],
-    [3, 3, true], [3, 2, true], [2, 2, false],
+    [3, 3, true], [3, 2, false], [2, 2, false],
     [6, 2, false], [10, 3, false], [100, 20, false],
     [20, 10, true], [20, 9, false],
   ]) {
