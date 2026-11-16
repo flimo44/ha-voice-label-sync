@@ -6183,3 +6183,47 @@ test("Assistant provides a localized direct GitHub issue-report link", () => {
   assert.ok(source.includes('Signaler un problème sur GitHub'));
   assert.ok(source.includes('Report an issue on GitHub'));
 });
+
+test("Bulk removal confirmation covers small HA configurations (UI/backend parity)", () => {
+  const {panel} = makePanel(async () => ({}));
+  for (const [before, removed, needed] of [
+    [10, 9, true], [8, 7, true], [6, 3, true],
+    [3, 3, true], [3, 2, true], [2, 2, false],
+    [6, 2, false], [10, 3, false], [100, 20, false],
+    [20, 10, true], [20, 9, false],
+  ]) {
+    const result = {
+      production_summary: {total: before},
+      comparison: {status: "ok", added: [],
+        removed: Array.from({length: removed}, (_, i) => "switch." + i)},
+    };
+    const details = panel._bulkRemovalDetails(result);
+    assert.equal(details !== null, needed, before + " -> " + (before - removed));
+    if (needed) {
+      assert.equal(details.removed, removed);
+      assert.equal(details.after, before - removed);
+    }
+  }
+});
+
+test("Small configuration removal sends exact count after confirmation", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    if (request.type === "ha_voice_label_sync/apply_preview")
+      return {output_path: "/config/google_assistant_entities.yaml",
+        bytes_written: 13};
+    return preview();
+  });
+  panel._review = {preview_sha256: "a".repeat(64),
+    production_sha256: "b".repeat(64)};
+  panel._lastAnalysis = {
+    production_summary: {total: 8},
+    comparison: {status: "ok", added: [],
+      removed: Array.from({length: 7}, (_, i) => "switch." + i)},
+  };
+  panel._loadPreview = async () => {};
+  await panel._applyPreview();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].acknowledged_bulk_removals, 7);
+});
