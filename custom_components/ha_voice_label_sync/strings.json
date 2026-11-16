@@ -96,7 +96,8 @@
       }
     },
     "error": {
-      "label_setup_failed": "Could not create or resolve the Home Assistant label. Check label names and permissions."
+      "label_setup_failed": "Could not create or resolve the Home Assistant label. Check label names and permissions.",
+      "unsafe_output_path": "Unsafe output path or path outside Home Assistant."
     }
   }
 }
