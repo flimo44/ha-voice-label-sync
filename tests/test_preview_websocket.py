@@ -201,6 +201,14 @@ def websocket_module(monkeypatch):
     monkeypatch.setitem(sys.modules, output_name, output_module)
     output_spec.loader.exec_module(output_module)
 
+    bulk_name = f"{prefix}.bulk_removal"
+    bulk_spec = importlib.util.spec_from_file_location(
+        bulk_name, path.with_name("bulk_removal.py"),
+    )
+    bulk_module = importlib.util.module_from_spec(bulk_spec)
+    monkeypatch.setitem(sys.modules, bulk_name, bulk_module)
+    bulk_spec.loader.exec_module(bulk_module)
+
     spec.loader.exec_module(module)
 
     module._read_and_compare_real = module._read_and_compare
@@ -1252,6 +1260,8 @@ def _manual_ws_plan(ws, changes, snapshot, *, digest="c" * 64):
         },
         "changes": changes, "content": "switch.new:\n  expose: true\n",
         "summary": {"total": 2},
+        "production_summary": {"total": 1},
+        "comparison": {"status": "ok", "removed": [], "added": ["switch.new"]},
     }
     ws.prepare_manual_label_preview.return_value = plan
     ws.evaluate_registered_output = Mock(return_value=SimpleNamespace(
@@ -1469,3 +1479,68 @@ def test_apply_refuses_unsafe_configured_path_without_writer(websocket_module):
     assert connection.send_error.call_args.args[1] == "unsafe_output_path"
     connection.send_result.assert_not_called()
     ws.apply_reviewed_preview.assert_not_called()
+
+
+
+def test_manual_label_bulk_removal_refused_before_guard_or_write(websocket_module):
+    ws = websocket_module.websocket
+    changes = [{"entity_id": "switch.new", "enabled": True}]
+    plan = _manual_ws_plan(ws, changes, ws.get_live_registries(make_hass()))
+    plan["comparison"] = {
+        "status": "ok",
+        "removed": [f"switch.old_{i}" for i in range(77)],
+        "added": [],
+    }
+    plan["production_summary"] = {"total": 80}
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+
+    asyncio.run(ws.websocket_apply_manual_label_preview(
+        make_hass(), connection, {
+            "id": 1303, "changes": changes,
+            "preview_sha256": "b" * 64,
+            "production_sha256": "a" * 64,
+            "label_plan_sha256": "c" * 64,
+        },
+    ))
+    connection.send_result.assert_not_called()
+    assert connection.send_error.call_args.args[1] == "manual_label_apply_failed"
+    assert "Bulk removal" in connection.send_error.call_args.args[2]
+    ws.create_guard.assert_not_called()
+    ws.write_owned_output.assert_not_called()
+    ws.update_entity_label.assert_not_called()
+
+
+def test_restore_bulk_removal_refused_before_backup_or_guard(websocket_module):
+    ws = websocket_module.websocket
+    ws.prepare_backup_preview = Mock(return_value={
+        "label_plan_sha256": "c" * 64,
+        "projection": {"ready": True},
+        "label_plan": {"review": [], "add": [], "remove": []},
+        "comparison": {
+            "status": "ok", "identical_text": False,
+            "removed": [f"switch.old_{i}" for i in range(77)],
+            "added": [],
+        },
+        "production_summary": {"total": 80},
+    })
+    ws.restore_reviewed_backup = Mock()
+    ws.create_guard = Mock()
+    ws.update_entity_label = Mock()
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    request = {
+        "id": 1304,
+        "backup_id": "old.bak",
+        "backup_sha256": "b" * 64,
+        "production_sha256": "a" * 64,
+        "label_plan_sha256": "c" * 64,
+    }
+
+    asyncio.run(ws.websocket_apply_backup_preview(
+        make_hass(), connection, request,
+    ))
+    connection.send_result.assert_not_called()
+    assert connection.send_error.call_args.args[1] == "backup_preview_apply_refused"
+    assert "Bulk removal" in connection.send_error.call_args.args[2]
+    ws.restore_reviewed_backup.assert_not_called()
+    ws.create_guard.assert_not_called()
+    ws.update_entity_label.assert_not_called()

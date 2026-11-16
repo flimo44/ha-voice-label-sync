@@ -5845,3 +5845,95 @@ test("Empty label changes can still Apply a recovery cleanup of obsolete YAML", 
   panel._updateApplyButton();
   assert.equal(controls.apply.disabled, false);
 });
+
+
+test("Large removal in normal Apply requires counted confirmation", async () => {
+  const calls = [];
+  const prompts = [];
+  const bulk = {
+    production_summary: {total: 80},
+    comparison: {
+      status: "ok", added: [],
+      removed: Array.from({length: 77}, (_, i) => "switch.old_" + i),
+    },
+  };
+  let accept = false;
+  const {panel} = makePanel(async message => {
+    calls.push(message);
+    return {output_path: "/config/entities.yaml", bytes_written: 42};
+  }, message => { prompts.push(message); return accept; });
+  panel._review = {
+    preview_sha256: "a".repeat(64),
+    production_sha256: "b".repeat(64),
+  };
+  panel._lastAnalysis = bulk;
+  panel._loadPreview = async () => {};
+
+  await panel._applyPreview();
+  assert.equal(calls.length, 0);
+  assert.match(prompts[0], /77/);
+  assert.match(prompts[0], /80/);
+  assert.match(prompts[0], /3/);
+  assert.match(prompts[0], /SUPPRESSION IMPORTANTE/);
+
+  accept = true;
+  await panel._applyPreview();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].type, "ha_voice_label_sync/apply_preview");
+  assert.equal(calls[0].acknowledged_bulk_removals, 77);
+});
+
+
+test("Large removal from manual labels includes approval count", async () => {
+  const calls = [];
+  const {panel} = makePanel(async message => {
+    calls.push(message);
+    if (message.type === "ha_voice_label_sync/apply_manual_label_preview")
+      return {applied: true, reconciled: true, label_additions: 0,
+        label_removals: 77};
+    return {generated: true};
+  });
+  panel._stagedRestore = {
+    ...manualStage([{entity_id: "switch.old_0", enabled: false}]),
+    production_summary: {total: 80},
+    comparison: {
+      status: "ok", added: [],
+      removed: Array.from({length: 77}, (_, i) => "switch.old_" + i),
+    },
+  };
+  panel._loadPreview = async () => {};
+  panel._loadEntities = async () => {};
+  await panel._applyPreview();
+  assert.equal(calls[0].type, "ha_voice_label_sync/apply_manual_label_preview");
+  assert.equal(calls[0].acknowledged_bulk_removals, 77);
+});
+
+
+test("Large removal from backup restoration includes approval count", async () => {
+  const calls = [];
+  const {panel} = makePanel(async message => {
+    calls.push(message);
+    if (message.type === "ha_voice_label_sync/apply_backup_preview")
+      return {applied: true, reconciled: true, yaml_entities: 3,
+        label_additions: 0, label_removals: 77};
+    return {generated: true};
+  });
+  panel._stagedRestore = {
+    mode: "restore_preview", backup_id: "old.bak",
+    backup_sha256: "a".repeat(64),
+    production_sha256: "b".repeat(64),
+    label_plan_sha256: "c".repeat(64),
+    label_plan: {add: [], remove: [], review: []},
+    projection: {ready: true},
+    production_summary: {total: 80},
+    comparison: {
+      status: "ok", identical_text: false, added: [],
+      removed: Array.from({length: 77}, (_, i) => "switch.old_" + i),
+    },
+  };
+  panel._loadPreview = async () => {};
+  panel._loadEntities = async () => {};
+  await panel._applyPreview();
+  assert.equal(calls[0].type, "ha_voice_label_sync/apply_backup_preview");
+  assert.equal(calls[0].acknowledged_bulk_removals, 77);
+});

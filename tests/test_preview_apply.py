@@ -24,7 +24,7 @@ def apply_module(monkeypatch):
 
     for name in (
         "restore_guard", "missing_output_rebuild",
-        "preview_guard", "preview_compare", "preview_apply",
+        "preview_guard", "preview_compare", "bulk_removal", "preview_apply",
     ):
         spec = importlib.util.spec_from_file_location(
             f"{prefix}.{name}", component / f"{name}.py"
@@ -324,3 +324,78 @@ def test_apply_rejects_invalid_owned_production_without_mutation(
     assert OwnershipRegistry(registry_path).get_record(
         "test-installation",
     ) == ownership_before
+
+
+
+def test_bulk_removal_blocks_unacknowledged_apply_without_mutation(
+    apply_module, tmp_path,
+):
+    """Even a hash-matched, HVLS-owned YAML needs explicit large-delete approval."""
+    from hvls.output_ownership_registry import OwnershipRegistry
+
+    production = "".join(
+        f"switch.legacy_{i}:\n  expose: true\n" for i in range(80)
+    )
+    registries, request, preview, output = prepare(
+        tmp_path, owned=True, production=production,
+    )
+    registry = tmp_path / ".hvls" / "ownership.json"
+    record = OwnershipRegistry(registry).get_record("test-installation")
+    review_sha = apply_module.preview_digest(preview.read_text())
+    production_sha = apply_module.preview_digest(output.read_text())
+    args = (
+        request, registries, preview, review_sha, 10, True,
+    )
+    kwargs = {
+        "expected_production_digest": production_sha,
+        "entry_id": "test-installation",
+        "ownership_registry_path": registry,
+    }
+
+    with pytest.raises(ValueError, match="Bulk removal requires confirmation"):
+        apply_module.apply_reviewed_preview(*args, **kwargs)
+
+    assert output.read_text() == production
+    assert OwnershipRegistry(registry).get_record("test-installation") == record
+    assert not (tmp_path / ".hvls_backups").exists()
+
+    # Stale or generic acknowledgments cannot bypass the reviewed count.
+    for wrong in (True, 1, 79, 81):
+        with pytest.raises(ValueError, match="Bulk removal requires confirmation"):
+            apply_module.apply_reviewed_preview(
+                *args, **kwargs, acknowledged_bulk_removals=wrong,
+            )
+        assert output.read_text() == production
+
+    result = apply_module.apply_reviewed_preview(
+        *args, **kwargs, acknowledged_bulk_removals=80,
+    )
+    assert result.backup_path is not None
+    assert result.backup_path.read_text() == production
+    assert output.read_text() == preview.read_text()
+
+
+def test_bulk_removal_threshold_requires_count_and_ratio(apply_module):
+    import sys
+
+    guard = sys.modules[f"{apply_module.__package__}.bulk_removal"]
+    for before, removed, expected in (
+        (80, 77, True),
+        (20, 10, True),
+        (20, 9, False),
+        (100, 20, False),
+        (40, 12, False),
+        (10, 10, True),
+    ):
+        comparison = {
+            "status": "ok",
+            "removed": [f"switch.old_{i}" for i in range(removed)],
+            "added": [],
+        }
+        details = guard.bulk_removal_details(comparison, before)
+        assert (details is not None) is expected
+
+    assert guard.bulk_removal_details(
+        {"status": "missing", "removed": ["switch.a"] * 30, "added": []},
+        None,
+    ) is None
