@@ -1181,7 +1181,11 @@ def _read_and_compare(preview_path: Path, output_path: Path) -> dict[str, Any]:
         "content": preview,
         "path": str(preview_path),
         **analysis,
-        "can_apply": production_readable,
+        # Readable but invalid production must never be applied over.
+        "can_apply": (
+            production_readable
+            and analysis["comparison"]["status"] != "invalid"
+        ),
         "preview_sha256": preview_digest(preview),
     }
 

@@ -24,7 +24,7 @@ def apply_module(monkeypatch):
 
     for name in (
         "restore_guard", "missing_output_rebuild",
-        "preview_guard", "preview_apply",
+        "preview_guard", "preview_compare", "preview_apply",
     ):
         spec = importlib.util.spec_from_file_location(
             f"{prefix}.{name}", component / f"{name}.py"
@@ -36,7 +36,7 @@ def apply_module(monkeypatch):
     return sys.modules[f"{prefix}.preview_apply"]
 
 
-def prepare(tmp_path, *, owned=False):
+def prepare(tmp_path, *, owned=False, production="switch.ancienne:\n  expose: true\n"):
     registries = make_registries()
     output = tmp_path / "production.yaml"
     preview = tmp_path / "preview.yaml"
@@ -58,13 +58,13 @@ def prepare(tmp_path, *, owned=False):
 
         write_owned_output(
             output_path=output,
-            content="ancienne configuration\n",
+            content=production,
             entry_id="test-installation",
             ownership_registry_path=tmp_path / ".hvls" / "ownership.json",
             backup_directory=tmp_path / ".hvls_backups",
         )
     else:
-        output.write_text("ancienne configuration\n", encoding="utf-8")
+        output.write_text(production, encoding="utf-8")
 
     return registries, request, preview, output
 
@@ -159,7 +159,7 @@ def test_apply_valid_reviewed_preview(apply_module, tmp_path):
 
     assert output.read_text() == preview.read_text()
     assert result.backup_path is not None
-    assert result.backup_path.read_text() == "ancienne configuration\n"
+    assert result.backup_path.read_text() == "switch.ancienne:\n  expose: true\n"
 
 
 def test_reject_changed_entities(apply_module, tmp_path):
@@ -181,7 +181,7 @@ def test_reject_changed_entities(apply_module, tmp_path):
             ownership_registry_path=tmp_path / ".hvls" / "ownership.json",
         )
 
-    assert output.read_text() == "ancienne configuration\n"
+    assert output.read_text() == "switch.ancienne:\n  expose: true\n"
     assert not (tmp_path / ".hvls_backups").exists()
 
 
@@ -204,7 +204,7 @@ def test_reject_modified_preview(apply_module, tmp_path):
             ownership_registry_path=tmp_path / ".hvls" / "ownership.json",
         )
 
-    assert output.read_text() == "ancienne configuration\n"
+    assert output.read_text() == "switch.ancienne:\n  expose: true\n"
 
 
 @pytest.mark.parametrize(
@@ -227,7 +227,7 @@ def test_reject_invalid_digest(apply_module, tmp_path, invalid_digest):
             ownership_registry_path=tmp_path / ".hvls" / "ownership.json",
         )
 
-    assert output.read_text() == "ancienne configuration\n"
+    assert output.read_text() == "switch.ancienne:\n  expose: true\n"
 
 
 def test_reject_changed_production(apply_module, tmp_path):
@@ -282,3 +282,45 @@ def test_apply_must_not_claim_unmanaged_output(apply_module, tmp_path):
 
     assert output.read_bytes() == original
     assert not (tmp_path / ".hvls_backups").exists()
+
+
+@pytest.mark.parametrize(
+    "invalid_yaml",
+    [
+        "switch.corrupt: [\n",
+        "- not_an_entity_mapping\n",
+        "switch.corrupt: 42\n",
+        "not_an_entity_id: {}\n",
+    ],
+)
+def test_apply_rejects_invalid_owned_production_without_mutation(
+    apply_module, tmp_path, invalid_yaml,
+):
+    """Even a matching owned production hash does not make bad YAML safe."""
+    from hvls.output_ownership_registry import OwnershipRegistry
+
+    registries, request, preview, output = prepare(
+        tmp_path, owned=True, production=invalid_yaml,
+    )
+    registry_path = tmp_path / ".hvls" / "ownership.json"
+    original = output.read_bytes()
+    ownership_before = OwnershipRegistry(registry_path).get_record("test-installation")
+
+    with pytest.raises(
+        apply_module.PreviewChangedError, match="Production YAML is invalid",
+    ):
+        apply_module.apply_reviewed_preview(
+            request, registries, preview,
+            apply_module.preview_digest(preview.read_text()),
+            10, True,
+            expected_production_digest=apply_module.preview_digest(
+                output.read_text(),
+            ),
+            entry_id="test-installation",
+            ownership_registry_path=registry_path,
+        )
+
+    assert output.read_bytes() == original
+    assert OwnershipRegistry(registry_path).get_record(
+        "test-installation",
+    ) == ownership_before

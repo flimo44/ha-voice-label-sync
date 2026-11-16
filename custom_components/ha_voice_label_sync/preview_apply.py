@@ -11,6 +11,7 @@ from hvls import GenerationRequest, run_google_assistant_workflow
 from hvls.owned_writer import write_owned_output
 
 from .missing_output_rebuild import rebuild_missing_owned_output
+from .preview_compare import PreviewFormatError, validate_entity_yaml
 from .preview_guard import (
     PreviewChangedError,
     preview_digest,
@@ -68,6 +69,25 @@ def apply_reviewed_preview(
 
     validate_preview_content(reviewed_content, generated.content)
     validate_production_unchanged(request.output_path, expected_production_digest)
+
+    # A matching SHA proves freshness, not that the YAML can be interpreted.
+    # Reject malformed owned production even when the UI is bypassed.
+    # The owned writer independently verifies ownership and SHA under its lock.
+    try:
+        current_production = request.output_path.read_bytes().decode("utf-8")
+    except FileNotFoundError:
+        current_production = None
+    except (OSError, UnicodeError) as exc:
+        raise PreviewChangedError(
+            "Production YAML cannot be read safely. Apply refused."
+        ) from exc
+    if current_production is not None:
+        try:
+            validate_entity_yaml(current_production)
+        except PreviewFormatError as exc:
+            raise PreviewChangedError(
+                "Production YAML is invalid. Repair or restore it before Apply."
+            ) from exc
 
     # Missing-file recovery is deliberately NOT a normal overwrite: it
     # requires a distinct explicit Apply action, a null prior digest and

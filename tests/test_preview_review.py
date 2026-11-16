@@ -65,3 +65,33 @@ def test_review_handles_missing_production(websocket_module, tmp_path, monkeypat
     assert result["can_apply"] is True
     assert result["preview_sha256"] is not None
     assert result["production_sha256"] is None
+
+
+def test_review_disables_apply_for_invalid_production(
+    websocket_module, tmp_path, monkeypatch,
+):
+    """An invalid production YAML cannot receive an Apply authorization."""
+    from unittest.mock import Mock
+
+    from test_preview_compare import module as real_compare
+
+    preview = tmp_path / "preview.yaml"
+    production = tmp_path / "production.yaml"
+    preview.write_text("switch.pompe:\n  expose: true\n", encoding="utf-8")
+    production.write_text("switch.broken: [\n", encoding="utf-8")
+
+    module = websocket_module.websocket
+    assert isinstance(module._read_and_compare, Mock)
+    module._read_and_compare = module._read_and_compare_real
+    monkeypatch.setattr(module, "analyze_preview", real_compare.analyze_preview)
+    # The isolated WebSocket fixture normally mocks this exception type.
+    # Match the actual parser's exception when testing real malformed YAML.
+    monkeypatch.setattr(module, "PreviewFormatError", real_compare.PreviewFormatError)
+
+    result = module._read_and_compare(preview, production)
+    assert result["available"] is True
+    assert result["comparison"]["status"] == "invalid"
+    assert result["can_apply"] is False
+    assert result["production_sha256"] == hashlib.sha256(
+        production.read_bytes(),
+    ).hexdigest()
