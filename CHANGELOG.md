@@ -6,6 +6,27 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.1.0] - Release candidate (date set at publication)
+
+### Added and improved
+- Guided onboarding for a new configuration or an existing Google Assistant YAML, including safe recovery and inspection before changes.
+- Entity selection can continue in Management or Statistics without forcing an immediate switch to Preview; the Preview tab shows the pending-change count.
+- Contextual Google Assistant YAML setup help with complete examples and non-blocking warnings when Google Assistant is not yet connected.
+- Recovery from backups and missing output through reviewed Preview, preserving safeguards around file ownership and HA entity labels.
+
+### Security and fixes
+- All production changes require reviewed Preview -> Apply, including restoration; protect existing production YAML, validate configured output paths and reject invalid YAML before writing.
+- Require explicit confirmation of bulk removals, guard unsaved proposals and preserve pending selections during navigation.
+- Disable legacy direct generation and retire the old Home Assistant button entities; existing automations calling `ha_voice_label_sync.generate` now fail explicitly and must migrate to reviewed Preview -> Apply.
+- Fix the `À valider` action to open Preview without toggling the checkbox, and compute frontend JS asset hash without blocking HA's event loop.
+
+### Validation and upgrade notes
+- Python unit tests, frontend JavaScript regressions, Ruff, package checks, Hassfest and HACS validation passed on integrated main before release preparation.
+- Installation, selections, Preview -> Apply, YAML/label consistency and backup restoration were exercised on an isolated Home Assistant Synology VM.
+- Existing retired button entities may appear unavailable in HA until the administrator cleans up the entity registry; no silent removal is performed.
+- Google Home synchronization remains a separate step from the HVLS YAML and labels workflow.
+
+
 ## [1.1.0-beta.5] - 2026-11-15
 
 ### Security
