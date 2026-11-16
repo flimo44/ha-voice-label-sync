@@ -6173,3 +6173,13 @@ test("Refusing removal of the last selected entity leaves Apply unapproved", () 
   };
   assert.equal(panel._confirmWithBulkRemoval(result, "Appliquer ?"), null);
 });
+
+test("Assistant provides a localized direct GitHub issue-report link", () => {
+  assert.ok(source.includes('id="assistantReportIssue"'));
+  assert.ok(source.includes(
+    'href="https://github.com/flimo44/ha-voice-label-sync/issues/new"'
+  ));
+  assert.ok(source.includes('target="_blank" rel="noopener noreferrer"'));
+  assert.ok(source.includes('Signaler un problème sur GitHub'));
+  assert.ok(source.includes('Report an issue on GitHub'));
+});
