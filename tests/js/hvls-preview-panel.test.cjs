@@ -6131,3 +6131,55 @@ test("Statistics keeps expanded room and domain lists during analysis refresh", 
   assert.ok(refreshed.every(group => group.open),
     "Expanded domain and room groups should remain open");
 });
+
+test("New entity management defaults to eligible entities without HVLS", () => {
+  const option = '<option value="eligible_no" selected>';
+  assert.ok(source.includes(option));
+  assert.ok(source.includes(
+    'const filter = this.querySelector("#entityFilter")?.value || "eligible_no";'
+  ));
+});
+
+test("Removing the last selected HVLS entity requires explicit confirmation", () => {
+  const prompts = [];
+  const {panel} = makePanel(async () => ({}), message => {
+    prompts.push(message);
+    return true;
+  });
+  const emptyPlan = {
+    mode: "label_preview",
+    summary: {total: 0},
+    production_summary: {total: 1},
+    comparison: {status: "ok", added: [], removed: ["switch.one"],
+      modified: []},
+  };
+  const approved = panel._confirmWithBulkRemoval(emptyPlan, "Appliquer ?");
+  assert.equal(approved, 0);
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0], /dernière entité HVLS/);
+  const normalPlan = {...emptyPlan, summary: {total: 1}};
+  panel._confirmWithBulkRemoval(normalPlan, "Appliquer ?");
+  assert.equal(prompts.length, 2);
+  assert.doesNotMatch(prompts[1], /dernière entité HVLS/);
+});
+
+test("Refusing removal of the last selected entity leaves Apply unapproved", () => {
+  const {panel} = makePanel(async () => ({}), () => false);
+  const result = {
+    mode: "label_preview", summary: {total: 0},
+    production_summary: {total: 1},
+    comparison: {status: "ok", added: [], removed: ["switch.one"],
+      modified: []},
+  };
+  assert.equal(panel._confirmWithBulkRemoval(result, "Appliquer ?"), null);
+});
+
+test("Assistant provides a localized direct GitHub issue-report link", () => {
+  assert.ok(source.includes('id="assistantReportIssue"'));
+  assert.ok(source.includes(
+    'href="https://github.com/flimo44/ha-voice-label-sync/issues/new"'
+  ));
+  assert.ok(source.includes('target="_blank" rel="noopener noreferrer"'));
+  assert.ok(source.includes('Signaler un problème sur GitHub'));
+  assert.ok(source.includes('Report an issue on GitHub'));
+});

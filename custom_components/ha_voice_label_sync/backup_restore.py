@@ -279,9 +279,21 @@ def prepare_manual_label_preview(
         request=request, registries=projected,
     ).generation
     if generation.entity_count == 0:
-        raise BackupRestoreError(
-            "No selected entities would remain; production was not modified."
+        # An empty selection may be intentional: permit it only when a
+        # non-recovery, explicitly reviewed label-removal proposal clears an
+        # existing production configuration. All other empty projections
+        # remain refused (notably recovery and accidental additions).
+        deliberate_last_removal = (
+            not recovery
+            and bool(remove)
+            and not add
+            and production is not None
+            and analyze_preview(production, None)["summary"]["total"] > 0
         )
+        if not deliberate_last_removal:
+            raise BackupRestoreError(
+                "No selected entities would remain; production was not modified."
+            )
     analysis = analyze_preview(generation.content, production)
     if recovery:
         # The old file is the selection source; current HA determines
