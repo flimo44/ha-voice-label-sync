@@ -16,11 +16,23 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 >
 > HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. Set up and verify Google Assistant before using HVLS.
 
-**Latest version:** `v1.0.0` (stable release candidate; see [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for publication status). **Previous tested beta:** [`v1.0.0-beta.5`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.0-beta.5).  
-**Python core dependency:** `ha-voice-label-sync==0.3.5` (separate from the Home Assistant integration version).
+**Latest published stable:** [`v1.0.1`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.1). **Next beta being prepared:** `v1.1.0-beta.2` (publish from `feat/reinstall-recovery-via-preview` only).  
+**Python core dependency:** `ha-voice-label-sync==0.3.6` (separate from the Home Assistant integration version).
+
+> **Release correction:** GitHub `v1.1.0-beta.1` was accidentally tagged from `main` and contains integration version `1.0.1`, not the intended beta changes. Do not use that tag to test the migration features. The corrected beta will be published as `v1.1.0-beta.2` **from this recovery branch**.
 
 > [!NOTE]
-> The V1 stable candidate has completed beta development. Install only a **published** release from GitHub/HACS; this README may be updated before the final release is published. Its Home Assistant integration and standalone PyPI core have independent version numbers. Feedback and issue reports are welcome.
+> `v1.1.0-beta.2` introduces setup, migration and disaster-recovery improvements. It is **not** a replacement for Google Assistant's manual Cloud/Google Home setup. Existing installations should make a HA snapshot first, and review every Preview before applying. Beta feedback and issue reports are welcome.
+
+## 🧪 Upcoming v1.1.0-beta.2 — Safer setup and recovery
+
+- **Fresh installation:** select HVLS entities in HA, or rebuild the first YAML from already labeled entities; nothing is written before the reviewed Preview.
+- **Import an older YAML:** inspect the original, detect missing or noneligible entities, preserve new HA labels and validate a proposed updated YAML. The original is protected with a verified backup.
+- **Repair without uninstalling:** reconstruct a missing HVLS-managed file from HA labels, or review and restore a backup even when production YAML is missing.
+- **Safer navigation:** pending label proposals remain protected across tabs, and the Assistant's new-selection button opens Entity Management directly.
+- **Integrity protection:** files owned by other installations, changed output content and incomplete operations stay blocked until explicitly resolved.
+
+The beta is intended for testing, especially existing YAML migrations and restoration. It does not automate Google Cloud, reverse proxy/DNS, or Google Home linking. See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## ✨ V1 stable highlights
 
@@ -170,9 +182,9 @@ This is an example: retain your actual project settings, credentials and other G
 
 ### Backup history and safe restore
 
-The **Backups** tab lists snapshots stored in a `.hvls_backups` directory beside the configured production YAML. Selecting a backup displays the changes **that would happen if it were restored**. The selected backup is checked against the current production configuration.
+The **Backups** tab lists snapshots stored in a `.hvls_backups` directory beside the configured production YAML. Selecting a backup proposes changes; when production exists, it is compared against that file. If production is **missing**, the backup remains reviewable, and its entities are checked against the current Home Assistant registry before the reviewed Preview can be applied.
 
-Restore is restricted to administrators and requires explicit confirmation. HVLS validates YAML and both SHA-256 fingerprints, **always makes a safety copy of the current production**, and replaces the YAML atomically. It does **not** modify HA labels or registries. After restoration, reload Google Assistant or restart Home Assistant and sync devices if necessary. A backup identical to production cannot be restored.
+Restore is administrator-only. HVLS validates YAML, checks SHA-256 fingerprints and current ownership, and requires a Preview and explicit approval. A current production file is always backed up before replacement; if the file is missing, there is no current file to back up, and existing backups are preserved. Depending on the reviewed restore plan, restoring an old configuration **can add or remove HVLS labels**; unresolved or ineligible entities must be examined before applying. HVLS verifies the resulting labels against the YAML and protects incomplete restore operations. After restoration, reload Google Assistant or restart Home Assistant and sync devices if necessary.
 
 The panel offers the following actions plus a **Settings** shortcut:
 
@@ -188,7 +200,7 @@ The panel offers the following actions plus a **Settings** shortcut:
 The panel displays entity counts, expandable breakdowns by domain and area, excluded-domain diagnostics and a Preview/Production comparison. Entity names open HA's native More Info dialog; in Statistics, the **HVLS** checkbox allows quick removal with confirmation. A warning highlights unapplied changes and links to Preview. **Apply Preview** remains an explicit, separate production action.
 
 > [!WARNING]
-> **Apply Preview and Restore change the configured production YAML.** Review the diff first. HACS rollback restores integration code, **not** generated YAML. Ordinary automatic backups are optional; a restore **always creates a safety backup of the current production**. With the default output directory, backups are under `/config/.hvls_backups/`.
+> **Apply Preview and Restore can change the configured production YAML; reviewed restoration can also update HVLS entity labels.** Review the diff and label plan before confirming. HACS rollback restores integration code, **not** generated YAML or HA labels. Ordinary automatic backups are optional; a restore of an existing production file creates a safety backup. When the file is missing, existing backups are preserved and a new safety copy cannot be made. With the default output directory, backups are under `/config/.hvls_backups/`.
 
 ### Native Home Assistant actions
 
@@ -268,7 +280,7 @@ An entity is also skipped when it:
 
 The Preview panel shows included-entity counts **by domain and room**. Under **Non-enabled domains**, it groups *labeled* entities excluded because their domain is not enabled; the **Excluded entities** diagnostic lists labeled exclusions and their reasons. Entities without the selected label are not included in these exclusion statistics.
 
-> **Note:** The native integration depends on the separately versioned Python core `ha-voice-label-sync==0.3.5`. Review package and integration rules again when updating eligibility in a future release.
+> **Note:** The native integration depends on the separately versioned Python core `ha-voice-label-sync==0.3.6`. Review package and integration rules again when updating eligibility in a future release.
 
 ## 🏠 Home Assistant integration features
 

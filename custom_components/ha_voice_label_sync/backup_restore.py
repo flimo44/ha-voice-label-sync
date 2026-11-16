@@ -24,6 +24,7 @@ from hvls.owned_writer import (
 )
 
 from .label_update import ensure_entity_eligible_for_addition, resolve_unique_label_id
+from .missing_output_rebuild import rebuild_missing_owned_output
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_guard import (
     PreviewChangedError,
@@ -214,6 +215,7 @@ def apply_backup_cleanup(
 def prepare_manual_label_preview(
     output_path: Path, catalog: dict, registries: dict,
     label: str, domains: frozenset[str], changes: list[dict],
+    *, recovery: bool = False,
 ) -> dict:
     """Simulate checked/unchecked HVLS labels before writing ANY HA state.
 
@@ -223,7 +225,7 @@ def prepare_manual_label_preview(
     """
     if (
         not isinstance(changes, list)
-        or not 1 <= len(changes) <= 100
+        or not (0 if recovery else 1) <= len(changes) <= (500 if recovery else 100)
         or any(
             not isinstance(item, dict)
             or set(item) != {"entity_id", "enabled"}
@@ -281,6 +283,28 @@ def prepare_manual_label_preview(
             "No selected entities would remain; production was not modified."
         )
     analysis = analyze_preview(generation.content, production)
+    if recovery:
+        # The old file is the selection source; current HA determines
+        # whether each selected entity can still be generated.
+        from .preview_compare import _entities
+
+        if production is None:
+            raise BackupRestoreError("No old YAML to recover.")
+        expected = {
+            entity_id for entity_id, options in _entities(production).items()
+            if options.get("expose") is True
+            and current.get(entity_id, {}).get("eligible") is True
+        }
+        # Current HA labels also represent deliberate selections made after
+        # the old YAML was created. Preserve them during recovery.
+        expected.update(
+            entity_id for entity_id, item in current.items()
+            if item.get("eligible") is True and item.get("has_label") is True
+        )
+        if set(_entities(generation.content)) != expected:
+            raise BackupRestoreError(
+                "Recovery Preview differs from eligible old YAML entities."
+            )
     if analysis["comparison"]["status"] not in {"ok", "missing"}:
         raise BackupRestoreError("Cannot compare current production YAML.")
     production_sha = preview_digest(production) if production is not None else None
@@ -292,6 +316,7 @@ def prepare_manual_label_preview(
         "label": label, "domains": sorted(domains),
         "output": str(output_path), "production": production_sha,
         "target": target_sha, "snapshot": snapshot_sha,
+        "recovery": recovery,
         "changes": sorted(
             [{"entity_id": eid, "enabled": enabled}
              for eid, enabled in wanted.items()],
@@ -299,7 +324,7 @@ def prepare_manual_label_preview(
         ),
     }, sort_keys=True, ensure_ascii=False))
     return {
-        "mode": "label_preview", "available": True,
+        "mode": "label_preview", "recovery": recovery, "available": True,
         "content": generation.content, "path": "Proposition HVLS",
         "production_path": str(output_path),
         "production_sha256": production_sha,
@@ -320,28 +345,40 @@ def prepare_manual_label_preview(
     }
 
 
+def _read_optional_production(output_path: Path) -> str | None:
+    """Absence is recoverable; a present unreadable YAML is never treated as absent."""
+    if output_path.is_symlink():
+        raise BackupRestoreError("Production is a symbolic link.")
+    if not output_path.exists():
+        return None
+    production = _read_yaml(output_path)
+    try:
+        analyze_preview(production, None)
+    except PreviewFormatError as exc:
+        raise BackupRestoreError("Current production YAML is invalid.") from exc
+    return production
+
+
 def review_backup(output_path: Path, backup_id: str) -> dict:
-    """Return a semantic diff with immutable tokens for the selected backup."""
+    """Review a snapshot even if HVLS-managed production was deleted."""
     backup_path = _get_backup(output_path, backup_id)
     candidate = _read_yaml(backup_path)
-    try:
-        production = _read_yaml(output_path)
-    except BackupRestoreError as exc:
-        raise BackupRestoreError(
-            "Cannot compare: current production YAML is unavailable."
-        ) from exc
+    production = _read_optional_production(output_path)
     try:
         analysis = analyze_preview(candidate, production)
     except PreviewFormatError as exc:
         raise BackupRestoreError(f"Invalid backup YAML: {exc}") from exc
-    if analysis["comparison"].get("status") != "ok":
-        raise BackupRestoreError("Cannot restore while production YAML is invalid.")
+    if analysis["comparison"].get("status") not in {"ok", "missing"}:
+        raise BackupRestoreError("Cannot compare current production YAML.")
     if not analysis["summary"]["total"]:
         raise BackupRestoreError("Refusing to restore an empty YAML backup.")
     return {
         "backup_id": backup_id,
         "backup_sha256": preview_digest(candidate),
-        "production_sha256": preview_digest(production),
+        "production_sha256": (
+            preview_digest(production) if production is not None else None
+        ),
+        "production_missing": production is None,
         "summary": analysis["summary"],
         "comparison": analysis["comparison"],
     }
@@ -435,7 +472,7 @@ def _compose_reviewed_restore(
 
 def prepare_backup_preview(
     output_path: Path, backup_id: str,
-    backup_sha256: str, production_sha256: str,
+    backup_sha256: str, production_sha256: str | None,
     catalog: dict,
     *,
     ignored_entities: list[str] | None = None,
@@ -449,25 +486,46 @@ def prepare_backup_preview(
     available. Its readiness is informational until the write transaction
     and recovery protocol have been implemented and tested.
     """
-    if not all(
-        isinstance(value, str) and _SHA.fullmatch(value)
-        for value in (backup_sha256, production_sha256)
+    if (
+        not isinstance(backup_sha256, str)
+        or not _SHA.fullmatch(backup_sha256)
+        or (
+            production_sha256 is not None
+            and (
+                not isinstance(production_sha256, str)
+                or not _SHA.fullmatch(production_sha256)
+            )
+        )
     ):
         raise BackupRestoreError("Invalid preview approval fingerprints.")
     review = review_backup(output_path, backup_id)
     if not hmac.compare_digest(review["backup_sha256"], backup_sha256):
         raise PreviewChangedError("Selected backup changed; review it again.")
-    if not hmac.compare_digest(
-        review["production_sha256"], production_sha256
-    ):
+    if review["production_sha256"] != production_sha256:
         raise PreviewChangedError("Production changed; review it again.")
 
     backup_content = _read_yaml(_get_backup(output_path, backup_id))
-    production = _read_yaml(output_path)
+    production = _read_optional_production(output_path)
     if preview_digest(backup_content) != backup_sha256:
         raise PreviewChangedError("Selected backup changed during preparation.")
-    if preview_digest(production) != production_sha256:
+    if (preview_digest(production) if production is not None else None) != (
+        production_sha256
+    ):
         raise PreviewChangedError("Production changed during preparation.")
+
+    # When YAML is missing, the live HA registry is the safe baseline for
+    # ignoring obsolete entries or preserving previously labeled entities.
+    # This is only a simulation, never mislabeled as production statistics.
+    baseline = production
+    if production is None:
+        if registries is None or not isinstance(label, str) or domains is None:
+            raise BackupRestoreError("Live HA registry required for missing YAML.")
+        request = GenerationRequest(
+            label=label, domains=domains, output_path=output_path, dry_run=True,
+        )
+        baseline = run_google_assistant_workflow(
+            request=request, registries=registries,
+        ).generation.content
 
     from .preview_compare import _entities
 
@@ -481,7 +539,10 @@ def prepare_backup_preview(
         for entity in catalog.get("entities", [])
         if isinstance(entity, dict) and isinstance(entity.get("entity_id"), str)
     }
-    original_diff = review["comparison"]
+    original_diff = (
+        analyze_preview(backup_content, baseline)["comparison"]
+        if production is None else review["comparison"]
+    )
     eligible_to_ignore = (
         set(original_diff["added"]) | set(original_diff["removed"]) |
         {row["entity_id"] for row in original_diff["modified"]}
@@ -509,7 +570,7 @@ def prepare_backup_preview(
     ):
         raise BackupRestoreError("Invalid ignored entity selection.")
     ignored = frozenset(ignored_entities)
-    content = _compose_reviewed_restore(backup_content, production, ignored)
+    content = _compose_reviewed_restore(backup_content, baseline, ignored)
     if not _entities(content):
         raise BackupRestoreError("Refusing to restore an empty configuration.")
 
@@ -588,7 +649,10 @@ def prepare_backup_preview(
         "production_path": str(output_path),
         "path": f"Backup: {backup_id}",
         "preview_sha256": preview_digest(content),
-        "production_summary": analyze_preview(production, None)["summary"],
+        "production_summary": (
+            analyze_preview(production, None)["summary"]
+            if production is not None else None
+        ),
         "label_plan": label_plan,
         "label_plan_sha256": approval,
         "projection": projection,
@@ -662,7 +726,7 @@ def restore_reviewed_backup(
     output_path: Path,
     backup_id: str,
     backup_sha256: str,
-    production_sha256: str,
+    production_sha256: str | None,
     *,
     entry_id: str,
     ownership_registry_path: Path,
@@ -670,15 +734,23 @@ def restore_reviewed_backup(
     prepared_sha256: str | None = None,
 ) -> dict:
     """Restore only an explicitly reviewed snapshot, after preserving production."""
-    if not all(isinstance(value, str) and _SHA.fullmatch(value)
-               for value in (backup_sha256, production_sha256)):
+    if (
+        not isinstance(backup_sha256, str) or not _SHA.fullmatch(backup_sha256)
+        or (
+            production_sha256 is not None
+            and (
+                not isinstance(production_sha256, str)
+                or not _SHA.fullmatch(production_sha256)
+            )
+        )
+    ):
         raise BackupRestoreError("Invalid review tokens.")
     backup_path = _get_backup(output_path, backup_id)
     candidate = _read_yaml(backup_path)
     if not hmac.compare_digest(preview_digest(candidate), backup_sha256):
         raise PreviewChangedError("Selected backup changed since the review.")
     current_review = review_backup(output_path, backup_id)
-    if not hmac.compare_digest(current_review["production_sha256"], production_sha256):
+    if current_review["production_sha256"] != production_sha256:
         raise PreviewChangedError("Production changed since the review.")
     # The server supplies only a freshly recomputed proposal. Never accept
     # mismatched partial content or a forged target fingerprint.
@@ -709,7 +781,13 @@ def restore_reviewed_backup(
     ownership = evaluate_registered_output(
         output_path, entry_id, ownership_registry_path,
     )
-    if ownership.status != "managed" or not ownership.write_allowed:
+    missing_managed = (
+        production_sha256 is None
+        and ownership.reason_code == "managed_output_missing"
+    )
+    if not missing_managed and (
+        ownership.status != "managed" or not ownership.write_allowed
+    ):
         raise BackupRestoreError(
             "Restore ownership verification failed before creating the hold"
         )
@@ -718,28 +796,38 @@ def restore_reviewed_backup(
     create_guard(
         ownership_registry_path,
         entry_id=entry_id, output_path=output_path,
-        backup_id=backup_id, original_sha256=production_sha256,
+        backup_id=backup_id,
+        original_sha256=production_sha256 or preview_digest(""),
         restored_sha256=target_sha256,
     )
-    # The supported HA endpoints serialize restoration and generation via
-    # the shared HA workflow lock. Recheck once more after installing the hold
-    # before invoking the existing atomic writer.
+    # The shared HA workflow lock serializes restores with other operations.
+    # A missing-file recovery creates exclusively and preserves the guard
+    # until labels and YAML have been reconciled.
     validate_production_unchanged(output_path, production_sha256)
     try:
-        result = write_owned_output(
-            output_path=output_path,
-            content=target,
-            entry_id=entry_id,
-            ownership_registry_path=ownership_registry_path,
-            backup_directory=_backup_directory(output_path),
-            restore_mode=True,
-        )
+        if missing_managed:
+            result = rebuild_missing_owned_output(
+                output_path=output_path,
+                content=target,
+                entry_id=entry_id,
+                ownership_registry_path=ownership_registry_path,
+                restore_backup_id=backup_id,
+            )
+        else:
+            result = write_owned_output(
+                output_path=output_path,
+                content=target,
+                entry_id=entry_id,
+                ownership_registry_path=ownership_registry_path,
+                backup_directory=_backup_directory(output_path),
+                restore_mode=True,
+            )
     except (FileWriterError, ValueError) as exc:
         raise BackupRestoreError(
             f"Restore ownership authorization failed: {exc}"
         ) from exc
 
-    if result.backup_path is None:
+    if result.backup_path is None and not missing_managed:
         raise BackupRestoreError(
             "Restore safety backup was not created."
         )
@@ -747,7 +835,9 @@ def restore_reviewed_backup(
     return {
         "restored": True,
         "backup_id": backup_id,
-        "safety_backup": result.backup_path.name,
+        "safety_backup": (
+            result.backup_path.name if result.backup_path else None
+        ),
         "bytes_written": result.bytes_written,
         "reconciliation_required": True,
     }

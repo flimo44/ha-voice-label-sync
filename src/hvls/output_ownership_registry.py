@@ -212,6 +212,50 @@ class OwnershipRegistry:
         self._save(data)
 
     @_serialized_mutation
+    def transfer_inactive_owner(
+        self, *, previous_entry_id: str, entry_id: str,
+        output_path: str, sha256: str, previous_sha256: str,
+        expected_revision: int,
+    ) -> None:
+        """Reassign ownership after separate authorized, backup-first review.
+
+        The previous owner's recorded digest may differ from the current
+        file: this is valid ONLY after the caller separately inspected the
+        current YAML and explicitly approved the changed-content scenario.
+        This method changes ONLY durable ownership metadata.
+        """
+        self._validate_entry(previous_entry_id, output_path)
+        self._validate_entry(entry_id, output_path)
+        self._validate_sha(sha256)
+        self._validate_sha(previous_sha256)
+        if previous_entry_id == entry_id:
+            raise ValueError("Transfer must change owner")
+        if type(expected_revision) is not int or expected_revision < 0:
+            raise ValueError("Invalid ownership revision")
+
+        data = self._load()
+        if data["revision"] != expected_revision:
+            raise ValueError("Ownership record changed since approval")
+        records = data["records"]
+        previous = records.get(previous_entry_id)
+        if (
+            previous is None or previous.get("state") != "managed"
+            or previous.get("output_path") != output_path
+            or previous.get("sha256") != previous_sha256
+            or entry_id in records
+        ):
+            raise ValueError("Previous ownership state cannot be transferred")
+        self._ensure_path_not_claimed(records, previous_entry_id, output_path)
+        # No pending or duplicate ownership may be reassigned.
+        del records[previous_entry_id]
+        records[entry_id] = {
+            "output_path": output_path,
+            "sha256": sha256,
+            "state": "managed",
+        }
+        self._save(data)
+
+    @_serialized_mutation
     def begin_create(
         self,
         *,

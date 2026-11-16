@@ -16,17 +16,17 @@ const HVLS_TRANSLATIONS = {
     migrationGuideTitle: "Identifions votre situation",
     migrationGuideStepIdentify: "Étape 1 — Identifiez votre situation",
     migrationGuideStepVerify: "Étape 2 sur 2 — Vérifiez les points indiqués",
-    assistantProvenanceStepVerify: "Étape 2 sur 3 — Vérifiez le fichier YAML",
+    assistantProvenanceStepVerify: "Vérifiez le fichier YAML à reprendre",
     migrationAdvancedTitle: "Outils de diagnostic et de migration (avancé)",
     migrationRecoveryAttention: "Une opération antérieure nécessite une vérification. Ouvrez les outils avancés avant de continuer.",
     migrationGuideDetected: "Aucune déclaration google_assistant: détectée. Cela n'empêche pas HVLS de gérer et générer le fichier d'entités.",
     migrationGuideCandidate: "Un fichier google_assistant_entities.yaml existe. Vous pouvez le reprendre pour initialiser vos labels HVLS, même sans connexion Google Assistant.",
     migrationGuideNoCandidate: "Aucun fichier google_assistant_entities.yaml habituel n'a été détecté. D'autres sources peuvent néanmoins exister.",
     migrationGuideQuestion: "Comment souhaitez-vous démarrer HVLS ?",
-    migrationGuideNew: "Partir d'une sélection vide",
+    migrationGuideNew: "Choisir mes entités dans HA",
     migrationGuideExisting: "Reprendre un fichier d'entités",
     migrationGuideUnsure: "Choisir un autre fichier",
-    migrationGuideNextNew: "Parcours nouvelle configuration choisi pour cet écran. Avant toute génération, vérifiez les fichiers déjà présents. Rien n'a été créé ni écrasé.",
+    migrationGuideNextNew: "Choisissez les entités dans Gestion des entités HVLS. Les étiquettes déjà présentes sont conservées. Le Preview reste obligatoire avant toute modification.",
     migrationGuideNextExisting: "Vérifiez le fichier d'entités, puis examinez les labels à reprendre. Aucune connexion Google Assistant n'est requise.",
     migrationGuideNextUnsure: "Indiquez le chemin relatif du fichier YAML à reprendre, puis vérifiez son contenu.",
     migrationGuideAwaitChoice: "Choisissez : reprendre le fichier, choisir un autre fichier ou repartir de zéro.",
@@ -68,10 +68,10 @@ const HVLS_TRANSLATIONS = {
     assistantFileUnsetExplanation: "Une entrée sans champ expose n'est pas considérée comme expose: true. Son exposition éventuelle dépend d'autres réglages et n'est pas établie ici.",
     assistantFileResultsTitle: "Bilan de lecture du fichier",
     assistantAdoptTitle: "Reprendre les entités dans HVLS",
-    assistantAdoptIntro: "Vous pouvez reprendre les entités de ce fichier pour gérer vos labels et générer un Preview YAML, sans configurer Google Assistant. Le fichier d'origine reste intact.",
+    assistantAdoptIntro: "Reprise de l'ancien YAML avec les entités actuellement disponibles dans HA. D'abord sauvegarder et récupérer la gestion, puis préparer le Preview. Aucun changement sans validation.",
     assistantAdoptNoCatalog: "Le catalogue des entités Home Assistant n'est pas chargé. Actualisez la comparaison avant de poursuivre.",
     assistantAdoptRefresh: "Actualiser la comparaison des labels",
-    assistantAdoptCounts: "{ready} à ajouter · {already} déjà dans HVLS · {excluded} exclusions conservées · {review} à examiner.",
+    assistantAdoptCounts: "{total} dans l'ancien YAML · {recoverable} récupérables · {existingNew} déjà étiquetées en plus dans HA · {nextTotal} proposées au total · {missing} absentes · {ineligible} non éligible(s) · {review} à vérifier.",
     assistantAdoptReview: "Détail des entités et décisions proposées",
     assistantAdoptReasonAdd: "Ajouter le label HVLS",
     assistantAdoptReasonAlready: "Déjà dans HVLS",
@@ -86,25 +86,46 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptReviewIneligible: "Entité non éligible à la génération",
     assistantAdoptReviewUnlabeledCustom: "Sans label HVLS ; personnalisations YAML à préserver",
     assistantAdoptCustomValuesUnverified: "Nom, pièce ou alias du YAML non comparés aux valeurs générées",
-    assistantAdoptLimits: "Ajout proposé uniquement pour expose: true, sans personnalisation et avec entité éligible. Les autres restent visibles sans bloquer l'ensemble.",
-    assistantAdoptAction: "Ajouter {count} label(s) HVLS",
-    assistantAdoptNone: "Aucun ajout automatique proposé. Vous pouvez toujours gérer les entités individuellement dans l'onglet Gestion des entités HVLS.",
+    assistantAdoptLimits: "Les entités absentes ou non éligibles seront supprimées du nouveau YAML uniquement. Le Preview montrera aussi les changements de noms, pièces et alias : vérifiez-les avant validation.",
+    assistantAdoptAction: "Préparer le Preview de reprise ({count} entités)",
+    assistantAdoptNone: "Aucune entité récupérable : impossible de préparer un nouveau YAML.",
     assistantTakeoverTitle: "Confier le fichier existant à HVLS",
-    assistantTakeoverIntro: "Si ce fichier est le fichier de production configuré, HVLS peut le sauvegarder puis enregistrer sa prise en charge, sans réécrire son contenu. Les différences avec le Preview restent soumises à un Apply distinct.",
+    migrationChangeChoice: "Changer de méthode (facultatif)",
+    importPreviewDanger: "ATTENTION : ce Preview ordinaire est généré à partir des étiquettes HA actuelles, ce n'est PAS une reprise du fichier existant. {count} entités sur {total} seraient supprimées du YAML. Ne l'appliquez pas avant d'avoir terminé la reprise dans l'Assistant.",
+    importPreviewReturn: "Retourner à l'Assistant",
+    assistantReinstallTitle: "Récupérer le fichier après réinstallation",
+    assistantReinstallIntro: "L'ancienne configuration sera analysée avec les entités actuelles de HA. HVLS sauvegarde le fichier avant de récupérer sa gestion. Ensuite, validez les changements dans Preview.",
+    assistantReinstallAction: "Vérifier et récupérer la gestion",
+    assistantRecoveryTakeoverConfirm: "Ancienne configuration : {total} entités.\nRécupérables : {recoverable}.\nAbsentes de HA : {missing}.\nNon éligibles : {ineligible}.\n\nCréer une sauvegarde vérifiée puis confier le fichier à HVLS ? Aucune modification du YAML ni des étiquettes à cette étape.",
+    assistantRecoveryChangedNote: "Attention : le fichier actuel diffère de celui enregistré par l'ancienne installation. La sauvegarde protège le fichier ACTUEL.\n\n",
+    assistantRecoveryReady: "Gestion récupérée après sauvegarde vérifiée. Préparez maintenant le Preview de reprise.",
+    assistantRecoveryPreviewPrepared: "Preview de reprise prêt. Vérifiez les suppressions et les modifications du YAML avant d'appliquer.",
+    assistantRecoveryPreviewFailed: "Préparation du Preview refusée : {error}. Aucune étiquette ni YAML modifié.",
+    assistantRecoveryNotPrepared: "Aucun Preview de reprise préparé. Ajouts, suppressions et modifications en attente : zéro. Commencez par l’Assistant.",
+    assistantRecoveryPreviewBack: "Ouvrir l’Assistant",
+    assistantRecoveryApply: "Valider la reprise de configuration",
+    assistantRecoveryApplyConfirm: "Appliquer la reprise vérifiée ? Le YAML actuel sera sauvegardé obligatoirement avant la mise à jour des étiquettes et du fichier. Les entités retirées ne seront supprimées que du YAML.",
+    assistantRecoveryApplied: "Reprise terminée : {count} entités dans le nouveau YAML. Sauvegarde : {backup}.",
+    assistantReinstallConfirm: "Transférer la gestion de {path} vers cette installation HVLS ?\n\nLa précédente installation doit être absente de Home Assistant. Le YAML actuel et le registre seront vérifiés, puis une sauvegarde sera créée. Aucun Apply ni changement d’étiquette automatique.",
+    assistantReinstallChangedConfirm: "ATTENTION : le fichier actuel n’est PLUS celui enregistré par l’ancienne installation.\n\nAncien SHA-256 : {oldSha}\nSHA-256 actuel : {newSha}\nEntités actuelles : {entities}\nPreview ordinaire : {added} ajout(s), {removed} suppression(s), {modified} modification(s).\n\nAutoriser uniquement la récupération de gestion, après sauvegarde vérifiée ? AUCUN YAML ni label modifié. NE PAS appliquer le Preview ordinaire avant d’avoir réconcilié les entités.",
+    assistantReinstallChangedSuccess: "Gestion du fichier remplacé récupérée avec sauvegarde vérifiée : {backup}. Les entités et le YAML n’ont pas changé. ATTENTION : le Preview ordinaire reste différent ; ne l’appliquez pas avant une reprise contrôlée des entités.",
+
+    assistantTakeoverIntro: "Vérifiez les entités récupérables. HVLS sauvegarde le fichier actuel puis prend en charge sa gestion. Le YAML sera actualisé uniquement après approbation du Preview.",
     assistantTakeoverAction: "Vérifier et reprendre ce fichier",
     assistantTakeoverConfirm: "Confier le fichier {path} à HVLS ?\n\nEntités actuelles : {entities} ({issues} à examiner).\nDifférences proposées par le Preview : {added} ajout(s), {removed} suppression(s), {modified} modification(s).\n\nUne sauvegarde obligatoire sera créée. Le fichier de production ne sera PAS modifié et aucun Apply ne sera lancé. Seule sa gestion future par HVLS sera autorisée.",
     assistantTakeoverSuccess: "Fichier repris par HVLS. Sauvegarde vérifiée : {backup}. Aucun Apply effectué. Examinez les différences dans Preview avant toute application.",
     assistantTakeoverFailure: "Reprise refusée ou incomplète : vérifiez le fichier, les sauvegardes et le statut de propriété, puis actualisez. Aucun Apply automatique.",
+    assistantTakeoverRegistrationFailed: "Sauvegarde créée, mais le transfert de propriété a échoué. Consultez les journaux Home Assistant (HVLS recovery) avant un nouvel essai.",
     assistantTakeoverBusy: "Vérification et sauvegarde du fichier en cours…",
     assistantAdoptConfirm: "Ajouter les labels HVLS aux {count} entités compatibles ? Le fichier YAML source et Google Assistant ne seront pas modifiés. Chaque ajout est contrôlé séparément : en cas d'échec, les ajouts déjà effectués sont conservés et signalés.",
     assistantAdoptBusy: "Ajout des labels HVLS : {done} / {total}",
     assistantAdoptDone: "{count} label(s) ajouté(s). Le YAML d'origine est conservé ; un nouveau Preview a été demandé. Vérifiez-le avant toute application.",
     assistantAdoptStopped: "{count} label(s) confirmé(s) avant interruption. Vérifiez le catalogue actualisé : une opération sans réponse peut avoir été appliquée. Aucun réessai automatique.",
-    assistantAdoptStale: "Fichier ou catalogue modifié depuis la vérification. Aucune nouvelle action : vérifiez à nouveau.",
-    assistantAdoptNeedsReview: "Un label HVLS confirme la sélection, pas l'identité des noms, pièces ou alias YAML. Les entités signalées « À examiner » ne sont pas ajoutées automatiquement.",
+    assistantAdoptStale: "Fichier ou catalogue changé depuis la vérification. Recommencez l'analyse avant de préparer un Preview.",
+    assistantAdoptNeedsReview: "Les différences entre l'ancien YAML et HA actuel apparaîtront dans le Preview. Les absentes et non éligibles ne bloquent pas les autres.",
     assistantAdoptTruncated: "Le fichier comporte trop d'entrées pour une reprise complète ; aucun ajout groupé n'est proposé.",
     assistantProvenanceAdvanced: "ⓘ Origine du fichier et recherches dans les sauvegardes (facultatif)",
-    assistantProvenanceStep: "Étape 3 sur 3 — Comprendre l'origine du fichier",
+    assistantProvenanceStep: "Origine du fichier (facultatif)",
     assistantProvenanceQuestion: "À votre connaissance, d'où vient ce fichier ?",
     assistantProvenanceOld: "Il appartenait à une ancienne configuration Google Assistant",
     assistantProvenanceUnknown: "Je ne connais pas son origine",
@@ -305,6 +326,9 @@ const HVLS_TRANSLATIONS = {
     backupCleanupDone: "Nettoyage effectué : {count} sauvegarde(s) supprimée(s).",
     backupCleanupFailed: "Nettoyage impossible : {error}. Actualisez la liste et réexaminez le plan.",
     backupReviewing: "Comparaison avec la production…",
+    backupMissingReview: "Le fichier de production est absent. Sauvegarde sélectionnée : {count} entités. Vous pouvez la préparer dans le Preview, puis examiner les entités et les étiquettes avant validation.",
+    backupMissingPreview: "La production est absente. Cette sauvegarde propose {count} entités. Les conflits avec les étiquettes actuelles doivent être résolus avant de recréer le YAML.",
+    backupMissingNoSafety: "Aucune (le fichier de production était absent)",
     backupReviewFailed: "Comparaison impossible : {error}",
     backupLoadFailed: "Chargement impossible : {error}",
     backupRestore: "Préparer cette sauvegarde dans le Preview",
@@ -408,6 +432,10 @@ const HVLS_TRANSLATIONS = {
     reasonCategoryFull: "Entité de configuration ou de diagnostic",
     metricEntities: "Entités en production",
     productionStatsUnavailable: "Statistiques de production indisponibles : fichier absent, illisible ou invalide.",
+    initialLabelsDetected: "{count} entités étiquetées HVLS détectées dans Home Assistant. Vous pouvez créer votre premier YAML à partir de cette sélection.",
+    initialLabelsPreview: "Préparer le Preview initial ({count} entités)",
+    initialPendingPreview: "Voir le Preview en attente ({count} modification(s))",
+    initialYamlPreview: "Première configuration : {count} entités proposées depuis les étiquettes HA. Le YAML sera créé uniquement après validation.",
     productionRemoval: "Suppression prévue dans le Preview : entité encore présente en production",
     metricRooms: "Pièces",
     byDomain: "Par domaine",
@@ -464,6 +492,12 @@ const HVLS_TRANSLATIONS = {
     applyReasonOutputPathMismatch: "Le chemin de sortie ne correspond plus au chemin enregistré par HVLS.",
     applyReasonPendingOperation: "Une opération HVLS est incomplète. Une reprise contrôlée est nécessaire avant Apply.",
     applyReasonManagedOutputMissing: "Le fichier précédemment géré par HVLS est introuvable.",
+    missingRebuildAction: "Reconstruire le fichier YAML",
+    missingRebuildReview: "Le fichier de production géré par HVLS a disparu. {count} entités peuvent être reconstruites à partir des étiquettes HA actuelles. Contrôlez le YAML avant de confirmer.",
+    missingRebuildConfirm: "Le fichier de production HVLS a disparu. Le recréer à partir du Preview vérifié et des étiquettes HA actuelles ? Aucun label ne sera modifié. Les sauvegardes existantes seront conservées. Si le fichier réapparaît, cette opération sera refusée.",
+    missingRebuildApplied: "Fichier YAML reconstruit : {path} — {bytes} octets écrits. Étiquettes HA inchangées.",
+    missingRebuildBackups: "Examiner les sauvegardes",
+    missingRebuildDetected: "Fichier de production HVLS manquant. Vous pouvez restaurer une sauvegarde ou le reconstruire depuis les {count} entités étiquetées dans HA, après contrôle du Preview.",
     applyReasonOutputChanged: "Le fichier géré par HVLS a été modifié depuis son dernier contrôle SHA-256.",
     applyReasonNotConfigured: "HVLS n'est pas encore configuré.",
     applyVerificationUnavailable: "Impossible de valider Apply : informations de sécurité manquantes ou incohérentes. Actualisez le Preview.",
@@ -489,6 +523,8 @@ const HVLS_TRANSLATIONS = {
     absentValue: "(absent)",
     showPreviewYaml: "Afficher le YAML du Preview",
     changesProposed: "Changements proposés à Google Assistant",
+    recoveryDiffTitle: "Différences entre l'ancien et le nouveau YAML",
+    recoveryDiffSummary: "Ancien fichier : {before} entités → Nouveau fichier proposé : {after} entités.",
     changesIntro: "Vérifiez les différences avant d’appliquer la configuration.",
     noChanges: "Aucun changement d’entité à appliquer.",
     removalNote: "Retirer une entité ici ne la supprime pas de Home Assistant : seule sa configuration Google Assistant change.",
@@ -513,17 +549,17 @@ const HVLS_TRANSLATIONS = {
     migrationGuideTitle: "Let's identify your situation",
     migrationGuideStepIdentify: "Step 1 — Identify your situation",
     migrationGuideStepVerify: "Step 2 of 2 — Review the recommended checks",
-    assistantProvenanceStepVerify: "Step 2 of 3 — Inspect the YAML file",
+    assistantProvenanceStepVerify: "Inspect the YAML file you want to reuse",
     migrationAdvancedTitle: "Diagnostics and migration tools (advanced)",
     migrationRecoveryAttention: "A previous operation needs review. Open the advanced tools before continuing.",
     migrationGuideDetected: "No google_assistant: declaration detected. This does not prevent HVLS from managing and generating an entity YAML file.",
     migrationGuideCandidate: "A google_assistant_entities.yaml file exists. You can reuse it to initialize HVLS labels, even without a Google Assistant connection.",
     migrationGuideNoCandidate: "No usual google_assistant_entities.yaml file was detected. Other sources may still exist.",
     migrationGuideQuestion: "How would you like to start using HVLS?",
-    migrationGuideNew: "Start with an empty selection",
+    migrationGuideNew: "Select my entities in HA",
     migrationGuideExisting: "Reuse an existing entity file",
     migrationGuideUnsure: "Choose another file",
-    migrationGuideNextNew: "New setup selected for this screen. Check any existing files before generating configuration. Nothing has been created or overwritten.",
+    migrationGuideNextNew: "Select entities under Manage HVLS entities. Existing labels remain unchanged. Preview approval is still required before any write.",
     migrationGuideNextExisting: "Inspect the entity file, then review the labels to import. No Google Assistant connection is needed.",
     migrationGuideNextUnsure: "Enter the relative path of the YAML file to reuse, then inspect it.",
     migrationGuideAwaitChoice: "Choose whether to reuse this file, select another file or start fresh.",
@@ -565,10 +601,10 @@ const HVLS_TRANSLATIONS = {
     assistantFileUnsetExplanation: "An entry without expose is not treated as expose: true. Any exposure depends on other settings and is not established here.",
     assistantFileResultsTitle: "File inspection summary",
     assistantAdoptTitle: "Reuse entities in HVLS",
-    assistantAdoptIntro: "Use entities from this file to manage labels and generate a YAML Preview without configuring Google Assistant. The original file stays unchanged.",
+    assistantAdoptIntro: "Recover the previous YAML using entities currently available in HA. First back up and take ownership, then prepare the Preview. No changes without approval.",
     assistantAdoptNoCatalog: "Home Assistant entity catalog is not loaded. Refresh the comparison to continue.",
     assistantAdoptRefresh: "Refresh label comparison",
-    assistantAdoptCounts: "{ready} to add · {already} already in HVLS · {excluded} exclusions kept · {review} need review.",
+    assistantAdoptCounts: "{total} in old YAML · {recoverable} recoverable · {existingNew} more already labeled in HA · {nextTotal} proposed total · {missing} missing · {ineligible} ineligible · {review} to review.",
     assistantAdoptReview: "Entity details and suggested decisions",
     assistantAdoptReasonAdd: "Add HVLS label",
     assistantAdoptReasonAlready: "Already in HVLS",
@@ -583,25 +619,46 @@ const HVLS_TRANSLATIONS = {
     assistantAdoptReviewIneligible: "Entity ineligible for generation",
     assistantAdoptReviewUnlabeledCustom: "No HVLS label; preserve YAML customizations",
     assistantAdoptCustomValuesUnverified: "YAML name, room or aliases not compared to generated values",
-    assistantAdoptLimits: "Only explicit expose: true entries with no customizations and eligible HA entities are suggested for label addition. Other entries remain visible.",
-    assistantAdoptAction: "Add {count} HVLS label(s)",
-    assistantAdoptNone: "No automatic additions suggested. You can still manage each entity in the HVLS Entity management tab.",
+    assistantAdoptLimits: "Missing or ineligible entities will be removed from the new YAML only. Preview also shows changes to names, rooms and aliases: review these before approval.",
+    assistantAdoptAction: "Prepare recovery Preview ({count} entities)",
+    assistantAdoptNone: "No recoverable entities: cannot prepare a new YAML.",
     assistantTakeoverTitle: "Let HVLS manage the existing YAML",
-    assistantTakeoverIntro: "If this is the configured production YAML, HVLS can back it up and register its ownership without rewriting its contents. Preview differences still require a separate Apply.",
+    migrationChangeChoice: "Change setup method (optional)",
+    importPreviewDanger: "WARNING: this ordinary Preview uses the current HA labels; it is NOT an import of the existing YAML. {count} of {total} entities would be removed from YAML. Do not Apply until you have completed the Assistant recovery.",
+    importPreviewReturn: "Return to Assistant",
+    assistantReinstallTitle: "Recover YAML management after reinstalling",
+    assistantReinstallIntro: "The old configuration is analyzed against current HA entities. HVLS backs up the file before taking ownership. Review the changes in Preview afterward.",
+    assistantReinstallAction: "Verify and recover management",
+    assistantRecoveryTakeoverConfirm: "Previous YAML: {total} entities.\nRecoverable: {recoverable}.\nMissing in HA: {missing}.\nIneligible: {ineligible}.\n\nCreate a verified backup and let HVLS manage this file? No YAML or labels change at this step.",
+    assistantRecoveryChangedNote: "Warning: the current file differs from the previous installation's recorded file. The backup protects the CURRENT file.\n\n",
+    assistantRecoveryReady: "Management recovered after a verified backup. Now prepare the recovery Preview.",
+    assistantRecoveryPreviewPrepared: "Recovery Preview prepared. Review YAML removals and modifications before applying.",
+    assistantRecoveryPreviewFailed: "Preview preparation refused: {error}. No YAML or labels changed.",
+    assistantRecoveryNotPrepared: "No recovery Preview prepared yet. Pending additions, removals and modifications: zero. Start from Assistant.",
+    assistantRecoveryPreviewBack: "Open Assistant",
+    assistantRecoveryApply: "Apply recovered configuration",
+    assistantRecoveryApplyConfirm: "Apply the reviewed recovery? A mandatory backup of the current YAML will be made before updating labels and the file. Retired entities are removed from YAML only.",
+    assistantRecoveryApplied: "Recovery complete: {count} entities in new YAML. Backup: {backup}.",
+    assistantReinstallConfirm: "Transfer management of {path} to this HVLS installation?\n\nThe previous installation must be absent from Home Assistant. Both YAML and registry will be verified and a backup will be made. No automatic Apply or HA label changes.",
+    assistantReinstallChangedConfirm: "WARNING: the current file is DIFFERENT from the one registered by the old installation.\n\nPrevious SHA-256: {oldSha}\nCurrent SHA-256: {newSha}\nCurrent entities: {entities}\nOrdinary Preview: {added} added, {removed} removed, {modified} changed.\n\nAuthorize ONLY a management takeover after a verified backup? No YAML or labels will be modified. DO NOT apply the ordinary Preview until the entities have been reconciled.",
+    assistantReinstallChangedSuccess: "Management of the replaced YAML recovered with verified backup: {backup}. No entities or YAML changed. WARNING: ordinary Preview differs; do not apply it until entity reconciliation.",
+
+    assistantTakeoverIntro: "Check recoverable entities. HVLS backs up the file and takes ownership. YAML is updated only after Preview approval.",
     assistantTakeoverAction: "Review and take over this file",
     assistantTakeoverConfirm: "Let HVLS manage {path}?\n\nCurrent entities: {entities} ({issues} to review).\nPreview differences: {added} added, {removed} removed, {modified} modified.\n\nA mandatory backup will be created. Production will NOT be edited and no Apply will run. This only authorizes future HVLS management.",
     assistantTakeoverSuccess: "HVLS now manages this YAML. Verified backup: {backup}. No Apply performed. Review Preview differences before applying.",
     assistantTakeoverFailure: "Takeover refused or incomplete: check the YAML, backups and ownership status, then refresh. No automatic Apply.",
+    assistantTakeoverRegistrationFailed: "Sauvegarde créée, mais la propriété n’a pas été transférée. Consultez les journaux Home Assistant (HVLS recovery). Ne répétez pas la reprise avant diagnostic.",
     assistantTakeoverBusy: "Verifying and backing up existing YAML…",
     assistantAdoptConfirm: "Add HVLS labels to {count} eligible entities? Neither the source YAML nor Google Assistant will be changed. Each addition is checked independently: if one fails, earlier successful additions remain and are reported.",
     assistantAdoptBusy: "Adding HVLS labels: {done} / {total}",
     assistantAdoptDone: "{count} label(s) added. Original YAML preserved; a new Preview was requested. Review it before applying.",
     assistantAdoptStopped: "{count} label addition(s) confirmed before interruption. Check the refreshed catalog: an unanswered operation might still have succeeded. No automatic retry.",
-    assistantAdoptStale: "File or catalog changed since inspection. No new action taken: inspect it again.",
-    assistantAdoptNeedsReview: "An HVLS label confirms selection, not matching YAML name, room or alias values. Entries marked 'Requires manual review' are never added automatically.",
+    assistantAdoptStale: "File or catalog changed since inspection. Recheck before preparing a Preview.",
+    assistantAdoptNeedsReview: "Differences between old YAML and current HA appear in Preview. Missing and ineligible entities do not block the others.",
     assistantAdoptTruncated: "File contains too many entries for a complete reuse plan; no bulk label additions are suggested.",
     assistantProvenanceAdvanced: "ⓘ File origin and historical backup checks (optional)",
-    assistantProvenanceStep: "Step 3 of 3 — Understand the file's origin",
+    assistantProvenanceStep: "File origin (optional)",
     assistantProvenanceQuestion: "As far as you know, where did this file come from?",
     assistantProvenanceOld: "It belonged to a previous Google Assistant configuration",
     assistantProvenanceUnknown: "I do not know its origin",
@@ -802,6 +859,9 @@ const HVLS_TRANSLATIONS = {
     backupCleanupDone: "Cleanup complete: {count} backups deleted.",
     backupCleanupFailed: "Cleanup refused: {error}. Refresh the list and review again.",
     backupReviewing: "Comparing with production…",
+    backupMissingReview: "Production is missing. Selected backup: {count} entities. You can prepare it in Preview, then review entities and HA labels before confirming.",
+    backupMissingPreview: "Production is missing. This backup proposes {count} entities. Resolve differences with current HA labels before rebuilding the YAML.",
+    backupMissingNoSafety: "None (production file was missing)",
     backupReviewFailed: "Cannot compare: {error}",
     backupLoadFailed: "Cannot load backups: {error}",
     backupRestore: "Prepare this backup in Preview",
@@ -905,6 +965,10 @@ const HVLS_TRANSLATIONS = {
     reasonCategoryFull: "Configuration or diagnostic entity",
     metricEntities: "Production entities",
     productionStatsUnavailable: "Production statistics unavailable: file missing, unreadable or invalid.",
+    initialLabelsDetected: "{count} HVLS-labeled entities found in Home Assistant. You can create the first YAML from this selection.",
+    initialLabelsPreview: "Prepare initial Preview ({count} entities)",
+    initialPendingPreview: "Review pending Preview ({count} change(s))",
+    initialYamlPreview: "First configuration: {count} entities proposed from current HA labels. YAML will be created only after approval.",
     productionRemoval: "Pending removal in Preview: entity is still present in production",
     metricRooms: "Areas",
     byDomain: "By domain",
@@ -961,6 +1025,12 @@ const HVLS_TRANSLATIONS = {
     applyReasonOutputPathMismatch: "The output path no longer matches the path registered by HVLS.",
     applyReasonPendingOperation: "An HVLS operation is incomplete. Controlled recovery is required before Apply.",
     applyReasonManagedOutputMissing: "The previously HVLS-managed output file is missing.",
+    missingRebuildAction: "Rebuild missing YAML",
+    missingRebuildReview: "The YAML previously managed by HVLS is missing. {count} entities can be rebuilt from current HA labels. Review the YAML before confirming.",
+    missingRebuildConfirm: "The HVLS production file is missing. Recreate it from the verified Preview and current HA labels? No labels will be changed and existing backups are preserved. If the file reappears, this operation is refused.",
+    missingRebuildApplied: "YAML rebuilt: {path} — {bytes} bytes written. HA labels unchanged.",
+    missingRebuildBackups: "Review backups",
+    missingRebuildDetected: "HVLS production file is missing. You can restore a backup or rebuild from {count} entities labeled in HA, after Preview review.",
     applyReasonOutputChanged: "The HVLS-managed file has changed since its last SHA-256 verification.",
     applyReasonNotConfigured: "HVLS is not configured yet.",
     applyVerificationUnavailable: "Cannot validate Apply: missing or inconsistent security information. Refresh the Preview.",
@@ -986,6 +1056,8 @@ const HVLS_TRANSLATIONS = {
     absentValue: "(absent)",
     showPreviewYaml: "Show Preview YAML",
     changesProposed: "Proposed Google Assistant changes",
+    recoveryDiffTitle: "Differences between old and new YAML",
+    recoveryDiffSummary: "Old file: {before} entities → Proposed new file: {after} entities.",
     changesIntro: "Review the differences before applying the configuration.",
     noChanges: "No entity changes to apply.",
     removalNote: "Removing an entity here does not delete it from Home Assistant: only its Google Assistant configuration changes.",
@@ -1307,6 +1379,12 @@ class HVLSPreviewPanel extends HTMLElement {
       if (loadId !== this._loadId || (this._applying && !afterApply)) return;
       this._previewPath = result.path;
       this._previewContent = result.content;
+      // The setup choice is guidance only; it never authorizes a write.
+      this._onboardingMode = ["new", "existing"].includes(result.onboarding_mode)
+        ? result.onboarding_mode : null;
+      this._recoveryPending = result.recovery_pending === true;
+      this._ownershipManaged = result.ownership?.status === "managed" &&
+        result.ownership?.write_allowed === true;
       const validHash = value =>
         typeof value === "string" &&
         /^[0-9a-f]{64}$/.test(value);
@@ -1353,11 +1431,22 @@ class HVLSPreviewPanel extends HTMLElement {
         ownershipConsistent &&
         validHash(result.preview_sha256);
       const canReview = allowedBySafety && !hasNoChanges;
+      const canRebuildMissing =
+        result.available === true &&
+        result.error == null &&
+        validHash(result.preview_sha256) &&
+        result.production_sha256 === null &&
+        result.comparison?.status === "missing" &&
+        Number.isSafeInteger(result.summary?.total) &&
+        result.summary.total > 0 &&
+        ownership?.status === "missing" &&
+        ownership?.reason_code === "managed_output_missing";
 
-      this._review = canReview
+      this._review = (canReview || canRebuildMissing) && !this._recoveryPending
         ? {
             preview_sha256: result.preview_sha256,
             production_sha256: result.production_sha256,
+            ...(canRebuildMissing ? {rebuild_missing: true} : {}),
           }
         : null;
 
@@ -1371,6 +1460,7 @@ class HVLSPreviewPanel extends HTMLElement {
       const shouldExplain =
         result.available === true &&
         !canReview &&
+        !canRebuildMissing &&
         (
           result.can_apply === true ||
           ownership?.write_allowed === false
@@ -1392,8 +1482,25 @@ class HVLSPreviewPanel extends HTMLElement {
 
       this._updateApplyButton();
       this._renderAssistantAdoption();
-      this._setContent(result.content || "");
+      this._setContent(this._recoveryPending ? "" : result.content || "");
+      if (this._recoveryPending) this._previewContent = "";
       this._renderAnalysis(result);
+      // Guide only the initial panel opening. Do not override a user-selected tab.
+      if (!this._onboardingAutoNavigated && this._initialized &&
+          this.querySelector('.hvls-tab[data-tab="summary"]')?.getAttribute(
+            "aria-selected"
+          ) === "true") {
+        const reason = result.ownership?.reason_code;
+        const target = this._onboardingMode === "existing" &&
+          ["unmanaged_output", "owned_by_other_installation"].includes(reason)
+            ? "migration"
+            : this._onboardingMode === "new" && reason === "new_output"
+              ? "entities" : null;
+        if (target) {
+          this._onboardingAutoNavigated = true;
+          this._activateTab(target);
+        }
+      }
       if (!result.available) {
         this._setStatus(result.error || this._t("previewMissing"));
       } else if (result.error) {
@@ -1419,8 +1526,9 @@ class HVLSPreviewPanel extends HTMLElement {
         staged?.mode === "restore_preview" &&
         staged.projection?.ready === true &&
         staged.label_plan?.review?.length === 0 &&
-        staged.comparison?.status === "ok" &&
+        ["ok", "missing"].includes(staged.comparison?.status) &&
         (
+          staged.comparison?.status === "missing" ||
           staged.comparison?.identical_entities === false ||
           staged.comparison?.identical_text === false ||
           (staged.label_plan?.add?.length || 0) > 0 ||
@@ -1431,7 +1539,7 @@ class HVLSPreviewPanel extends HTMLElement {
         staged?.mode === "label_preview" &&
         staged.projection?.ready === true &&
         Array.isArray(staged.changes) &&
-        staged.changes.length > 0 &&
+        (staged.recovery === true || staged.changes.length > 0) &&
         staged.label_plan?.review?.length === 0 &&
         ["ok", "missing"].includes(staged.comparison?.status) &&
         /^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "");
@@ -1441,8 +1549,10 @@ class HVLSPreviewPanel extends HTMLElement {
         this._generating === true || this._refreshing === true ||
         this._entityWritePending === true;
       button.textContent = staged?.mode === "label_preview"
-        ? this._t("manualLabelApply")
-        : staged ? this._t("backupPreviewApply") : this._t("apply");
+        ? this._t(staged.recovery === true ? "assistantRecoveryApply" : "manualLabelApply")
+        : staged ? this._t("backupPreviewApply")
+        : this._review?.rebuild_missing === true
+          ? this._t("missingRebuildAction") : this._t("apply");
     }
     const cancel = this.querySelector("#cancelPreview");
     if (cancel) {
@@ -1506,6 +1616,12 @@ class HVLSPreviewPanel extends HTMLElement {
 
   async _generatePreview(fromRefresh = false) {
     if (!this._hass || this._generating || this._applying || this._restoring || (this._refreshing && !fromRefresh)) return;
+    // A normal generation uses only SAVED HA labels. It must not discard
+    // a separately reviewed, not-yet-applied change in the label Preview.
+    if (this._stagedRestore?.mode === "label_preview") {
+      this._activateTab("preview");
+      return;
+    }
 
     this._generating = true;
     this._loadId = (this._loadId || 0) + 1;
@@ -1603,7 +1719,7 @@ class HVLSPreviewPanel extends HTMLElement {
       });
       if (this._loadId !== requestId) return;
       if (result?.mode !== "restore_preview" ||
-          result?.comparison?.status !== "ok" ||
+          !["ok", "missing"].includes(result?.comparison?.status) ||
           !Array.isArray(result.ignored_entities) ||
           !result.label_plan || !result.projection ||
           !/^[0-9a-f]{64}$/.test(result.label_plan_sha256 || "")) {
@@ -1641,8 +1757,9 @@ class HVLSPreviewPanel extends HTMLElement {
         this._refreshing || this._generating || this._entityWritePending ||
         staged.projection?.ready !== true ||
         staged.label_plan?.review?.length !== 0 ||
-        (staged.comparison?.identical_text === true &&
-          !(staged.label_plan?.add?.length || staged.label_plan?.remove?.length)) ||
+        (staged.comparison?.status === "ok" &&
+         staged.comparison?.identical_text === true &&
+         !(staged.label_plan?.add?.length || staged.label_plan?.remove?.length)) ||
         !/^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "")) return;
     if (!window.confirm(this._t("backupPreviewConfirm"))) return;
 
@@ -1678,7 +1795,7 @@ class HVLSPreviewPanel extends HTMLElement {
         entities: applied.yaml_entities,
         added: applied.label_additions,
         removed: applied.label_removals,
-        backup: applied.safety_backup,
+        backup: applied.safety_backup || this._t("backupMissingNoSafety"),
       });
     } catch (error) {
       // The server may have changed production before a partial failure:
@@ -1690,7 +1807,7 @@ class HVLSPreviewPanel extends HTMLElement {
           entities: applied.yaml_entities,
           added: applied.label_additions,
           removed: applied.label_removals,
-          backup: applied.safety_backup,
+          backup: applied.safety_backup || this._t("backupMissingNoSafety"),
         });
       } else {
         this._setStatusKey("backupPreviewApplyFailed", {
@@ -1713,7 +1830,9 @@ class HVLSPreviewPanel extends HTMLElement {
     const review = {...this._review};
 
     if (!window.confirm(
-      this._t("applyConfirm") + "\n\n" + this._t("applyWarning")
+      review.rebuild_missing === true
+        ? this._t("missingRebuildConfirm")
+        : this._t("applyConfirm") + "\n\n" + this._t("applyWarning")
     )) return;
 
     this._applying = true;
@@ -1738,10 +1857,13 @@ class HVLSPreviewPanel extends HTMLElement {
       this._backupRestoreCompleted = false;
       this._renderRestoreWarning();
       await this._loadPreview(true);
-      this._setStatusKey("previewApplied", {
-        path: result.output_path, bytes: result.bytes_written,
-        backupPath: result.backup_path || null, backup: ""
-      });
+      this._setStatusKey(
+        review.rebuild_missing === true ? "missingRebuildApplied" : "previewApplied",
+        {
+          path: result.output_path, bytes: result.bytes_written,
+          backupPath: result.backup_path || null, backup: "",
+        },
+      );
     } catch (error) {
       this._setStatusKey("previewApplyFailed", {error: error.message || String(error)});
     } finally {
@@ -1880,8 +2002,33 @@ class HVLSPreviewPanel extends HTMLElement {
     panel.replaceChildren();
 
     const heading = document.createElement("h2");
-    heading.textContent = this._t("changesProposed");
+    const isRecoveryPreview = this._stagedRestore?.recovery === true;
+    heading.textContent = this._t(
+      isRecoveryPreview ? "recoveryDiffTitle" : "changesProposed"
+    );
     panel.appendChild(heading);
+
+    // An ordinary generation based on old labels is NOT a recovery plan.
+    // Before the first reviewed recovery, show no pending operations.
+    if (this._recoveryPending && this._stagedRestore?.recovery !== true) {
+      const counters = document.createElement("div");
+      counters.className = "metrics";
+      for (const key of ["added", "removed", "modified"]) {
+        this._addMetric(counters, this._t(key), 0);
+      }
+      panel.appendChild(counters);
+      const note = document.createElement("p");
+      note.className = "diagnostic-note";
+      note.textContent = this._t("assistantRecoveryNotPrepared");
+      panel.appendChild(note);
+      const back = document.createElement("button");
+      back.type = "button";
+      back.className = "secondary";
+      back.textContent = this._t("assistantRecoveryPreviewBack");
+      back.addEventListener("click", () => this._activateTab("migration"));
+      panel.appendChild(back);
+      return;
+    }
 
     if (!result.available || !result.summary) {
       const note = document.createElement("p");
@@ -1895,19 +2042,69 @@ class HVLSPreviewPanel extends HTMLElement {
     if (comparison.status !== "ok") {
       const note = document.createElement("p");
       note.className = "diagnostic-note";
+      const managedMissing = result.ownership?.reason_code ===
+        "managed_output_missing";
+      const missingBackup = this._stagedRestore?.mode === "restore_preview" &&
+        this._stagedRestore.production_missing === true;
       note.textContent = comparison.status === "missing"
-        ? this._t("firstProduction")
+        ? missingBackup
+          ? this._tf("backupMissingPreview", {count: result.summary.total})
+          : managedMissing
+          ? this._tf("missingRebuildReview", {count: result.summary.total})
+          : this._onboardingMode === "new" && result.summary.total > 0
+            ? this._tf("initialYamlPreview", {count: result.summary.total})
+            : this._t("firstProduction")
         : this._tf("comparisonFailed", {
             status: comparison.status,
             reason: comparison.reason || this._t("unreadableFile")
           });
       panel.appendChild(note);
+      if (managedMissing) {
+        const backups = document.createElement("button");
+        backups.type = "button";
+        backups.className = "secondary";
+        backups.textContent = this._t("missingRebuildBackups");
+        backups.addEventListener("click", () => this._activateTab("backups"));
+        panel.appendChild(backups);
+      }
       return;
+    }
+
+    if (isRecoveryPreview &&
+        Number.isSafeInteger(result.production_summary?.total) &&
+        Number.isSafeInteger(result.summary.total)) {
+      const summary = document.createElement("p");
+      summary.className = "diagnostic-note";
+      summary.textContent = this._tf("recoveryDiffSummary", {
+        before: result.production_summary.total,
+        after: result.summary.total,
+      });
+      panel.appendChild(summary);
     }
 
     const added = Array.isArray(comparison.added) ? comparison.added : [];
     const removed = Array.isArray(comparison.removed) ? comparison.removed : [];
     const modified = Array.isArray(comparison.modified) ? comparison.modified : [];
+    const total = result.production_summary?.total;
+    // Prevent an ordinary label-generated Preview from looking like a
+    // successful legacy YAML import. This is only a UI warning: all
+    // existing ownership and Apply guards remain in force.
+    if (this._onboardingMode === "existing" &&
+        Number.isSafeInteger(total) && total > 0 &&
+        removed.length >= 10 && removed.length * 2 >= total) {
+      const caution = document.createElement("p");
+      caution.className = "diagnostic-note";
+      caution.setAttribute("role", "alert");
+      caution.textContent = this._tf("importPreviewDanger", {
+        count: removed.length, total,
+      });
+      const back = document.createElement("button");
+      back.type = "button";
+      back.className = "secondary";
+      back.textContent = this._t("importPreviewReturn");
+      back.addEventListener("click", () => this._activateTab("migration"));
+      panel.append(caution, back);
+    }
     const counters = document.createElement("div");
     counters.className = "metrics";
     for (const [key, count] of [
@@ -2003,6 +2200,9 @@ class HVLSPreviewPanel extends HTMLElement {
   }
 
   _productionStatus(entityId, result) {
+    if (this._recoveryPending && this._stagedRestore?.recovery !== true) {
+      return "unknown";
+    }
     const comparison = result?.comparison;
     // A missing, invalid or unreviewable comparison is not proof of
     // production presence. Do not show a green badge in that case.
@@ -2350,12 +2550,62 @@ class HVLSPreviewPanel extends HTMLElement {
       unavailable.className = "diagnostic-note";
       unavailable.textContent = this._t("productionStatsUnavailable");
       panel.appendChild(unavailable);
+      if ((this._onboardingMode === "new" ||
+           result.ownership?.reason_code === "managed_output_missing") &&
+          this._entityCatalog && !this._recoveryPending) {
+        const selected = this._entityCatalog.entities.filter(
+          entity => entity.has_label === true && entity.eligible === true
+        ).length;
+        if (selected > 0) {
+          const explanation = document.createElement("p");
+          explanation.className = "diagnostic-note";
+          explanation.textContent = this._tf(
+            result.ownership?.reason_code === "managed_output_missing"
+              ? "missingRebuildDetected" : "initialLabelsDetected",
+            {count: selected},
+          );
+          panel.appendChild(explanation);
+          const prepare = document.createElement("button");
+          prepare.type = "button";
+          prepare.className = "secondary";
+          const pending = this._stagedRestore?.mode === "label_preview"
+            ? this._stagedRestore.changes?.length || 0 : 0;
+          prepare.textContent = this._tf(
+            pending ? "initialPendingPreview" : "initialLabelsPreview",
+            {count: pending || selected},
+          );
+          prepare.disabled = this._generating || this._applying ||
+            this._entityWritePending || this._restoring;
+          prepare.addEventListener("click", async () => {
+            if (this._stagedRestore?.mode === "label_preview") {
+              this._activateTab("preview");
+              return;
+            }
+            await this._generatePreview();
+            if (this._review) this._activateTab("preview");
+          });
+          panel.appendChild(prepare);
+        }
+      }
     }
 
     const comparison = result.comparison || {status: "missing"};
     const heading = document.createElement("h2");
     heading.textContent = this._t("comparisonTitle");
     panel.appendChild(heading);
+    if (this._recoveryPending && this._stagedRestore?.recovery !== true) {
+      const counters = document.createElement("div");
+      counters.className = "metrics";
+      for (const key of ["added", "removed", "modified"]) {
+        this._addMetric(counters, this._t(key), 0);
+      }
+      panel.appendChild(counters);
+      const note = document.createElement("p");
+      note.className = "diagnostic-note";
+      note.textContent = this._t("assistantRecoveryNotPrepared");
+      panel.appendChild(note);
+      return;
+    }
     if (comparison.status !== "ok") {
       const warning = document.createElement("p");
       warning.textContent = comparison.status === "missing"
@@ -3043,14 +3293,17 @@ class HVLSPreviewPanel extends HTMLElement {
             <p id="migrationGuideDetected"></p>
             <p id="migrationGuideCandidate"></p>
             <p id="migrationGuideQuestion">${this._t("migrationGuideQuestion")}</p>
-            <div class="migration-controls">
-              <button id="migrationIntentNew" type="button" class="secondary"
-                aria-pressed="false">${this._t("migrationGuideNew")}</button>
-              <button id="migrationIntentExisting" type="button" class="secondary"
-                aria-pressed="false">${this._t("migrationGuideExisting")}</button>
-              <button id="migrationIntentUnsure" type="button" class="secondary"
-                aria-pressed="false">${this._t("migrationGuideUnsure")}</button>
-            </div>
+            <details id="migrationChoiceDetails">
+              <summary id="migrationChoiceTitle">${this._t("migrationChangeChoice")}</summary>
+              <div class="migration-controls">
+                <button id="migrationIntentNew" type="button" class="secondary"
+                  aria-pressed="false">${this._t("migrationGuideNew")}</button>
+                <button id="migrationIntentExisting" type="button" class="secondary"
+                  aria-pressed="false">${this._t("migrationGuideExisting")}</button>
+                <button id="migrationIntentUnsure" type="button" class="secondary"
+                  aria-pressed="false">${this._t("migrationGuideUnsure")}</button>
+              </div>
+            </details>
             <p id="migrationGuideNext" role="status"></p>
             <div id="assistantFileSection" hidden>
               <details id="assistantFileExamples">
@@ -3108,6 +3361,14 @@ entity_config: !include google_assistant_entities.yaml</pre>
               <p id="assistantFileSafety" class="diagnostic-note">
                 ${this._t("assistantFileSafety")}
               </p>
+                <section id="assistantTakeoverSection" hidden
+                  aria-labelledby="assistantTakeoverTitle">
+                  <h4 id="assistantTakeoverTitle"></h4>
+                  <p id="assistantTakeoverIntro" class="diagnostic-note"></p>
+                  <button id="assistantTakeoverButton" type="button"
+                    class="secondary"></button>
+                  <p id="assistantTakeoverResult" role="status"></p>
+                </section>
               <section id="assistantAdoption" hidden aria-labelledby="assistantAdoptTitle">
                 <h4 id="assistantAdoptTitle"></h4>
                 <p id="assistantAdoptIntro"></p>
@@ -3121,14 +3382,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
                 <p id="assistantAdoptNeedsReview" class="diagnostic-note"></p>
                 <button id="assistantAdoptApply" type="button" disabled></button>
                 <p id="assistantAdoptResult" role="status"></p>
-                <section id="assistantTakeoverSection" hidden
-                  aria-labelledby="assistantTakeoverTitle">
-                  <h4 id="assistantTakeoverTitle"></h4>
-                  <p id="assistantTakeoverIntro" class="diagnostic-note"></p>
-                  <button id="assistantTakeoverButton" type="button"
-                    class="secondary"></button>
-                  <p id="assistantTakeoverResult" role="status"></p>
-                </section>
+
               </section>
               <details id="assistantProvenanceAdvanced">
                 <summary id="assistantProvenanceAdvancedTitle">${this._t("assistantProvenanceAdvanced")}</summary>
@@ -3337,7 +3591,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       "click", () => this._resolveRestoreReconciliation("cancel_failed")
     );
     this.querySelector("#migrationAnalyze").addEventListener("click", () => this._loadMigrationReview());
-    this.querySelector("#migrationIntentNew").addEventListener("click", () => this._chooseMigrationIntent("new"));
+    this.querySelector("#migrationIntentNew").addEventListener("click", () => this._startNewSelection());
     this.querySelector("#migrationIntentExisting").addEventListener("click", () => this._chooseMigrationIntent("existing"));
     this.querySelector("#migrationIntentUnsure").addEventListener("click", () => this._chooseMigrationIntent("unsure"));
     this.querySelector("#assistantFilePath").addEventListener("input", event => {
@@ -3515,11 +3769,13 @@ entity_config: !include google_assistant_entities.yaml</pre>
   async _applyManualLabelPreview() {
     const stage = this._stagedRestore;
     if (!this._hass || stage?.mode !== "label_preview" ||
-        stage.projection?.ready !== true || !stage.changes?.length ||
+        stage.projection?.ready !== true ||
+        (!stage.recovery && !stage.changes?.length) ||
         !/^[0-9a-f]{64}$/.test(stage.label_plan_sha256 || "") ||
         this._entityWritePending || this._restoring || this._applying ||
         this._generating || this._refreshing) return;
-    if (!window.confirm(this._t("manualLabelConfirm"))) return;
+    if (!window.confirm(this._t(stage.recovery === true
+      ? "assistantRecoveryApplyConfirm" : "manualLabelConfirm"))) return;
 
     this._applying = true;
     this._loadId = (this._loadId || 0) + 1;
@@ -3533,21 +3789,32 @@ entity_config: !include google_assistant_entities.yaml</pre>
         preview_sha256: stage.preview_sha256,
         production_sha256: stage.production_sha256,
         label_plan_sha256: stage.label_plan_sha256,
+        recovery: stage.recovery === true,
       });
       if (applied?.applied !== true || applied?.reconciled !== true) {
         throw new Error("Unverified label-Preview Apply response");
       }
       this._manualLabelChanges = null;
       this._stagedRestore = null;
+      if (stage.recovery === true) {
+        this._assistantFileReport = null;
+        this._assistantAdoptMessage = null;
+      }
       this._backupList = null;
       await this._hass.callWS({
         type: "ha_voice_label_sync/generate_preview",
       });
       await this._loadPreview(true);
       await this._loadEntities();
-      this._setStatusKey("manualLabelApplied", {
-        added: applied.label_additions, removed: applied.label_removals,
-      });
+      if (stage.recovery === true) {
+        this._setStatusKey("assistantRecoveryApplied", {
+          count: applied.yaml_entities, backup: applied.safety_backup || "—",
+        });
+      } else {
+        this._setStatusKey("manualLabelApplied", {
+          added: applied.label_additions, removed: applied.label_removals,
+        });
+      }
     } catch (error) {
       // A partial server failure may have installed the durable guard.
       // Always discard the old approval and show the current HA state.
@@ -4157,8 +4424,24 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const restore = this.querySelector("#restoreBackup");
     if (restore) restore.textContent = this._t("backupRestore");
     const data = this._backupReview;
-    if (!data || !data.comparison || data.comparison.status !== "ok") {
+    if (!data || !data.comparison ||
+        !["ok", "missing"].includes(data.comparison.status)) {
       if (restore) restore.disabled = true;
+      return;
+    }
+    if (data.comparison.status === "missing") {
+      const note = document.createElement("p");
+      note.className = "diagnostic-note";
+      note.textContent = this._tf("backupMissingReview", {
+        count: data.summary?.total || 0,
+      });
+      container.appendChild(note);
+      if (restore) {
+        restore.disabled = Boolean(
+          this._restoring || this._applying || this._refreshing ||
+          this._generating || this._entityWritePending
+        );
+      }
       return;
     }
     const heading = document.createElement("h3");
@@ -4440,7 +4723,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const data = this._backupReview;
     if (!data || this._restoring || this._applying ||
         this._refreshing || this._generating || this._entityWritePending ||
-        data.comparison?.status !== "ok") return;
+        !["ok", "missing"].includes(data.comparison?.status)) return;
 
     this._restoring = true;
     const requestId = (this._loadId || 0) + 1;
@@ -4461,7 +4744,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
       if (this._loadId !== requestId) return;
       if (result?.mode !== "restore_preview" ||
           result?.available !== true || result?.can_apply !== false ||
-          result?.comparison?.status !== "ok" ||
+          !["ok", "missing"].includes(result?.comparison?.status) ||
           typeof result?.content !== "string" ||
           !/^[0-9a-f]{64}$/.test(result.label_plan_sha256 || "") ||
           !result.label_plan || !result.projection) {
@@ -4482,7 +4765,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._updateApplyButton();
       this._activateTab("preview");
       const diff = result.comparison;
-      const counts = {
+      const counts = diff.status === "missing" ? {
+        added: result.summary?.total || 0, removed: 0, modified: 0,
+      } : {
         added: diff.added.length, removed: diff.removed.length,
         modified: diff.modified.length,
       };
@@ -4503,6 +4788,13 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._assistantHistoryBusy = false;
     this._assistantHistoryReport = null;
     this._assistantHistoryError = false;
+  }
+
+  _startNewSelection() {
+    // Starting from the Assistant means choosing exposed entities, not
+    // clearing existing HA labels or silently creating a YAML file.
+    this._chooseMigrationIntent("new");
+    this._activateTab("entities");
   }
 
   _chooseMigrationIntent(intent) {
@@ -4762,12 +5054,25 @@ entity_config: !include google_assistant_entities.yaml</pre>
     }
   }
 
+  _assistantNeedsOutputTakeover() {
+    const diag = this._migrationReport?.diagnostic;
+    return diag?.mode === "assisted_migration" &&
+      diag?.source?.status === "resolved" &&
+      !this._assistantPackagesDetected() &&
+      ["unmanaged_output", "owned_by_other_installation"].includes(
+        this._applyBlockReasonCode
+      );
+  }
+
   _assistantAdoptionAvailable() {
     const diag = this._migrationReport?.diagnostic;
     const report = this._assistantFileReport;
-    return diag?.mode === "new_configuration" &&
-      diag?.source?.status === "resolved" &&
-      !this._assistantPackagesDetected() &&
+    return (
+      (diag?.mode === "new_configuration" &&
+        diag?.source?.status === "resolved" &&
+        !this._assistantPackagesDetected()) ||
+      this._assistantNeedsOutputTakeover()
+    ) &&
       ["existing", "unsure"].includes(this._migrationIntent) &&
       !this._assistantFileChecking && !this._assistantFileError &&
       ["parsed", "review_required"].includes(report?.status) &&
@@ -4788,10 +5093,10 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const catalog = new Map(this._entityCatalog.entities.map(
       entity => [entity.entity_id, entity]
     ));
-    const seen = new Set();
-    const rows = [];
-    const candidates = [];
-    const totals = {ready: 0, already: 0, excluded: 0, review: 0};
+    const rows = [], candidates = [], recoverable = [], seen = new Set();
+    const totals = {total: report.counts?.entries || 0,
+      ready: 0, already: 0, recoverable: 0, missing: 0,
+      ineligible: 0, excluded: 0, review: 0};
     for (const entry of report.adoption_entries) {
       if (!entry || typeof entry.entity_id !== "string" ||
           !/^[a-z0-9_]+\.[a-z0-9_]+$/.test(entry.entity_id) ||
@@ -4801,53 +5106,50 @@ entity_config: !include google_assistant_entities.yaml</pre>
           !Array.isArray(entry.reasons)) return null;
       seen.add(entry.entity_id);
       const entity = catalog.get(entry.entity_id);
-      let category = "review";
-      let reasonKey = null;
-      let noteKey = null;
+      let category = "review", reasonKey = null, noteKey = null;
       if (entry.reasons.length) {
         reasonKey = "assistantAdoptReviewYamlIssue";
-      } else if (entry.exposure === "invalid") {
-        reasonKey = "assistantAdoptReviewInvalidExposure";
-      } else if (!entity) {
-        reasonKey = "assistantAdoptReviewMissingEntity";
-      } else if (entry.exposure === "unset") {
-        reasonKey = "assistantAdoptReviewImplicitExposure";
-      } else if (entity.has_label !== true && entity.has_label !== false) {
-        reasonKey = "assistantAdoptReviewUnknownLabel";
       } else if (entry.exposure === "exclude") {
-        if (entity.has_label === false) {
-          category = "excluded";
-          if (entry.has_customizations) {
-            noteKey = "assistantAdoptCustomValuesUnverified";
-          }
-        } else {
-          reasonKey = "assistantAdoptReviewExcludedLabeled";
+        category = "excluded";
+        if (entity?.has_label === true) {
+          noteKey = "assistantAdoptReviewExcludedLabeled";
         }
+      } else if (entry.exposure !== "expose") {
+        reasonKey = entry.exposure === "unset" ?
+          "assistantAdoptReviewImplicitExposure" : "assistantAdoptReviewInvalidExposure";
+      } else if (!entity) {
+        category = "missing";
+        reasonKey = "assistantAdoptReviewMissingEntity";
       } else if (entity.eligible !== true) {
+        category = "ineligible";
         reasonKey = "assistantAdoptReviewIneligible";
       } else if (entity.has_label === true) {
-        // The label is already present. name/room are generated by HVLS too:
-        // their presence alone must not turn a labeled entity into "review".
-        // Do not claim YAML values match; the inspector never returns them.
         category = "already";
-        if (entry.has_customizations) {
-          noteKey = "assistantAdoptCustomValuesUnverified";
-        }
-      } else if (entry.has_customizations) {
-        reasonKey = "assistantAdoptReviewUnlabeledCustom";
-      } else {
+        recoverable.push(entry.entity_id);
+      } else if (entity.has_label === false) {
         category = "ready";
+        recoverable.push(entry.entity_id);
         candidates.push(entry.entity_id);
+      } else {
+        reasonKey = "assistantAdoptReviewUnknownLabel";
+      }
+      if (entry.has_customizations && ["ready", "already"].includes(category)) {
+        noteKey = "assistantAdoptCustomValuesUnverified";
       }
       totals[category] += 1;
       rows.push({entity_id: entry.entity_id, category, reasonKey, noteKey});
     }
-    // Invalid YAML keys have no safe entity ID to display, but remain
-    // local issues. Do not silently classify them as importable entries.
-    const unlisted = Math.max(0, (report.counts?.entries || 0) - rows.length);
+    const unlisted = Math.max(0, totals.total - rows.length);
     totals.review += unlisted;
+    totals.recoverable = recoverable.length;
+    const recovered = new Set(recoverable);
+    totals.existingNew = this._entityCatalog.entities.filter(
+      entity => entity.eligible === true && entity.has_label === true &&
+        !recovered.has(entity.entity_id)
+    ).length;
+    totals.nextTotal = totals.recoverable + totals.existingNew;
     return {
-      candidates, rows, totals,
+      candidates, recoverable, rows, totals,
       complete: report.adoption_entries_complete === true &&
         unlisted <= (report.counts?.entries_with_anomalies || 0),
       canWrite: Array.isArray(this._entityCatalog.label_ids) &&
@@ -4859,7 +5161,11 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const section = this.querySelector("#assistantAdoption");
     if (!section) return;
     section.hidden = !this._assistantAdoptionAvailable();
-    if (section.hidden) return;
+    if (section.hidden) {
+      const takeover = this.querySelector("#assistantTakeoverSection");
+      if (takeover) takeover.hidden = true;
+      return;
+    }
     for (const id of ["assistantAdoptTitle", "assistantAdoptIntro",
                       "assistantAdoptLimits", "assistantAdoptRefresh",
                       "assistantAdoptReview"]) {
@@ -4882,28 +5188,37 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._entityLoading === true;
     const action = this.querySelector("#assistantAdoptApply");
     if (action) {
-      action.textContent = plan?.candidates.length
-        ? this._tf("assistantAdoptAction", {count: plan.candidates.length})
+      action.textContent = plan?.recoverable.length
+        ? this._tf("assistantAdoptAction", {count: plan.totals.nextTotal})
         : this._t("assistantAdoptNone");
       action.disabled = this._assistantAdoptBusy === true ||
         this._entityWritePending === true ||
         this._entityLoading === true ||
-        !plan?.complete || !plan?.canWrite || !plan.candidates.length;
+        !plan?.complete || !plan?.canWrite || !plan.recoverable.length ||
+        !this._ownershipManaged || !this._recoveryPending;
     }
     const result = this.querySelector("#assistantAdoptResult");
     if (result) result.textContent = this._assistantAdoptMessage ||
       (plan && !plan.complete ? this._t("assistantAdoptTruncated") : "");
     const takeoverSection = this.querySelector("#assistantTakeoverSection");
     const takeoverVisible = this._assistantAdoptionAvailable() &&
-      this._applyBlockReasonCode === "unmanaged_output";
+      ["unmanaged_output", "owned_by_other_installation"].includes(
+        this._applyBlockReasonCode
+      );
+    const reinstall = this._applyBlockReasonCode ===
+      "owned_by_other_installation";
     if (takeoverSection) takeoverSection.hidden = !takeoverVisible &&
       !this._assistantTakeoverMessage;
     for (const id of ["assistantTakeoverTitle", "assistantTakeoverIntro",
                       "assistantTakeoverButton"]) {
       const node = this.querySelector("#" + id);
       if (!node) continue;
-      node.textContent = this._t(id === "assistantTakeoverButton"
-        ? "assistantTakeoverAction" : id);
+      const key = reinstall
+        ? {assistantTakeoverTitle: "assistantReinstallTitle",
+           assistantTakeoverIntro: "assistantReinstallIntro",
+           assistantTakeoverButton: "assistantReinstallAction"}[id]
+        : id === "assistantTakeoverButton" ? "assistantTakeoverAction" : id;
+      node.textContent = this._t(key);
     }
     const takeoverAction = this.querySelector("#assistantTakeoverButton");
     if (takeoverAction) takeoverAction.hidden = !takeoverVisible;
@@ -4924,6 +5239,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
           ready: "assistantAdoptReasonAdd",
           already: "assistantAdoptReasonAlready",
           excluded: "assistantAdoptReasonExclude",
+          missing: "assistantAdoptReasonReview",
+          ineligible: "assistantAdoptReasonReview",
           review: "assistantAdoptReasonReview",
         }[entry.category];
         const details = [entry.reasonKey, entry.noteKey]
@@ -4937,7 +5254,9 @@ entity_config: !include google_assistant_entities.yaml</pre>
 
   async _takeOverAssistantFile() {
     if (!this._hass || !this._assistantAdoptionAvailable() ||
-        this._applyBlockReasonCode !== "unmanaged_output" ||
+        !["unmanaged_output", "owned_by_other_installation"].includes(
+          this._applyBlockReasonCode
+        ) ||
         this._assistantTakeoverBusy || this._assistantAdoptBusy ||
         this._entityWritePending || this._generating ||
         this._applying || this._restoring || this._refreshing) return;
@@ -4960,11 +5279,16 @@ entity_config: !include google_assistant_entities.yaml</pre>
           !/^[0-9a-f]{64}$/.test(prepared.preview_sha256 || "")) {
         throw new Error("stale_source");
       }
-      const diff = prepared.changes || {};
-      const confirmed = window.confirm(this._tf("assistantTakeoverConfirm", {
-        path, entities: prepared.entities, issues: prepared.issues,
-        added: diff.added, removed: diff.removed, modified: diff.modified,
-      }));
+      const plan = this._assistantAdoptionPlan();
+      if (!plan?.complete || !plan.canWrite ||
+          prepared.entities !== plan.totals.total) {
+        throw new Error("recovery_inventory_changed");
+      }
+      const confirmed = window.confirm(
+        (prepared.recorded_sha_mismatch ?
+          this._t("assistantRecoveryChangedNote") : "") +
+        this._tf("assistantRecoveryTakeoverConfirm", plan.totals)
+      );
       if (!confirmed) {
         this._assistantTakeoverMessage = "";
         return;
@@ -4974,6 +5298,10 @@ entity_config: !include google_assistant_entities.yaml</pre>
         type: "ha_voice_label_sync/confirm_existing_output_takeover",
         path, production_sha256: prepared.production_sha256,
         preview_sha256: prepared.preview_sha256, confirmed: true,
+        previous_entry_id: prepared.previous_entry_id,
+        previous_sha256: prepared.previous_sha256,
+        ownership_revision: prepared.ownership_revision,
+        acknowledge_changed_output: prepared.recorded_sha_mismatch === true,
       });
       if (result?.taken_over !== true ||
           result?.production_unchanged !== true ||
@@ -4981,13 +5309,16 @@ entity_config: !include google_assistant_entities.yaml</pre>
           typeof result.backup_name !== "string") {
         throw new Error("unverified_result");
       }
-      this._assistantTakeoverMessage = this._tf("assistantTakeoverSuccess", {
-        backup: result.backup_name,
-      });
+      this._assistantTakeoverMessage = this._t("assistantRecoveryReady") +
+        " " + result.backup_name;
       // Refresh the server's ownership evaluation, never apply the Preview.
       await this._loadPreview();
-    } catch (_error) {
-      this._assistantTakeoverMessage = this._t("assistantTakeoverFailure");
+    } catch (error) {
+      const message = String(error?.message || "");
+      this._assistantTakeoverMessage = message.includes(
+        "ownership_registration_failed_after_backup"
+      ) ? this._t("assistantTakeoverRegistrationFailed")
+        : this._t("assistantTakeoverFailure");
       // A backup or ownership record may already exist; always reread.
       await this._loadPreview();
     } finally {
@@ -4999,94 +5330,90 @@ entity_config: !include google_assistant_entities.yaml</pre>
   async _adoptAssistantFile() {
     const plan = this._assistantAdoptionPlan();
     if (!this._hass || !plan?.complete || !plan.canWrite ||
-        !plan.candidates.length || this._assistantAdoptBusy ||
+        !plan.recoverable.length || !this._ownershipManaged ||
+        !this._recoveryPending || this._assistantAdoptBusy ||
         this._entityWritePending || this._entityLoading ||
         this._applying || this._restoring || this._generating) return;
-    const ids = [...plan.candidates];
     const path = this._assistantFilePath.trim();
     const original = this._assistantFileReport;
     const requestId = this._assistantFileRequestId || 0;
-    if (!window.confirm(this._tf("assistantAdoptConfirm", {
-      count: ids.length,
-    }))) return;
-
     this._assistantAdoptBusy = true;
     this._entityWritePending = true;
-    this._review = null;  // Label changes invalidate previous Preview approval.
-    this._loadId = (this._loadId || 0) + 1;
+    this._stagedRestore = null;
+    this._review = null;
     this._updateApplyButton();
-    let completed = 0;
-    let finished = false;
-    let writeAttempted = false;
-    this._assistantAdoptMessage = this._tf("assistantAdoptBusy", {
-      done: completed, total: ids.length,
-    });
-    this._renderAssistantAdoption();
     try {
       const fresh = await this._hass.callWS({
         type: "ha_voice_label_sync/inspect_assistant_entity_file", path,
       });
-      if (!this._assistantAdoptionAvailable() ||
-          requestId !== (this._assistantFileRequestId || 0) ||
+      if (requestId !== (this._assistantFileRequestId || 0) ||
           this._assistantFilePath.trim() !== path ||
-          fresh?.read_only !== true ||
-          fresh?.source_active_verified !== false ||
-          fresh?.migration_authorized !== false ||
-          fresh?.stage_allowed !== false ||
-          fresh?.apply_allowed !== false ||
-          fresh?.cutover_allowed !== false ||
-          !["parsed", "review_required"].includes(fresh.status) ||
-          fresh.file_sha256 !== original.file_sha256 ||
+          fresh?.file_sha256 !== original?.file_sha256 ||
           JSON.stringify(fresh.adoption_entries) !==
-            JSON.stringify(original.adoption_entries)) {
+            JSON.stringify(original?.adoption_entries)) {
         throw new Error("stale_source");
       }
-      // Revalidate current labels and eligibility before starting any write.
       if (!await this._loadEntities()) throw new Error("catalog_unavailable");
-      const verified = this._assistantAdoptionPlan();
-      if (!verified?.complete || !verified.canWrite ||
-          JSON.stringify(verified.candidates) !== JSON.stringify(ids)) {
+      const current = this._assistantAdoptionPlan();
+      if (!current?.complete || !current.canWrite ||
+          JSON.stringify(current.recoverable.slice().sort()) !==
+            JSON.stringify(plan.recoverable.slice().sort())) {
         throw new Error("stale_catalog");
       }
-      for (const entity_id of ids) {
-        if (requestId !== (this._assistantFileRequestId || 0) ||
-            this._assistantFilePath.trim() !== path) {
-          throw new Error("context_changed");
-        }
-        // Existing admin-only, per-entity, eligibility-checked HA label API.
-        // No migration staging API, source YAML write or Google cutover.
-        writeAttempted = true;
-        const response = await this._hass.callWS({
-          type: "ha_voice_label_sync/set_entity_label",
-          entity_id, enabled: true, expected_enabled: false,
-        });
-        if (response?.entity_id !== entity_id ||
-            response?.has_label !== true || response?.changed !== true) {
-          throw new Error("label_not_confirmed");
-        }
-        completed += 1;
-        this._assistantAdoptMessage = this._tf("assistantAdoptBusy", {
-          done: completed, total: ids.length,
-        });
-        this._renderAssistantAdoption();
+      // Start from the old YAML selection but use CURRENT HA eligibility.
+      // Any former entity missing from HA is removed from the NEW YAML only.
+      const desired = new Set(current.recoverable);
+      // Current HA labels are a newer explicit selection than the old YAML.
+      // A recovery may ADD the missing labels, but never silently REMOVE
+      // existing HVLS labels just because the legacy file omitted them.
+      const extraSelected = this._entityCatalog.entities.filter(
+        entity => entity.eligible === true && entity.has_label === true &&
+          !desired.has(entity.entity_id)
+      );
+      extraSelected.forEach(entity => desired.add(entity.entity_id));
+      const changes = this._entityCatalog.entities
+        .filter(entity =>
+          desired.has(entity.entity_id) && entity.has_label === false)
+        .map(entity => ({
+          entity_id: entity.entity_id, enabled: true,
+        }))
+        .sort((a, b) => a.entity_id.localeCompare(b.entity_id));
+      if (changes.length > 500) throw new Error("too_many_label_changes");
+      const preview = await this._hass.callWS({
+        type: "ha_voice_label_sync/prepare_manual_label_preview",
+        changes, recovery: true,
+      });
+      if (preview?.mode !== "label_preview" ||
+          preview.recovery !== true || preview.projection?.ready !== true ||
+          !Array.isArray(preview.changes) ||
+          !/^[a-f0-9]{64}$/.test(preview.label_plan_sha256 || "") ||
+          preview.production_sha256 !== original.file_sha256 ||
+          preview.summary?.total !== desired.size) {
+        throw new Error("recovery_preview_inconsistent");
       }
-      finished = true;
-    } catch (_error) {
-      // Fail at the first uncertain result. Never guess a rollback.
+      this._manualLabelChanges = new Map(changes.map(
+        item => [item.entity_id, item.enabled]
+      ));
+      this._stagedRestore = preview;
+      this._previewContent = preview.content;
+      this._previewPath = preview.path;
+      this._applyBlockReason = this._t("manualLabelHelp");
+      this._applyBlockReasonCode = null;
+      this._renderAnalysis(preview);
+      this._setContent(preview.content);
+      this._assistantAdoptMessage = this._t("assistantRecoveryPreviewPrepared");
+      this._activateTab("preview");
+    } catch (error) {
+      this._stagedRestore = null;
+      this._manualLabelChanges = null;
+      this._assistantAdoptMessage = this._tf("assistantRecoveryPreviewFailed", {
+        error: error?.message || String(error),
+      });
     } finally {
-      if (writeAttempted) {
-        await this._loadEntities();
-        await this._generatePreview(); // Preview only; never Apply YAML.
-      }
       this._entityWritePending = false;
       this._assistantAdoptBusy = false;
-      this._assistantAdoptMessage = this._tf(
-        finished ? "assistantAdoptDone" :
-          writeAttempted ? "assistantAdoptStopped" : "assistantAdoptStale",
-        {count: completed}
-      );
-      this._updateApplyButton();
       this._renderAssistantAdoption();
+      this._updateApplyButton();
     }
   }
 
@@ -5296,7 +5623,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const path = (this._assistantFilePath || "").trim();
     if (!this._hass || this._assistantFileChecking || !path) return;
     const relevant = this._migrationReport?.diagnostic?.mode === "new_configuration" ||
-      this._assistantPackagesDetected();
+      this._assistantPackagesDetected() || this._assistantNeedsOutputTakeover();
     if (!relevant || this._migrationIntent === "new") return;
     const requestId = (this._assistantFileRequestId || 0) + 1;
     this._assistantFileRequestId = requestId;
@@ -5340,7 +5667,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const packages = this._assistantPackagesDetected();
     const isNew = diag?.mode === "new_configuration" &&
       diag?.source?.status === "resolved";
-    const relevant = isNew || packages;
+    const needsTakeover = this._assistantNeedsOutputTakeover();
+    const relevant = isNew || packages || needsTakeover;
     const detected = this.querySelector("#assistantSourceDetected");
     if (detected) {
       const found = diag?.mode === "assisted_migration" &&
@@ -5357,6 +5685,18 @@ entity_config: !include google_assistant_entities.yaml</pre>
       }
     }
     guide.hidden = !relevant;
+    if (needsTakeover && !this._migrationIntent) {
+      // Production YAML already exists but is protected. Open the safe
+      // inspection/takeover path, not the unrelated 6404-entity audit.
+      this._migrationIntent = "existing";
+    }
+    if (relevant && !this._migrationIntent && !this._onboardingChoiceApplied &&
+        ["new", "existing"].includes(this._onboardingMode) && !packages) {
+      // Carry the initial installer choice forward rather than asking again.
+      // The user can still choose a different path explicitly at any time.
+      this._migrationIntent = this._onboardingMode;
+      this._onboardingChoiceApplied = true;
+    }
     if (!relevant) {
       this._migrationIntent = null;
       this._assistantFileReport = null;
@@ -5379,15 +5719,18 @@ entity_config: !include google_assistant_entities.yaml</pre>
       const element = this.querySelector("#" + id);
       if (element) element.textContent = this._t(key);
     }
+    const hasCandidate = diag?.source?.unreferenced_google_entity_file_present === true ||
+      (needsTakeover && (diag.source.locations || []).some(
+        location => location.path === "google_assistant_entities.yaml"
+      ));
     const candidate = this.querySelector("#migrationGuideCandidate");
     if (candidate) candidate.textContent = this._t(packages
       ? "assistantPackagesDetected"
-      : diag.source.unreferenced_google_entity_file_present === true
-        ? "migrationGuideCandidate" : "migrationGuideNoCandidate"
+      : hasCandidate ? "migrationGuideCandidate" : "migrationGuideNoCandidate"
     );
     const detectedNote = this.querySelector("#migrationGuideDetected");
-    if (detectedNote) detectedNote.textContent = packages
-      ? "" : this._t("migrationGuideDetected");
+    if (detectedNote) detectedNote.textContent = isNew && !packages
+      ? this._t("migrationGuideDetected") : "";
     const question = this.querySelector("#migrationGuideQuestion");
     const questionKey = packages ? "assistantPackagesQuestion" :
       this._migrationIntent === "new" ? "migrationGuideSelectedNew" :
@@ -5395,6 +5738,16 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._migrationIntent === "unsure" ? "migrationGuideSelectedUnsure" :
       "migrationGuideQuestion";
     if (question) question.textContent = this._t(questionKey);
+    const choiceDetails = this.querySelector("#migrationChoiceDetails");
+    if (choiceDetails) {
+      choiceDetails.hidden = packages;
+      if (!this._onboardingChoiceDisplaySet) {
+        choiceDetails.open = !["existing", "new"].includes(this._onboardingMode);
+        this._onboardingChoiceDisplaySet = true;
+      }
+    }
+    const choiceTitle = this.querySelector("#migrationChoiceTitle");
+    if (choiceTitle) choiceTitle.textContent = this._t("migrationChangeChoice");
     const intentControls = ["migrationIntentNew", "migrationIntentExisting", "migrationIntentUnsure"];
     for (const id of intentControls) {
       const element = this.querySelector("#" + id);
@@ -5424,14 +5777,12 @@ entity_config: !include google_assistant_entities.yaml</pre>
       this._migrationIntent === "unsure";
     if (fileSection) fileSection.hidden = !showFile;
     if (showFile && this._assistantFilePath == null) {
-      this._assistantFilePath = !packages &&
-        diag.source.unreferenced_google_entity_file_present === true
-          ? "google_assistant_entities.yaml" : "";
+      this._assistantFilePath = !packages && hasCandidate
+        ? "google_assistant_entities.yaml" : "";
     }
     const hint = this.querySelector("#assistantFileHint");
-    if (hint) hint.textContent = this._t(!packages &&
-      diag.source.unreferenced_google_entity_file_present === true
-        ? "assistantFileCandidate" : "assistantFileManual");
+    if (hint) hint.textContent = this._t(!packages && hasCandidate
+      ? "assistantFileCandidate" : "assistantFileManual");
     this._renderAssistantFileStatus();
   }
 

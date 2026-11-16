@@ -369,6 +369,59 @@ def test_apply_websocket_success(websocket_module, tmp_path):
     )
 
 
+def test_apply_websocket_requires_missing_owned_output_for_rebuild(
+    websocket_module,
+):
+    ws = websocket_module.websocket
+    ws.evaluate_registered_output = Mock(return_value=SimpleNamespace(
+        status="missing", reason_code="managed_output_missing",
+        write_allowed=False,
+    ))
+    ws.apply_reviewed_preview.return_value = SimpleNamespace(
+        output_path=Path("/config/google_assistant_entities.yaml"),
+        backup_path=None, bytes_written=2708,
+    )
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    request = {
+        "id": 218, "preview_sha256": "a" * 64,
+        "production_sha256": None, "rebuild_missing": True,
+    }
+    asyncio.run(ws.websocket_apply_preview(
+        make_hass(), connection, request,
+    ))
+    connection.send_error.assert_not_called()
+    assert connection.send_result.call_args.args[1]["applied"] is True
+    assert ws.apply_reviewed_preview.call_args.kwargs["rebuild_missing"] is True
+
+
+@pytest.mark.parametrize(
+    ("reason", "prior_digest"),
+    [
+        ("unmanaged_output", None),
+        ("owned_by_other_installation", None),
+        ("pending_operation", None),
+        ("verified_owned_output", None),
+        ("managed_output_missing", "b" * 64),
+    ],
+)
+def test_apply_websocket_rejects_unsafe_rebuild_state_before_writing(
+    websocket_module, reason, prior_digest,
+):
+    ws = websocket_module.websocket
+    ws.evaluate_registered_output = Mock(return_value=SimpleNamespace(
+        status="unknown", reason_code=reason, write_allowed=False,
+    ))
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_preview(
+        make_hass(), connection, {
+            "id": 219, "preview_sha256": "a" * 64,
+            "production_sha256": prior_digest, "rebuild_missing": True,
+        },
+    ))
+    assert connection.send_error.call_args.args[1] == "apply_failed"
+    ws.apply_reviewed_preview.assert_not_called()
+
+
 def test_apply_websocket_rejects_changed_preview(websocket_module):
     PreviewChangedError = websocket_module.websocket.PreviewChangedError
 
@@ -707,6 +760,90 @@ def test_reviewed_restore_applies_yaml_then_labels_and_verifies(
         for call in ws.update_entity_label.call_args_list
     )
     assert ws.complete_preview_restoration.call_count == 1
+
+
+def test_missing_owned_yaml_backup_prepares_preview_without_writes(
+    websocket_module,
+):
+    ws = _setup_reviewed_restore(websocket_module)
+    ws.evaluate_registered_output = Mock(return_value=SimpleNamespace(
+        status="missing", reason_code="managed_output_missing",
+        write_allowed=False,
+    ))
+    ws.prepare_backup_preview.return_value["comparison"] = {"status": "missing"}
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_prepare_backup_preview(
+        make_hass(), connection, {
+            "id": 809, "backup_id": "backup.bak",
+            "backup_sha256": "a" * 64, "production_sha256": None,
+        },
+    ))
+    connection.send_error.assert_not_called()
+    assert connection.send_result.call_args.args[1][
+        "comparison"]["status"] == "missing"
+    assert ws.prepare_backup_preview.call_args.args[3] is None
+    ws.restore_reviewed_backup.assert_not_called()
+    ws.update_entity_label.assert_not_called()
+
+
+def test_missing_owned_yaml_backup_apply_reconciles_and_keeps_backups(
+    websocket_module,
+):
+    ws = _setup_reviewed_restore(websocket_module)
+    ws.evaluate_registered_output = Mock(return_value=SimpleNamespace(
+        status="missing", reason_code="managed_output_missing",
+        write_allowed=False,
+    ))
+    ws.prepare_backup_preview.return_value["comparison"] = {"status": "missing"}
+    ws.restore_reviewed_backup.return_value = {
+        "restored": True, "safety_backup": None,
+    }
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_backup_preview(
+        make_hass(), connection, {
+            "id": 810, "backup_id": "backup.bak",
+            "backup_sha256": "a" * 64,
+            "production_sha256": None,
+            "label_plan_sha256": "c" * 64,
+        },
+    ))
+    connection.send_error.assert_not_called()
+    result = connection.send_result.call_args.args[1]
+    assert result["applied"] is True
+    assert result["reconciled"] is True
+    assert result["safety_backup"] is None
+    assert ws.restore_reviewed_backup.call_args.args[3] is None
+    ws.update_entity_label.assert_not_called()
+    ws.complete_preview_restoration.assert_called_once()
+
+
+def test_missing_backup_restore_rejects_unowned_output_at_prepare_and_apply(
+    websocket_module,
+):
+    ws = _setup_reviewed_restore(websocket_module)
+    ws.evaluate_registered_output = Mock(return_value=SimpleNamespace(
+        status="new", reason_code="new_output", write_allowed=True,
+    ))
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    args = {
+        "backup_id": "backup.bak", "backup_sha256": "a" * 64,
+        "production_sha256": None, "label_plan_sha256": "c" * 64,
+    }
+    asyncio.run(ws.websocket_prepare_backup_preview(
+        make_hass(), connection, {"id": 811, **args},
+    ))
+    assert connection.send_error.call_args.args[1] == "backup_preview_failed"
+    ws.prepare_backup_preview.assert_not_called()
+
+    connection = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_backup_preview(
+        make_hass(), connection, {"id": 812, **args},
+    ))
+    assert connection.send_error.call_args.args[1] == (
+        "backup_preview_apply_refused"
+    )
+    ws.restore_reviewed_backup.assert_not_called()
+    ws.update_entity_label.assert_not_called()
 
 
 def test_changed_restore_label_plan_refuses_all_writes(websocket_module):
@@ -1230,3 +1367,47 @@ def test_manual_label_apply_keeps_guard_if_label_update_fails(
     assert connection.send_error.call_args.args[1] == "manual_label_apply_failed"
     ws.create_guard.assert_called_once()
     ws.complete_preview_restoration.assert_not_called()
+
+
+def test_recovery_apply_unlocks_only_after_guarded_yaml_and_labels(
+    websocket_module,
+):
+    """Review flag cannot bypass the old-file recovery gate."""
+    ws = websocket_module.websocket
+    changes = [{"entity_id": "switch.new", "enabled": True}]
+    hass = make_hass()
+    entry = SimpleNamespace(
+        data={"label": "google_assistant", "onboarding_mode": "existing"},
+        options={}, entry_id="test-installation",
+    )
+    hass.config_entries.async_entries = lambda domain: [entry]
+    hass.config_entries.async_update_entry = Mock()
+    snapshot = ws.get_live_registries(hass)
+    _manual_ws_plan(ws, changes, snapshot)
+    first = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    request = {
+        "id": 240, "changes": changes,
+        "preview_sha256": "b" * 64,
+        "production_sha256": "a" * 64,
+        "label_plan_sha256": "c" * 64,
+    }
+    asyncio.run(ws.websocket_apply_manual_label_preview(
+        hass, first, request,
+    ))
+    first.send_result.assert_not_called()
+    assert first.send_error.call_args.args[1] == "manual_label_apply_failed"
+    ws.write_owned_output.assert_not_called()
+    hass.config_entries.async_update_entry.assert_not_called()
+
+    second = SimpleNamespace(send_result=Mock(), send_error=Mock())
+    asyncio.run(ws.websocket_apply_manual_label_preview(
+        hass, second, {**request, "recovery": True},
+    ))
+    second.send_error.assert_not_called()
+    assert second.send_result.call_args.args[1]["reconciled"] is True
+    ws.write_owned_output.assert_called_once()
+    assert ws.write_owned_output.call_args.kwargs["restore_mode"] is True
+    ws.complete_preview_restoration.assert_called_once()
+    hass.config_entries.async_update_entry.assert_called_once_with(
+        entry, data={**entry.data, "recovery_completed": True},
+    )

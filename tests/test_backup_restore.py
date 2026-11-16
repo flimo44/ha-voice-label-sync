@@ -47,7 +47,8 @@ def backup_module(monkeypatch):
     )
     for name in (
         "preview_compare", "preview_guard", "restore_guard",
-        "entity_catalog", "label_update", "backup_restore",
+        "missing_output_rebuild", "entity_catalog", "label_update",
+        "backup_restore",
     ):
         spec = importlib.util.spec_from_file_location(
             f"{prefix}.{name}", component / f"{name}.py"
@@ -79,6 +80,183 @@ def sample(tmp_path):
         encoding="utf-8",
     )
     return production, backup_id, backup
+
+
+def test_review_backup_stays_available_when_production_disappears(
+    backup_module, sample,
+):
+    output, backup_id, original = sample
+    output.unlink()
+    data = backup_module.review_backup(output, backup_id)
+    assert data["production_missing"] is True
+    assert data["production_sha256"] is None
+    assert data["comparison"]["status"] == "missing"
+    assert data["summary"]["total"] == 2
+    assert not output.exists()
+    assert original.exists()
+
+
+def _missing_backup_fixture(backup_module, tmp_path):
+    from test_live_registries import make_registries
+
+    from hvls import GenerationRequest, run_google_assistant_workflow
+    from hvls.owned_writer import write_owned_output
+
+    output = tmp_path / "google_entities.yaml"
+    ownership = tmp_path / ".hvls" / "ownership.json"
+    registries = make_registries()
+    request = GenerationRequest(
+        label="google_assistant", domains=frozenset({"switch"}),
+        output_path=output, dry_run=True,
+    )
+    generated = run_google_assistant_workflow(
+        request=request, registries=registries,
+    ).generation.content
+    write_owned_output(
+        output_path=output,
+        content="switch.old:\n  expose: true\n",
+        entry_id="test-installation",
+        ownership_registry_path=ownership,
+        backup_directory=tmp_path / ".hvls_backups",
+    )
+    original = tmp_path / "original-renamed.yaml"
+    output.rename(original)
+    backup_id = "google_entities.yaml.20261115-023059.safety.bak"
+    backup = tmp_path / ".hvls_backups" / backup_id
+    backup.parent.mkdir(parents=True, exist_ok=True)
+    backup.write_text(generated, encoding="utf-8")
+    catalog = backup_module.build_entity_catalog(
+        registries, "google_assistant", frozenset({"switch"}),
+    )
+    return output, ownership, original, backup_id, registries, catalog, generated
+
+
+def test_missing_owned_yaml_backup_can_be_prepared_read_only(
+    backup_module, tmp_path,
+):
+    (
+        output, ownership, original, backup_id, registries, catalog, generated,
+    ) = _missing_backup_fixture(backup_module, tmp_path)
+    review = backup_module.review_backup(output, backup_id)
+    stage = backup_module.prepare_backup_preview(
+        output, backup_id, review["backup_sha256"], None, catalog,
+        registries=registries, label="google_assistant",
+        domains=frozenset({"switch"}),
+    )
+    assert stage["mode"] == "restore_preview"
+    assert stage["production_missing"] is True
+    assert stage["production_summary"] is None
+    assert stage["production_sha256"] is None
+    assert stage["comparison"]["status"] == "missing"
+    assert stage["projection"]["ready"] is True
+    assert stage["label_plan"]["add"] == []
+    assert stage["label_plan"]["remove"] == []
+    assert stage["label_plan"]["review"] == []
+    assert stage["content"] == generated
+    assert not output.exists()
+    assert original.exists()
+    assert not (ownership.parent / "restore_reconciliation.json").exists()
+
+
+def test_missing_owned_yaml_backup_restores_with_hold_and_final_verification(
+    backup_module, tmp_path,
+):
+    (
+        output, ownership, original, backup_id, registries, catalog, generated,
+    ) = _missing_backup_fixture(backup_module, tmp_path)
+    review = backup_module.review_backup(output, backup_id)
+    stage = backup_module.prepare_backup_preview(
+        output, backup_id, review["backup_sha256"], None, catalog,
+        registries=registries, label="google_assistant",
+        domains=frozenset({"switch"}),
+    )
+    result = backup_module.restore_reviewed_backup(
+        output, backup_id, review["backup_sha256"], None,
+        entry_id="test-installation", ownership_registry_path=ownership,
+        prepared_content=stage["content"],
+        prepared_sha256=stage["preview_sha256"],
+    )
+    assert result["restored"] is True
+    assert result["safety_backup"] is None
+    assert output.read_text(encoding="utf-8") == generated
+    assert original.read_text(encoding="utf-8") == (
+        "switch.old:\n  expose: true\n"
+    )
+    assert backup_module._guard.read_guard(ownership)["backup_id"] == backup_id
+    finish = backup_module.complete_preview_restoration(
+        output, ownership,
+        entry_id="test-installation",
+        backup_sha256=stage["preview_sha256"],
+    )
+    assert finish["reconciled"] is True
+    assert backup_module._guard.read_guard(ownership) is None
+
+
+def test_missing_backup_preview_flags_obsolete_entities_for_review(
+    backup_module, tmp_path,
+):
+    (
+        output, _ownership, _original, backup_id, registries, catalog, generated,
+    ) = _missing_backup_fixture(backup_module, tmp_path)
+    backup = tmp_path / ".hvls_backups" / backup_id
+    backup.write_text(
+        generated + "switch.obsolete:\n  expose: true\n",
+        encoding="utf-8",
+    )
+    review = backup_module.review_backup(output, backup_id)
+    stage = backup_module.prepare_backup_preview(
+        output, backup_id, review["backup_sha256"], None, catalog,
+        registries=registries, label="google_assistant",
+        domains=frozenset({"switch"}),
+    )
+    assert "switch.obsolete" in stage["ignore_candidates"]
+    assert any(
+        row["entity_id"] == "switch.obsolete"
+        for row in stage["label_plan"]["review"]
+    )
+    assert stage["projection"]["ready"] is False
+    ignored = backup_module.prepare_backup_preview(
+        output, backup_id, review["backup_sha256"], None, catalog,
+        ignored_entities=["switch.obsolete"],
+        registries=registries, label="google_assistant",
+        domains=frozenset({"switch"}),
+    )
+    assert ignored["content"] == generated
+    assert ignored["label_plan"]["review"] == []
+    assert ignored["projection"]["ready"] is True
+    assert ignored["comparison"]["status"] == "missing"
+    assert not output.exists()
+
+
+def test_missing_yaml_backup_rejects_file_reappearing_without_overwrite(
+    backup_module, tmp_path,
+):
+    (
+        output, ownership, _original, backup_id, _registries, _catalog, _generated,
+    ) = _missing_backup_fixture(backup_module, tmp_path)
+    review = backup_module.review_backup(output, backup_id)
+    output.write_text("switch.external:\n  expose: true\n", encoding="utf-8")
+    with pytest.raises(backup_module.PreviewChangedError):
+        backup_module.restore_reviewed_backup(
+            output, backup_id, review["backup_sha256"], None,
+            entry_id="test-installation", ownership_registry_path=ownership,
+        )
+    assert output.read_text(encoding="utf-8") == (
+        "switch.external:\n  expose: true\n"
+    )
+
+
+def test_missing_unowned_yaml_cannot_restore_backup(backup_module, sample):
+    output, backup_id, _source = sample
+    output.unlink()
+    review = backup_module.review_backup(output, backup_id)
+    with pytest.raises(backup_module.BackupRestoreError, match="ownership"):
+        backup_module.restore_reviewed_backup(
+            output, backup_id, review["backup_sha256"], None,
+            entry_id="test-installation",
+            ownership_registry_path=output.parent / ".hvls" / "ownership.json",
+        )
+    assert not output.exists()
 
 
 def test_list_only_valid_backups(backup_module, sample, tmp_path):
@@ -1320,3 +1498,117 @@ def test_manual_label_preview_changes_fingerprint_when_ha_changes(
     )
     assert before["label_plan_sha256"] != after["label_plan_sha256"]
     assert output.read_text() == "switch.one:\n  expose: true\n"
+
+
+def test_recovery_40_to_25_is_a_read_only_preview_of_current_ha(
+    backup_module, tmp_path,
+):
+    """Old YAML can contain retired entities; they are shown as YAML removals."""
+    output = tmp_path / "google_entities.yaml"
+    old_names = [f"switch.live_{i}" for i in range(25)]
+    obsolete = [f"climate.retired_{i}" for i in range(14)]
+    obsolete.append("binary_sensor.ineligible")
+    output.write_text("".join(
+        f"{eid}:\n  expose: true\n  name: Legacy {i}\n"
+        for i, eid in enumerate(old_names + obsolete)
+    ), encoding="utf-8")
+    previous = output.read_bytes()
+    registries = _manual_label_state()
+    registries["entity_registry"]["data"]["entities"] = [
+        {
+            "entity_id": eid, "name": f"Current {i}",
+            "labels": ["hvls"] if i == 0 else [],
+            "area_id": None, "device_id": None,
+            "disabled_by": None, "hidden_by": None, "entity_category": None,
+        }
+        for i, eid in enumerate(old_names)
+    ] + [{
+        "entity_id": "binary_sensor.ineligible", "device_class": "motion",
+        "name": "Rain", "labels": [], "disabled_by": None,
+        "hidden_by": None, "entity_category": None,
+    }]
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch", "binary_sensor"})
+    )
+    proposal = backup_module.prepare_manual_label_preview(
+        output, catalog, registries, "HVLS",
+        frozenset({"switch", "binary_sensor"}),
+        [{"entity_id": eid, "enabled": True} for eid in old_names[1:]],
+        recovery=True,
+    )
+    assert proposal["recovery"] is True
+    assert proposal["summary"]["total"] == 25
+    assert proposal["production_summary"]["total"] == 40
+    assert len(proposal["comparison"]["removed"]) == 15
+    assert proposal["comparison"]["added"] == []
+    assert len(proposal["label_plan"]["add"]) == 24
+    assert len(proposal["comparison"]["modified"]) == 25  # Current HA names
+    assert output.read_bytes() == previous
+    assert not (tmp_path / ".hvls_backups").exists()
+
+
+def test_recovery_no_label_changes_is_allowed_when_old_yaml_differs(
+    backup_module, tmp_path,
+):
+    output = tmp_path / "google_entities.yaml"
+    original = "switch.one:\n  expose: true\n  name: Old Name\n"
+    output.write_text(original, encoding="utf-8")
+    registries = _manual_label_state()
+    # Only switch.one is labeled; other registry entities have no HVLS label.
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch"})
+    )
+    plan = backup_module.prepare_manual_label_preview(
+        output, catalog, registries, "HVLS", frozenset({"switch"}),
+        [], recovery=True,
+    )
+    assert plan["changes"] == []
+    assert plan["recovery"] is True
+    assert plan["comparison"]["status"] == "ok"
+    assert "switch.one" in [x["entity_id"] for x in plan["comparison"]["modified"]]
+    assert output.read_text() == original
+
+
+def test_recovery_requires_exact_current_ha_membership(backup_module, tmp_path):
+    output = tmp_path / "google_entities.yaml"
+    original = "switch.one:\n  expose: true\n  name: One\n"
+    output.write_text(original, encoding="utf-8")
+    registries = _manual_label_state()
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch"})
+    )
+    # Even a confirmed reviewer cannot silently import an unrelated label.
+    with pytest.raises(backup_module.BackupRestoreError, match="differs"):
+        backup_module.prepare_manual_label_preview(
+            output, catalog, registries, "HVLS", frozenset({"switch"}),
+            [{"entity_id": "switch.two", "enabled": True}],
+            recovery=True,
+        )
+    assert output.read_text() == original
+
+
+def test_recovery_preserves_current_labeled_ha_entities_not_in_old_yaml(
+    backup_module, tmp_path,
+):
+    """An old YAML must not erase newer, explicit HA label selections."""
+    output = tmp_path / "google_entities.yaml"
+    original = "switch.one:\n  expose: true\n  name: Old One\n"
+    output.write_text(original, encoding="utf-8")
+    registries = _manual_label_state()
+    # switch.one was selected in the old YAML, and switch.two got labeled
+    # later directly in HA. Both must be part of the current output.
+    registries["entity_registry"]["data"]["entities"][1]["labels"] = [
+        "hvls", "other",
+    ]
+    catalog = backup_module.build_entity_catalog(
+        registries, "HVLS", frozenset({"switch"})
+    )
+    plan = backup_module.prepare_manual_label_preview(
+        output, catalog, registries, "HVLS", frozenset({"switch"}),
+        [], recovery=True,
+    )
+    assert plan["summary"]["total"] == 2
+    assert plan["comparison"]["added"] == ["switch.two"]
+    assert plan["label_plan"]["remove"] == []
+    assert plan["label_plan"]["add"] == []
+    assert output.read_text() == original

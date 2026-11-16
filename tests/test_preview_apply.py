@@ -22,7 +22,10 @@ def apply_module(monkeypatch):
         Path(__file__).resolve().parents[1] / "custom_components/ha_voice_label_sync"
     )
 
-    for name in ("preview_guard", "preview_apply"):
+    for name in (
+        "restore_guard", "missing_output_rebuild",
+        "preview_guard", "preview_apply",
+    ):
         spec = importlib.util.spec_from_file_location(
             f"{prefix}.{name}", component / f"{name}.py"
         )
@@ -64,6 +67,78 @@ def prepare(tmp_path, *, owned=False):
         output.write_text("ancienne configuration\n", encoding="utf-8")
 
     return registries, request, preview, output
+
+
+def test_apply_reviewed_preview_can_rebuild_only_after_missing_file_review(
+    apply_module, tmp_path,
+):
+    from hvls.owned_writer import evaluate_registered_output
+
+    registries, request, preview, output = prepare(tmp_path, owned=True)
+    original = output.read_bytes()
+    saved = tmp_path / "prior.yaml"
+    output.rename(saved)
+    registry = tmp_path / ".hvls" / "ownership.json"
+    assert evaluate_registered_output(
+        output, "test-installation", registry
+    ).reason_code == "managed_output_missing"
+
+    result = apply_module.apply_reviewed_preview(
+        request, registries, preview,
+        apply_module.preview_digest(preview.read_text()),
+        10, True, expected_production_digest=None,
+        entry_id="test-installation",
+        ownership_registry_path=registry,
+        rebuild_missing=True,
+    )
+
+    assert output.read_text(encoding="utf-8") == preview.read_text(encoding="utf-8")
+    assert result.backup_path is None
+    assert saved.read_bytes() == original
+    assert evaluate_registered_output(
+        output, "test-installation", registry
+    ).write_allowed is True
+
+
+def test_missing_output_rebuild_rejects_stale_review_without_mutation(
+    apply_module, tmp_path,
+):
+    from hvls.output_ownership_registry import OwnershipRegistry
+
+    registries, request, preview, output = prepare(tmp_path, owned=True)
+    output.unlink()
+    registry = tmp_path / ".hvls" / "ownership.json"
+    before = OwnershipRegistry(registry).get_record("test-installation")
+    preview.write_text("switch.forged:\n  expose: true\n", encoding="utf-8")
+
+    with pytest.raises(apply_module.PreviewChangedError):
+        apply_module.apply_reviewed_preview(
+            request, registries, preview,
+            apply_module.preview_digest(preview.read_text()),
+            10, True, expected_production_digest=None,
+            entry_id="test-installation", ownership_registry_path=registry,
+            rebuild_missing=True,
+        )
+    assert not output.exists()
+    assert OwnershipRegistry(registry).get_record("test-installation") == before
+
+
+def test_missing_output_rebuild_requires_null_production_hash(
+    apply_module, tmp_path,
+):
+    registries, request, preview, output = prepare(tmp_path, owned=True)
+    previous_hash = apply_module.preview_digest(output.read_text())
+    output.unlink()
+    with pytest.raises(apply_module.PreviewChangedError):
+        apply_module.apply_reviewed_preview(
+            request, registries, preview,
+            apply_module.preview_digest(preview.read_text()),
+            10, True, expected_production_digest=previous_hash,
+            entry_id="test-installation",
+            ownership_registry_path=tmp_path / ".hvls" / "ownership.json",
+            rebuild_missing=True,
+        )
+    assert not output.exists()
 
 
 def test_apply_valid_reviewed_preview(apply_module, tmp_path):

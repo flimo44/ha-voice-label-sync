@@ -99,29 +99,88 @@ class HVLSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         user_input: dict[str, Any] | None = None,
     ) -> FlowResult:
-        """Show and validate initial setup with read-only discovery."""
-        values = user_input or {}
-        output = values.get(CONF_OUTPUT, DEFAULT_OUTPUT)
-
+        """First contact: ask what the user wishes to do, not for paths."""
         report = await self.hass.async_add_executor_job(
             inspect_initial_setup,
             self.hass.config.path(),
-            output,
+            DEFAULT_OUTPUT,
+        )
+        existing = report["output_status"] == "existing"
+        french = str(
+            getattr(self.hass.config, "language", "en")
+        ).lower().startswith("fr")
+        if french:
+            hint = (
+                "Un fichier YAML existe déjà ; il restera intact."
+                if existing else "Aucun fichier YAML HVLS habituel détecté."
+            )
+        else:
+            hint = (
+                "An existing YAML file was found; it will remain unchanged."
+                if existing else "No standard HVLS YAML file was detected."
+            )
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=["new", "existing"],
+            description_placeholders={"detected_file": hint},
         )
 
+    async def async_step_new(
+        self, user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Create a new HVLS selection, never overwrite an existing output."""
+        return await self._async_step_configure("new", user_input)
+
+    async def async_step_existing(
+        self, user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Reuse a preexisting YAML only after separate Assistant review."""
+        return await self._async_step_configure("existing", user_input)
+
+    async def _async_step_configure(
+        self, mode: str, user_input: dict[str, Any] | None,
+    ) -> FlowResult:
+        """Show technical defaults only after the user's initial choice."""
+        if mode not in {"new", "existing"}:
+            raise ValueError("Invalid onboarding choice")
+        # A user choosing "new" must not accidentally select an old file.
+        # Keep a simple root-level path so the writer's parent exists.
+        original = await self.hass.async_add_executor_job(
+            inspect_initial_setup,
+            self.hass.config.path(),
+            DEFAULT_OUTPUT,
+        )
+        suggested_output = (
+            self.hass.config.path("google_assistant_entities_hvls.yaml")
+            if mode == "new" and original["output_status"] == "existing"
+            else DEFAULT_OUTPUT
+        )
+        values = user_input or {CONF_OUTPUT: suggested_output}
+        output = values.get(CONF_OUTPUT, suggested_output)
+        report = await self.hass.async_add_executor_job(
+            inspect_initial_setup, self.hass.config.path(), output,
+        )
         placeholders = {
             "diagnostic": render_initial_setup_diagnostic(
-                report,
-                getattr(self.hass.config, "language", "en"),
+                report, getattr(self.hass.config, "language", "en"),
             ),
         }
 
         if user_input is not None:
             error = initial_setup_output_error(report)
-
+            if (
+                error is None and mode == "new"
+                and report["output_status"] == "existing"
+            ):
+                error = "new_output_exists"
+            if (
+                error is None and mode == "existing"
+                and report["output_status"] != "existing"
+            ):
+                error = "existing_source_missing"
             if error:
                 return self.async_show_form(
-                    step_id="user",
+                    step_id=mode,
                     data_schema=build_schema(user_input),
                     errors={"base": error},
                     description_placeholders=placeholders,
@@ -129,12 +188,11 @@ class HVLSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             await self.async_set_unique_id(DOMAIN)
             self._abort_if_unique_id_configured()
-
             try:
                 ensure_configured_label(self.hass, user_input[CONF_LABEL])
             except (LabelUpdateError, ValueError, OSError):
                 return self.async_show_form(
-                    step_id="user",
+                    step_id=mode,
                     data_schema=build_schema(user_input),
                     errors={"base": "label_setup_failed"},
                     description_placeholders=placeholders,
@@ -144,6 +202,7 @@ class HVLSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 title=NAME,
                 data={
                     **user_input,
+                    "onboarding_mode": mode,  # Guidance only; never write authority.
                     CONF_BACKUP_RETENTION: int(
                         user_input[CONF_BACKUP_RETENTION]
                     ),
@@ -151,8 +210,8 @@ class HVLSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         return self.async_show_form(
-            step_id="user",
-            data_schema=build_schema(),
+            step_id=mode,
+            data_schema=build_schema(values),
             description_placeholders=placeholders,
         )
 

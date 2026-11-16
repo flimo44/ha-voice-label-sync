@@ -6,6 +6,34 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.1.0-beta.2] - 2026-11-15
+
+### Release correction
+- The `v1.1.0-beta.1` tag was accidentally created from `main`; it contained integration version `1.0.1` and not the recovery changes.
+- `v1.1.0-beta.2` is the intended first public test build for the features listed below. Its tag **must** target `feat/reinstall-recovery-via-preview`, and its manifest must say `1.1.0-beta.2`.
+
+
+
+### Added
+- Guided initial setup: choose whether to select current Home Assistant entities or review an existing YAML file, without silently overwriting production.
+- Recovery via explicit Preview: reconcile entities from an older Google Assistant YAML against the live HA registry; preserve currently labeled entities and report obsolete, missing or ineligible entries.
+- Backup-first takeover for a previous HVLS installation with SHA-256 ownership checks and explicit approval.
+- Restore a previous backup or reconstruct a deleted HVLS-managed YAML after reviewing the proposed changes, without reinstalling HVLS.
+- Show current labeled entities even when no production YAML exists; first-generation Preview requires explicit Apply.
+- Preserve pending label proposals when navigating between Statistics, Entity Management and Preview.
+
+### Improved
+- Detailed initial-recovery comparison, including old and proposed YAML entity counts.
+- An explicit route from **Choose my entities in HA** to Entity Management; no clearing of existing labels.
+- Guarded file recreation and backup reconciliation, with refusal of foreign owners, stale reviews, unsafe paths, or files reappearing during recovery.
+
+### Validation and limits
+- Python and JavaScript regression tests, package checks, HACS validation, Hassfest, and isolated Home Assistant Core checks.
+- End-to-end test VM coverage of YAML takeover (40 → 28), initial creation (28 entities), restart persistence and missing-production recovery flows; additional early-beta feedback remains welcome.
+- Google Cloud project, DNS/HTTPS and Home/Google Assistant account linkage remain manual and outside HVLS.
+- The Home Assistant integration uses the separately released `ha-voice-label-sync==0.3.6` Python core; no new PyPI release is included in this beta.
+
+
 ## [1.0.1] - 2026-11-10
 
 ### Fixed

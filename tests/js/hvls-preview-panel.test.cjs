@@ -102,6 +102,110 @@ function preview(canApply = true) {
   };
 }
 
+test("Onboarding setup choice is read-only guidance in preview response", async () => {
+  const {panel} = makePanel(async () => ({
+    ...preview(false),
+    onboarding_mode: "existing",
+  }));
+  await panel._loadPreview();
+  assert.equal(panel._onboardingMode, "existing");
+  assert.equal(panel._migrationIntent, undefined);
+});
+
+test("Assistant honors installer's initial existing-file choice without asking again", () => {
+  const {panel} = makePanel(async () => preview(false));
+  panel._migrationReport = {
+    diagnostic: {
+      mode: "new_configuration",
+      source: {status: "resolved", unreferenced_google_entity_file_present: true},
+    },
+  };
+  panel._onboardingMode = "existing";
+  panel._assistantPackagesDetected = () => false;
+  panel._renderAssistantFileStatus = () => {};
+  const nodes = new Map();
+  panel.querySelector = selector => {
+    if (!nodes.has(selector)) {
+      nodes.set(selector, {
+        hidden: false, textContent: "", value: "",
+        setAttribute(name, value) {this[name] = value;},
+      });
+    }
+    return nodes.get(selector);
+  };
+  panel._renderMigrationGuide();
+  assert.equal(panel._migrationIntent, "existing");
+  assert.equal(nodes.get("#assistantFileSection").hidden, false);
+  assert.equal(nodes.get("#migrationIntentExisting")["aria-pressed"], "true");
+
+  // User deliberately changes the choice; a refresh must not undo it.
+  panel._migrationIntent = "new";
+  panel._renderMigrationGuide();
+  assert.equal(panel._migrationIntent, "new");
+  assert.equal(nodes.get("#assistantFileSection").hidden, true);
+});
+
+test("First opening of existing-file install navigates directly to Assistant once", async () => {
+  const response = managedPreviewWithComparison();
+  response.onboarding_mode = "existing";
+  response.ownership = {
+    status: "unknown", write_allowed: false,
+    reason_code: "owned_by_other_installation",
+    reason: "Old installation owns output",
+  };
+  const {panel} = makePanel(async () => response);
+  panel._initialized = true;
+  const original = panel.querySelector.bind(panel);
+  panel.querySelector = selector => selector.includes('data-tab="summary"')
+    ? {getAttribute: () => "true"} : original(selector);
+  const navigated = [];
+  panel._activateTab = name => navigated.push(name);
+  await panel._loadPreview();
+  await panel._loadPreview();
+  assert.deepEqual(navigated, ["migration"]);
+});
+
+
+test("New installation goes to entity selection, not another setup choice", async () => {
+  const response = {...preview(), onboarding_mode: "new"};
+  response.ownership.reason_code = "new_output";
+  const {panel} = makePanel(async () => response);
+  panel._initialized = true;
+  const original = panel.querySelector.bind(panel);
+  panel.querySelector = selector => selector.includes('data-tab="summary"')
+    ? {getAttribute: () => "true"} : original(selector);
+  const navigated = [];
+  panel._activateTab = name => navigated.push(name);
+  await panel._loadPreview();
+  assert.deepEqual(navigated, ["entities"]);
+});
+
+
+test("Guided onboarding never overrides a tab already selected by the user", async () => {
+  const response = {...preview(), onboarding_mode: "existing"};
+  response.ownership = {
+    status: "unmanaged", write_allowed: false,
+    reason_code: "unmanaged_output", reason: "Existing manual YAML",
+  };
+  const {panel} = makePanel(async () => response);
+  panel._initialized = true;
+  const original = panel.querySelector.bind(panel);
+  panel.querySelector = selector => selector.includes('data-tab="summary"')
+    ? {getAttribute: () => "false"} : original(selector);
+  let navigated = false;
+  panel._activateTab = () => {navigated = true;};
+  await panel._loadPreview();
+  assert.equal(navigated, false);
+});
+
+
+test("Recovered file action appears before the long per-entity review", () => {
+  const takeover = source.indexOf('<section id="assistantTakeoverSection"');
+  const adoption = source.indexOf('<section id="assistantAdoption"');
+  assert.ok(takeover > 0 && adoption > takeover);
+  assert.ok(source.includes('id="migrationChoiceDetails"'));
+});
+
 test("Apply disabled without an approved Preview", async () => {
   const { panel, controls } = makePanel(async () => preview(false));
 
@@ -314,6 +418,91 @@ test("Failed apply requires a fresh Preview review", async () => {
   assert.equal(calls.length, 2);
 });
 
+test("Missing owned production enables reviewed rebuild without changing labels", async () => {
+  const calls = [];
+  let repaired = false;
+  const {panel, controls} = makePanel(async message => {
+    calls.push(message);
+    if (message.type === "ha_voice_label_sync/apply_preview") {
+      assert.equal(message.rebuild_missing, true);
+      assert.equal(message.production_sha256, null);
+      assert.equal(message.preview_sha256, "a".repeat(64));
+      repaired = true;
+      return {
+        output_path: "/config/google_assistant_entities.yaml",
+        bytes_written: 2708, backup_path: null,
+      };
+    }
+    return repaired ? {
+      ...preview(false),
+      ownership: {status: "managed", write_allowed: true},
+      production_sha256: "a".repeat(64),
+      comparison: {status: "ok", added: [], removed: [], modified: []},
+      summary: {total: 28},
+    } : {
+      ...preview(false),
+      onboarding_mode: "new",
+      ownership: {
+        status: "missing", reason_code: "managed_output_missing",
+        write_allowed: false,
+      },
+      summary: {total: 28},
+      comparison: {status: "missing"},
+    };
+  });
+  await panel._loadPreview();
+  assert.equal(panel._review.rebuild_missing, true);
+  assert.equal(controls.apply.disabled, false);
+  assert.match(controls.apply.textContent, /Reconstruire le fichier YAML/);
+  await panel._applyPreview();
+  assert.deepEqual(calls.map(x => x.type), [
+    "ha_voice_label_sync/get_preview", "ha_voice_label_sync/apply_preview",
+    "ha_voice_label_sync/get_preview",
+  ]);
+  assert.match(panel.status, /Fichier YAML reconstruit/);
+});
+
+test("No missing-file rebuild for unowned, foreign or pending outputs", async () => {
+  for (const reason_code of [
+    "unmanaged_output", "owned_by_other_installation", "pending_operation",
+    "registry_invalid", "output_changed",
+  ]) {
+    const calls = [];
+    const {panel, controls} = makePanel(async message => {
+      calls.push(message.type);
+      return {
+        ...preview(false),
+        ownership: {status: "unknown", reason_code, write_allowed: false},
+        summary: {total: 28}, comparison: {status: "missing"},
+      };
+    });
+    await panel._loadPreview();
+    assert.equal(panel._review, null, reason_code);
+    assert.equal(controls.apply.disabled, true, reason_code);
+    await panel._applyPreview();
+    assert.deepEqual(calls, ["ha_voice_label_sync/get_preview"]);
+  }
+});
+
+test("Operator cancellation never attempts missing-file recovery", async () => {
+  const calls = [];
+  const {panel} = makePanel(async message => {
+    calls.push(message.type);
+    return {
+      ...preview(false),
+      ownership: {
+        status: "missing", reason_code: "managed_output_missing",
+        write_allowed: false,
+      },
+      summary: {total: 28}, comparison: {status: "missing"},
+    };
+  }, () => false);
+  await panel._loadPreview();
+  assert.equal(panel._review.rebuild_missing, true);
+  await panel._applyPreview();
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_preview"]);
+});
+
 test("Generate Preview regenerates YAML and refreshes panel", async () => {
   const calls = [];
 
@@ -343,6 +532,41 @@ test("Generate Preview regenerates YAML and refreshes panel", async () => {
   assert.equal(controls.apply.disabled, false);
   assert.equal(controls.refresh.disabled, false);
   assert.match(panel.status, /32 entités/);
+});
+
+test("Generating normal Preview must not discard a pending HA label proposal", async () => {
+  const calls = [], tabs = [];
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request.type);
+    return preview(true);
+  });
+  panel._activateTab = tab => tabs.push(tab);
+  const staged = {
+    mode: "label_preview",
+    changes: [{entity_id: "climate.thermostat_test", enabled: true}],
+    projection: {ready: true},
+  };
+  panel._stagedRestore = staged;
+  panel._manualLabelChanges = new Map([
+    ["climate.thermostat_test", true],
+  ]);
+  await panel._generatePreview();
+  assert.deepEqual(calls, []);
+  assert.deepEqual(tabs, ["preview"]);
+  assert.strictEqual(panel._stagedRestore, staged);
+  assert.equal(panel._manualLabelChanges.get("climate.thermostat_test"), true);
+  assert.equal(controls.generate.disabled, false);
+});
+
+test("Initial Preview button uses a prepared label Preview when one exists", () => {
+  const start = source.indexOf('const pending = this._stagedRestore?.mode === "label_preview"');
+  const end = source.indexOf('panel.appendChild(prepare);', start);
+  const fragment = source.slice(start, end);
+  assert.ok(start > 0 && end > start);
+  assert.match(fragment, /initialPendingPreview/);
+  assert.match(fragment, /this._activateTab\("preview"\)/);
+  assert.match(fragment, /if \(this._stagedRestore\?\.mode === "label_preview"\)/);
+  assert.doesNotMatch(fragment, /apply_preview|set_entity_label/);
 });
 
 test("Generate Preview prevents applying stale review", async () => {
@@ -775,6 +999,82 @@ function flattenText(node) {
   return [node.textContent || "", ...(node.children || []).map(flattenText)].join(" | ");
 }
 
+test("Recovery Preview explains old-to-new YAML totals without changing diff counts", () => {
+  const {panel} = makePanel(async () => preview());
+  panel._recoveryPending = true;
+  panel._stagedRestore = {recovery: true, mode: "label_preview"};
+  const container = {
+    children: [],
+    appendChild(node) { this.children.push(node); },
+    replaceChildren() { this.children = []; },
+  };
+  panel.querySelector = selector => selector === "#previewChanges" ? container : null;
+  panel._renderPreviewChanges({
+    available: true,
+    production_summary: {total: 40},
+    summary: {total: 25, entities: []},
+    comparison: {
+      status: "ok", added: [],
+      removed: Array.from({length: 15}, (_, i) => "switch.old_" + i),
+      modified: Array.from({length: 16}, (_, i) => ({
+        entity_id: "switch.changed_" + i,
+        fields: {name: {before: "Old", after: "Current"}},
+      })),
+    },
+  });
+  const rendered = flattenText(container);
+  assert.match(rendered, /Différences entre l'ancien et le nouveau YAML/);
+  assert.match(rendered, /Ancien fichier : 40 entités/);
+  assert.match(rendered, /Nouveau fichier proposé : 25 entités/);
+  assert.match(rendered, /Entités supprimées \(15\)/);
+  assert.match(rendered, /Entités modifiées \(16\)/);
+  assert.doesNotMatch(rendered, /Entités ajoutées \(1\)/);
+});
+
+test("Normal Preview keeps its original title and shows no recovery totals", () => {
+  const {panel} = makePanel(async () => preview());
+  const container = {
+    children: [],
+    appendChild(node) { this.children.push(node); },
+    replaceChildren() { this.children = []; },
+  };
+  panel.querySelector = selector => selector === "#previewChanges" ? container : null;
+  panel._renderPreviewChanges({
+    available: true,
+    production_summary: {total: 40},
+    summary: {total: 25, entities: []},
+    comparison: {
+      status: "ok", added: [], removed: ["switch.old"], modified: [],
+    },
+  });
+  const rendered = flattenText(container);
+  assert.match(rendered, /Changements proposés à Google Assistant/);
+  assert.doesNotMatch(rendered, /Ancien fichier : 40 entités/);
+});
+
+test("Fresh installation without YAML explains existing HVLS labels and Preview action", () => {
+  assert.match(source, /initialLabelsDetected:.*28|initialLabelsDetected:/);
+  const start = source.indexOf('unavailable.textContent = this._t("productionStatsUnavailable")');
+  const end = source.indexOf("const comparison = result.comparison ||", start);
+  assert.ok(start > 0 && end > start);
+  const block = source.slice(start, end);
+  assert.match(block, /this._onboardingMode === "new"/);
+  assert.match(block, /entity.has_label === true && entity.eligible === true/);
+  assert.match(block, /"initialLabelsDetected"/);
+  assert.match(block, /this._generatePreview\(\)/);
+  assert.match(block, /this._activateTab\("preview"\)/);
+  assert.doesNotMatch(block, /apply_preview|set_entity_label|write_owned_output/);
+});
+
+test("The initial YAML Preview remains a reviewed proposal, not an Apply", () => {
+  const start = source.indexOf('  _renderPreviewChanges(result) {');
+  const end = source.indexOf('  _productionStatus(', start);
+  assert.ok(start >= 0 && end > start);
+  const block = source.slice(start, end);
+  assert.match(block, /this._tf\("initialYamlPreview", \{count: result.summary.total\}\)/);
+  assert.doesNotMatch(block, /write_owned_output|set_entity_label/);
+});
+
 test("Preview renders grouped entity changes and modified fields", () => {
   const { panel } = makePanel(async () => preview());
   const container = {
@@ -808,6 +1108,32 @@ test("Preview renders grouped entity changes and modified fields", () => {
   assert.match(rendered, /ne la supprime pas de Home Assistant/);
 });
 
+test("Import of 40 entities with 39 ordinary Preview removals is flagged", () => {
+  const {panel} = makePanel(async () => preview(false));
+  panel._onboardingMode = "existing";
+  const container = {
+    children: [],
+    replaceChildren() {this.children = [];},
+    appendChild(child) {this.children.push(child);},
+    append(...children) {this.children.push(...children);},
+  };
+  panel.querySelector = selector => selector === "#previewChanges" ? container : null;
+  panel._renderPreviewChanges({
+    available: true,
+    summary: {entities: []},
+    production_summary: {total: 40},
+    comparison: {
+      status: "ok",
+      added: ["switch.one", "switch.two", "switch.three"],
+      removed: Array.from({length: 39}, (_, i) => "switch.old_" + i),
+      modified: [],
+    },
+  });
+  const rendered = flattenText(container);
+  assert.match(rendered, /ce n'est PAS une reprise/);
+  assert.match(rendered, /39 entités sur 40/);
+  assert.match(rendered, /Retourner à l'Assistant/);
+});
 test("Preview clearly reports missing production and identical configurations", () => {
   const { panel } = makePanel(async () => preview());
   const container = {
@@ -1341,6 +1667,89 @@ test("Restore Preview shows individual HA label operations and exceptional entit
   panel._renderStagedRestorePlan();
   assert.equal(notice.hidden, true);
   assert.deepEqual(notice.children, []);
+});
+
+test("Selected backup stays reviewable when production YAML is missing", () => {
+  const {panel} = makePanel(async () => ({}));
+  const diff = {
+    children: [], replaceChildren() {this.children = [];},
+    appendChild(item) {this.children.push(item);},
+  };
+  const restore = {disabled: true, textContent: ""};
+  panel.querySelector = selector => selector === "#backupDiff" ? diff :
+    selector === "#restoreBackup" ? restore : null;
+  panel._backupReview = {
+    backup_id: "historical.safety.bak",
+    production_sha256: null, production_missing: true,
+    summary: {total: 40}, comparison: {status: "missing"},
+  };
+  panel._renderBackupDiff();
+  assert.equal(restore.disabled, false);
+  assert.match(diff.children[0].textContent, /production est absent/);
+  assert.match(diff.children[0].textContent, /40 entités/);
+});
+
+test("Missing-production backup stages a read-only Preview with unresolved labels", async () => {
+  const requests = [], tabs = [];
+  const {panel, controls} = makePanel(async request => {
+    requests.push(request);
+    return {
+      mode: "restore_preview", available: true, can_apply: false,
+      production_missing: true, content: "switch.test: {}\n",
+      comparison: {status: "missing"}, summary: {total: 40},
+      projection: {ready: false},
+      label_plan: {review: [{entity_id: "switch.absent", reason: "missing_ha_entity"}],
+        add: [], remove: []},
+      label_plan_sha256: "c".repeat(64),
+    };
+  });
+  panel._activateTab = tab => tabs.push(tab);
+  panel._backupReview = {
+    backup_id: "historical.safety.bak", backup_sha256: "b".repeat(64),
+    production_sha256: null, comparison: {status: "missing"},
+  };
+  await panel._restoreBackup();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].type, "ha_voice_label_sync/prepare_backup_preview");
+  assert.equal(requests[0].production_sha256, null);
+  assert.equal(panel._stagedRestore.mode, "restore_preview");
+  assert.deepEqual(tabs, ["preview"]);
+  assert.equal(controls.apply.disabled, true);
+  assert.match(panel.status, /Restauration préparée/);
+});
+
+test("Reviewed missing-YAML backup restores only with aligned labels", async () => {
+  const requests = [];
+  const {panel, controls} = makePanel(async request => {
+    requests.push(request);
+    if (request.type === "ha_voice_label_sync/apply_backup_preview") {
+      return {applied: true, reconciled: true, yaml_entities: 28,
+        label_additions: 0, label_removals: 0, safety_backup: null};
+    }
+    if (request.type === "ha_voice_label_sync/generate_preview") {
+      return {entity_count: 28};
+    }
+    throw new Error("Unexpected request");
+  });
+  panel._stagedRestore = {
+    mode: "restore_preview", production_missing: true,
+    backup_id: "historical.safety.bak", backup_sha256: "b".repeat(64),
+    production_sha256: null, label_plan_sha256: "c".repeat(64),
+    label_plan: {add: [], remove: [], review: []},
+    comparison: {status: "missing"}, projection: {ready: true},
+  };
+  panel._loadPreview = async () => {};
+  panel._loadEntities = async () => {};
+  panel._updateApplyButton();
+  assert.equal(controls.apply.disabled, false);
+  await panel._applyPreview();
+  assert.deepEqual(requests.map(x => x.type), [
+    "ha_voice_label_sync/apply_backup_preview",
+    "ha_voice_label_sync/generate_preview",
+  ]);
+  assert.equal(requests[0].production_sha256, null);
+  assert.match(panel.status, /Restauration validée/);
+  assert.match(panel.status, /fichier de production était absent/);
 });
 
 test("Confirmed restoration applies reviewed YAML and labels then refreshes", async () => {
@@ -3715,8 +4124,33 @@ test("Guided setup reports unreferenced YAML without assuming an active setup", 
   assert.match(controls.migrationGuideSafety.textContent, /aucune écriture/);
   assert.deepEqual(requests, []);
   panel._chooseMigrationIntent("new");
-  assert.match(controls.migrationGuideNext.textContent, /Rien n'a été créé ni écrasé/);
+  assert.match(controls.migrationGuideNext.textContent, /étiquettes déjà présentes sont conservées/);
   assert.deepEqual(requests, []);
+});
+
+test("Assistant new-selection button navigates to entity manager without modifying labels", () => {
+  const requests = [];
+  const tabs = [];
+  const {panel} = makePanel(async request => {requests.push(request);});
+  const catalog = {
+    entities: [{entity_id: "switch.existing", has_label: true, eligible: true}],
+    labeled: 1,
+  };
+  panel._entityCatalog = catalog;
+  panel._renderMigrationGuide = () => {};
+  panel._renderAssistantFileStatus = () => {};
+  panel._activateTab = tab => tabs.push(tab);
+
+  panel._startNewSelection();
+
+  assert.deepEqual(tabs, ["entities"]);
+  assert.equal(panel._migrationIntent, "new");
+  assert.strictEqual(panel._entityCatalog, catalog);
+  assert.equal(catalog.entities[0].has_label, true);
+  assert.deepEqual(requests, []);
+  assert.match(source, /migrationIntentNew"\)\.addEventListener\("click", \(\) => this\._startNewSelection\(\)\)/);
+  assert.match(source, /migrationGuideNew: "Choisir mes entités dans HA"/);
+  assert.doesNotMatch(source, /Partir d'une sélection vide/);
 });
 
 test("Guided setup handles absent candidate and unknown intent", () => {
@@ -3848,7 +4282,7 @@ test("Assistant changes step text after local user choice, without writes", () =
   panel._renderMigrationGuide();
   assert.match(controls.migrationGuideStep.textContent, /Étape 1 —/);
   panel._chooseMigrationIntent("existing");
-  assert.match(controls.migrationGuideStep.textContent, /Étape 2 sur 3/);
+  assert.match(controls.migrationGuideStep.textContent, /Vérifiez le fichier YAML à reprendre/);
   assert.match(controls.migrationGuideNext.textContent, /labels à reprendre/);
   panel._chooseMigrationIntent("new");
   assert.match(controls.migrationGuideStep.textContent, /Étape 2 sur 2/);
@@ -3921,6 +4355,89 @@ test("Assistant proposes detected file and inspects it without migration writes"
   assert.match(controls.assistantFileResult.textContent, /52 entité/);
   assert.match(controls.assistantFileResult.textContent, /0 anomalie/);
   assert.match(controls.assistantFileSafety.textContent, /Aucun label ni YAML/);
+});
+
+test("Existing active Google Assistant YAML offers safe takeover when HVLS does not own it", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {
+      read_only: true, source_active_verified: false,
+      migration_authorized: false, stage_allowed: false,
+      apply_allowed: false, cutover_allowed: false,
+      status: "parsed", file_sha256: "a".repeat(64),
+      adoption_entries_complete: true,
+      adoption_entries: [{entity_id: "switch.existing", exposure: "expose",
+        has_customizations: false, reasons: []}],
+      counts: {entries: 1, entries_with_anomalies: 0},
+    };
+  });
+  const ids = [
+    "migrationGuide", "migrationGuideCandidate", "migrationGuideDetected",
+    "migrationGuideQuestion", "assistantSourceDetected",
+    "assistantSourceTitle", "assistantSourceSummary",
+    "assistantFileSection", "assistantFilePath", "assistantFileCheck",
+    "assistantFileResult", "assistantFileSafety", "assistantFileHint",
+    "migrationGuideNext",
+  ];
+  const nodes = Object.fromEntries(ids.map(id => [id, {
+    hidden: true, textContent: "", value: "", disabled: false,
+    setAttribute() {},
+  }]));
+  panel.querySelector = selector => nodes[selector.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "assisted_migration", source: {
+      status: "resolved",
+      locations: [
+        {path: "configuration.yaml"},
+        {path: "google_assistant_entities.yaml"},
+      ],
+    }, counts: {explicit_yaml_entries: 40},
+  }};
+  panel._assistantFilePath = null;
+  panel._applyBlockReasonCode = "unmanaged_output";
+  panel._renderMigrationGuide();
+  assert.equal(nodes.migrationGuide.hidden, false);
+  assert.equal(nodes.assistantSourceDetected.hidden, false);
+  assert.equal(nodes.assistantFileSection.hidden, false);
+  assert.equal(panel._migrationIntent, "existing");
+  assert.equal(nodes.assistantFilePath.value, "google_assistant_entities.yaml");
+  assert.equal(nodes.assistantFileCheck.disabled, false);
+  assert.match(nodes.assistantSourceSummary.textContent, /40 entité/);
+  assert.equal(nodes.migrationGuideDetected.textContent, "");
+  assert.equal(calls.length, 0);
+  await panel._checkAssistantEntityFile();
+  assert.deepEqual(calls.map(x => x.type), [
+    "ha_voice_label_sync/inspect_assistant_entity_file",
+  ]);
+  assert.equal(calls[0].path, "google_assistant_entities.yaml");
+  assert.equal(panel._assistantAdoptionAvailable(), true);
+  assert.match(nodes.assistantFileResult.textContent, /1 entité/);
+});
+
+test("Assistant takeover appears only for unmanaged or former-owner YAML", () => {
+  const {panel} = makePanel(async () => {
+    throw Error("No WS operation should run");
+  });
+  const guide = {hidden: true, setAttribute() {}};
+  panel.querySelector = selector => selector === "#migrationGuide" ? guide : null;
+  panel._migrationReport = {diagnostic: {
+    mode: "assisted_migration", source: {status: "resolved", locations: []},
+  }};
+  for (const reason of ["unmanaged_output", "owned_by_other_installation"]) {
+    panel._applyBlockReasonCode = reason;
+    panel._renderMigrationGuide();
+    assert.equal(guide.hidden, false, reason);
+  }
+  for (const reason of [null, "managed_output_missing", "no_changes"]) {
+    panel._applyBlockReasonCode = reason;
+    panel._renderMigrationGuide();
+    assert.equal(guide.hidden, true, String(reason));
+  }
+  panel._applyBlockReasonCode = "unmanaged_output";
+  panel._migrationReport.diagnostic.source.status = "ambiguous";
+  panel._renderMigrationGuide();
+  assert.equal(guide.hidden, true);
 });
 
 test("Assistant offers packages as unsupported other configuration", () => {
@@ -4260,8 +4777,8 @@ test("Assistant origin guide is a local non-authorizing step with bilingual copy
   assert.match(source, /report\?\.cutover_allowed === false/);
   assert.match(source, /_assistantProvenanceChoice = null/);
   assert.match(source, /aria-pressed="false"/);
-  assert.match(source, /Étape 3 sur 3/);
-  assert.match(source, /Step 3 of 3/);
+  assert.match(source, /Origine du fichier \(facultatif\)/);
+  assert.match(source, /File origin \(optional\)/);
 });
 
 test("Assistant provenance sections have separate accessible headings and safe manual guide", () => {
@@ -4676,286 +5193,213 @@ function cloneAdoptionReport(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
-test("Unreferenced YAML offers HVLS label reuse, not a Google connectivity blocker", () => {
+test("Recovery identifies eligible old entities, independent of existing HVLS labels", () => {
   const {panel, nodes} = standardAdoptionFixture(async () => {
-    throw Error("No requests expected");
+    throw Error("Read-only comparison must not write");
   });
   const plan = panel._assistantAdoptionPlan();
-  assert.deepEqual(Array.from(plan.candidates), ["light.new"]);
-  assert.equal(plan.totals.ready, 1);
+  assert.deepEqual(Array.from(plan.candidates), ["light.new", "light.custom"]);
+  assert.deepEqual(Array.from(plan.recoverable), ["light.new", "light.already", "light.custom"]);
+  assert.equal(plan.totals.total, 5);
+  assert.equal(plan.totals.recoverable, 3);
+  assert.equal(plan.totals.ready, 2);
   assert.equal(plan.totals.already, 1);
   assert.equal(plan.totals.excluded, 1);
-  assert.equal(plan.totals.review, 2);
+  assert.equal(plan.totals.review, 1); // Missing expose: no implicit exposure.
   panel._renderAssistantAdoption();
-  assert.equal(nodes.assistantAdoption.hidden, false);
-  assert.match(nodes.assistantAdoptSummary.textContent, /1 à ajouter/);
-  assert.match(nodes.assistantAdoptIntro.textContent, /sans configurer Google Assistant/);
+  assert.match(nodes.assistantAdoptSummary.textContent, /3 récupérables/);
+  assert.equal(nodes.assistantAdoptApply.disabled, true); // Ownership first.
+  panel._ownershipManaged = true;
+  panel._recoveryPending = true;
+  panel._renderAssistantAdoption();
   assert.equal(nodes.assistantAdoptApply.disabled, false);
-  assert.equal(nodes.assistantAdoptRows.children.length, 5);
-  assert.match(nodes.assistantAdoptRows.children[2].textContent, /aucun ajout/);
-  assert.equal(panel._migrationBaselineEligible(), false);
 });
 
-test("Confirmed existing file takeover shows diff, calls only prepare/confirm and never Apply", async () => {
-  const calls = [];
-  const confirmations = [];
+test("40 old entities result in 25 recoverable, 14 absent and 1 ineligible", () => {
+  const {panel} = standardAdoptionFixture(async () => {});
+  panel._assistantFileReport.adoption_entries = [
+    ...Array.from({length: 25}, (_, i) => ({
+      entity_id: "light.item_" + i, exposure: "expose",
+      has_customizations: true, reasons: [],
+    })),
+    ...Array.from({length: 14}, (_, i) => ({
+      entity_id: "climate.old_" + i, exposure: "expose",
+      has_customizations: false, reasons: [],
+    })),
+    {entity_id: "binary_sensor.rain", exposure: "expose",
+      has_customizations: false, reasons: []},
+  ];
+  panel._assistantFileReport.counts.entries = 40;
+  panel._entityCatalog.entities = [
+    ...Array.from({length: 25}, (_, i) => ({
+      entity_id: "light.item_" + i, eligible: true, has_label: i === 0,
+    })),
+    {entity_id: "binary_sensor.rain", eligible: false, has_label: false},
+  ];
+  const plan = panel._assistantAdoptionPlan();
+  assert.deepEqual({...plan.totals}, {
+    total: 40, ready: 24, already: 1, recoverable: 25,
+    missing: 14, ineligible: 1, excluded: 0, review: 0,
+    existingNew: 0, nextTotal: 25,
+  });
+  assert.equal(plan.complete, true);
+  assert.equal(plan.recoverable.length, 25);
+});
+
+test("Taking over a former YAML saves it first and displays recovery counts, not ordinary Preview", async () => {
+  const calls = [], confirmations = [];
   const {panel, nodes} = standardAdoptionFixture(async request => {
     calls.push(request);
     if (request.type === "ha_voice_label_sync/prepare_existing_output_takeover") {
-      assert.equal(request.path, "google_assistant_entities.yaml");
       return {
-        eligible: true, selected_path: request.path,
+        eligible: true, selected_path: request.path, entities: 5,
         production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
-        entities: 4, issues: 0,
-        changes: {added: 0, removed: 1, modified: 2},
+        recorded_sha_mismatch: true, previous_sha256: "c".repeat(64),
+        previous_entry_id: "old", ownership_revision: 1,
+        changes: {added: 2, removed: 4, modified: 1},
       };
     }
     if (request.type === "ha_voice_label_sync/confirm_existing_output_takeover") {
       assert.equal(request.confirmed, true);
-      assert.equal(request.production_sha256, "a".repeat(64));
-      assert.equal(request.preview_sha256, "b".repeat(64));
+      assert.equal(request.acknowledge_changed_output, true);
       return {
-        taken_over: true, backup_name: "google_assistant_entities.yaml.safety.bak",
+        taken_over: true, backup_name: "old.safety.bak",
         production_unchanged: true, apply_performed: false,
       };
     }
-    throw Error("No other operation expected");
-  }, message => { confirmations.push(message); return true; });
-  panel._applyBlockReasonCode = "unmanaged_output";
-  let previewReloads = 0;
+    throw Error("No automatic Apply or label write allowed");
+  }, message => {confirmations.push(message);return true;});
+  panel._applyBlockReasonCode = "owned_by_other_installation";
   panel._loadPreview = async () => {
-    previewReloads += 1;
     panel._applyBlockReasonCode = null;
+    panel._ownershipManaged = true;
+    panel._recoveryPending = true;
   };
-  panel._renderAssistantAdoption();
-  assert.equal(nodes.assistantTakeoverSection.hidden, false);
-  assert.equal(nodes.assistantTakeoverButton.disabled, false);
   await panel._takeOverAssistantFile();
-  assert.equal(previewReloads, 1);
-  assert.deepEqual(calls.map(r => r.type), [
+  assert.deepEqual(calls.map(x => x.type), [
     "ha_voice_label_sync/prepare_existing_output_takeover",
     "ha_voice_label_sync/confirm_existing_output_takeover",
   ]);
-  assert.match(confirmations[0], /1 suppression/);
-  assert.match(confirmations[0], /2 modification/);
-  assert.match(confirmations[0], /aucun Apply/i);
-  assert.match(confirmations[0], /\?\n\nEntités actuelles/);
-  assert.match(confirmations[0], /\nDifférences proposées par le Preview/);
-  assert.doesNotMatch(confirmations[0], /\\n/);
-  assert.match(nodes.assistantTakeoverResult.textContent, /Sauvegarde vérifiée/);
-  assert.equal(nodes.assistantTakeoverButton.hidden, true);
+  assert.match(confirmations[0], /5 entités/);
+  assert.match(confirmations[0], /3\./);
+  assert.doesNotMatch(confirmations[0], /SHA-256|Preview ordinaire|4 suppression/);
+  assert.match(nodes.assistantTakeoverResult.textContent, /sauvegarde vérifiée/i);
+  assert.equal(nodes.assistantAdoptApply.disabled, false);
 });
 
-test("English takeover confirmation has real line breaks", async () => {
-  const confirmations = [];
-  const {panel} = standardAdoptionFixture(async request => {
-    assert.equal(request.type, "ha_voice_label_sync/prepare_existing_output_takeover");
-    return {
-      eligible: true, selected_path: "google_assistant_entities.yaml",
-      production_sha256: "a".repeat(64), preview_sha256: "b".repeat(64),
-      entities: 4, issues: 0,
-      changes: {added: 0, removed: 0, modified: 0},
-    };
-  }, message => { confirmations.push(message); return false; });
-  panel._language = "en";
-  panel._applyBlockReasonCode = "unmanaged_output";
-  await panel._takeOverAssistantFile();
-  assert.equal(confirmations.length, 1);
-  assert.match(confirmations[0], /\?\n\nCurrent entities/);
-  assert.match(confirmations[0], /\nPreview differences:/);
-  assert.doesNotMatch(confirmations[0], /\\n/);
-});
-
-test("Existing file takeover rejects stale source, cancellation and unsupported status", async () => {
-  for (const testCase of ["cancel", "stale", "not_unmanaged"]) {
+test("Takeover cancellation and source digest mismatch never transfer ownership", async () => {
+  for (const mode of ["cancel", "stale"]) {
     const calls = [];
-    const {panel, nodes} = standardAdoptionFixture(async request => {
-      calls.push(request.type);
+    const {panel} = standardAdoptionFixture(async req => {
+      calls.push(req.type);
       return {
-        eligible: true, selected_path: "google_assistant_entities.yaml",
-        production_sha256: testCase === "stale"
-          ? "f".repeat(64) : "a".repeat(64),
-        preview_sha256: "b".repeat(64), entities: 4, issues: 0,
-        changes: {added: 0, removed: 0, modified: 0},
+        eligible: true, selected_path: req.path, entities: 5,
+        production_sha256: mode === "stale" ? "f".repeat(64) : "a".repeat(64),
+        preview_sha256: "b".repeat(64),
       };
     }, () => false);
-    panel._applyBlockReasonCode = testCase === "not_unmanaged"
-      ? "registry_invalid" : "unmanaged_output";
+    panel._applyBlockReasonCode = "unmanaged_output";
     panel._loadPreview = async () => {};
     await panel._takeOverAssistantFile();
-    if (testCase === "not_unmanaged") {
-      assert.deepEqual(calls, []);
-    } else {
-      assert.deepEqual(calls, ["ha_voice_label_sync/prepare_existing_output_takeover"]);
-    }
-    assert.equal(nodes.assistantTakeoverResult.textContent.includes("Fichier repris"), false);
+    assert.deepEqual(calls, ["ha_voice_label_sync/prepare_existing_output_takeover"]);
   }
 });
 
-test("Already labeled entities with generated name/room are recognized without any write", () => {
-  const {panel, nodes} = standardAdoptionFixture(async () => {
-    throw Error("No write requests expected");
-  });
-  const ids = [
-    "switch.sonoff_10007b6160_1", "switch.sonoff_10007b6160_2",
-    "switch.piscine_chauffage", "switch.pompe_piscine_prise",
-  ];
-  panel._assistantFileReport.adoption_entries = ids.map(entity_id => ({
-    entity_id, exposure: "expose", has_customizations: true, reasons: [],
-  }));
-  panel._assistantFileReport.counts.entries = 4;
-  panel._entityCatalog.entities = ids.map(entity_id => ({
-    entity_id, eligible: true, has_label: true,
-  }));
-  const plan = panel._assistantAdoptionPlan();
-  assert.equal(plan.totals.ready, 0);
-  assert.equal(plan.totals.already, 4);
-  assert.equal(plan.totals.excluded, 0);
-  assert.equal(plan.totals.review, 0);
-  assert.deepEqual(Array.from(plan.candidates), []);
-  panel._renderAssistantAdoption();
-  assert.equal(nodes.assistantAdoptApply.disabled, true);
-  assert.equal(nodes.assistantAdoptNeedsReview.hidden, false);
-  assert.equal(nodes.assistantAdoptRows.children.length, 4);
-  for (const row of nodes.assistantAdoptRows.children) {
-    assert.match(row.textContent, /Déjà dans HVLS/);
-    assert.match(row.textContent, /non comparés/);
-    assert.doesNotMatch(row.textContent, /À examiner manuellement/);
-  }
-  assert.equal(panel._migrationBaselineEligible(), false);
-});
-
-test("Entity review shows the specific reason and never auto-adds risky entries", () => {
-  const {panel, nodes} = standardAdoptionFixture(async () => {
-    throw Error("No write requests expected");
-  });
-  const extra = [
-    ["switch.conflict", "exclude", false, []],
-    ["light.absent", "expose", false, []],
-    ["light.ineligible", "expose", false, []],
-    ["light.invalid", "invalid", false, ["invalid_expose"]],
-  ];
-  for (const [entity_id, exposure, has_customizations, reasons] of extra) {
-    panel._assistantFileReport.adoption_entries.push({
-      entity_id, exposure, has_customizations, reasons,
-    });
-  }
-  panel._assistantFileReport.counts.entries += extra.length;
-  panel._entityCatalog.entities.push(
-    {entity_id: "switch.conflict", eligible: true, has_label: true},
-    {entity_id: "light.ineligible", eligible: false, has_label: false},
-    {entity_id: "light.invalid", eligible: true, has_label: false},
-  );
-  panel._renderAssistantAdoption();
-  const rows = nodes.assistantAdoptRows.children.map(row => row.textContent);
-  assert.match(rows.find(row => row.startsWith("light.custom")), /personnalisations YAML/);
-  assert.match(rows.find(row => row.startsWith("light.unknown")), /Directive expose absente/);
-  assert.match(rows.find(row => row.startsWith("switch.conflict")), /expose: false mais label/);
-  assert.match(rows.find(row => row.startsWith("light.absent")), /absente du catalogue/);
-  assert.match(rows.find(row => row.startsWith("light.ineligible")), /non éligible/);
-  assert.match(rows.find(row => row.startsWith("light.invalid")), /Anomalie dans la déclaration/);
-  assert.deepEqual(Array.from(panel._assistantAdoptionPlan().candidates), ["light.new"]);
-});
-
-test("Confirmed reuse only updates an explicit compatible entity using existing API", async () => {
-  const calls = [];
-  const {panel, nodes} = standardAdoptionFixture(async req => {
-    calls.push(req);
-    if (req.type === "ha_voice_label_sync/inspect_assistant_entity_file") {
-      return cloneAdoptionReport(panel._assistantFileReport);
-    }
-    if (req.type === "ha_voice_label_sync/set_entity_label") {
-      assert.equal(req.entity_id, "light.new");
-      assert.equal(req.enabled, true);
-      assert.equal(req.expected_enabled, false);
-      panel._entityCatalog.entities[0].has_label = true;
-      return {entity_id: req.entity_id, has_label: true, changed: true};
-    }
-    throw Error("Unexpected operation");
-  });
-  let previews = 0;
-  panel._loadEntities = async () => true;
-  panel._generatePreview = async () => { previews++; };
-  await panel._adoptAssistantFile();
-  assert.deepEqual(calls.map(req => req.type), [
-    "ha_voice_label_sync/inspect_assistant_entity_file",
-    "ha_voice_label_sync/set_entity_label",
-  ]);
-  assert.equal(previews, 1);
-  assert.match(nodes.assistantAdoptResult.textContent, /1 label/);
-  assert.deepEqual(Array.from(panel._assistantAdoptionPlan().candidates), []);
-});
-
-test("Reuse cancel sends nothing; changed YAML rejects writes before labels", async () => {
-  const requests = [];
+test("Recovery stage shows 25 entities and never calls direct set_entity_label", async () => {
+  const calls = [], navigated = [];
   const {panel} = standardAdoptionFixture(async req => {
-    requests.push(req);
-  }, () => false);
-  await panel._adoptAssistantFile();
-  assert.equal(requests.length, 0);
-  const {panel: current, nodes} = standardAdoptionFixture(async req => {
-    requests.push(req);
-    return {...cloneAdoptionReport(current._assistantFileReport),
-      file_sha256: "b".repeat(64)};
-  });
-  current._loadEntities = async () => true;
-  await current._adoptAssistantFile();
-  assert.deepEqual(requests.map(req => req.type),
-    ["ha_voice_label_sync/inspect_assistant_entity_file"]);
-  assert.match(nodes.assistantAdoptResult.textContent, /Fichier ou catalogue modifié/);
-});
-
-test("Reuse rejects forged authority, incomplete inventory or ambiguous label", async () => {
-  const {panel, nodes} = standardAdoptionFixture(async () => {
-    throw Error("No WebSocket allowed");
-  });
-  panel._assistantFileReport.stage_allowed = true;
-  assert.equal(panel._assistantAdoptionPlan(), null);
-  panel._renderAssistantAdoption();
-  assert.equal(nodes.assistantAdoption.hidden, true);
-  panel._assistantFileReport.stage_allowed = false;
-  panel._assistantFileReport.adoption_entries_complete = false;
-  panel._renderAssistantAdoption();
-  assert.equal(nodes.assistantAdoptApply.disabled, true);
-  panel._assistantFileReport.adoption_entries_complete = true;
-  panel._entityCatalog.label_ids = ["one", "two"];
-  panel._renderAssistantAdoption();
-  assert.equal(nodes.assistantAdoptApply.disabled, true);
-  await panel._adoptAssistantFile();
-});
-
-test("An uncertain second label update stops without hiding first success", async () => {
-  const calls = [];
-  const {panel, nodes} = standardAdoptionFixture(async req => {
     calls.push(req);
     if (req.type === "ha_voice_label_sync/inspect_assistant_entity_file") {
       return cloneAdoptionReport(panel._assistantFileReport);
     }
-    if (req.type === "ha_voice_label_sync/set_entity_label") {
-      if (req.entity_id === "light.new") {
-        return {entity_id: req.entity_id, has_label: true, changed: true};
-      }
-      throw Error("Simulated failure");
+    if (req.type === "ha_voice_label_sync/prepare_manual_label_preview") {
+      assert.equal(req.recovery, true);
+      assert.deepEqual(JSON.parse(JSON.stringify(req.changes)), [
+        {entity_id: "light.custom", enabled: true},
+        {entity_id: "light.new", enabled: true},
+      ]);
+      return {
+        mode: "label_preview", recovery: true,
+        projection: {ready: true}, changes: req.changes,
+        preview_sha256: "f".repeat(64), label_plan_sha256: "b".repeat(64),
+        production_sha256: "a".repeat(64), path: "Recovery Preview",
+        content: "light.new:\n  expose: true\n",
+        summary: {total: 3},
+      };
     }
-    throw Error("Unexpected operation");
+    throw Error("Unexpected WS mutation");
   });
-  panel._assistantFileReport.adoption_entries.push({
-    entity_id: "light.second", exposure: "expose",
-    has_customizations: false, reasons: [],
-  });
-  panel._assistantFileReport.counts.entries = 6;
-  panel._entityCatalog.entities.push({
-    entity_id: "light.second", eligible: true, has_label: false,
-  });
+  panel._ownershipManaged = true;
+  panel._recoveryPending = true;
   panel._loadEntities = async () => true;
-  panel._generatePreview = async () => {};
+  panel._activateTab = tab => navigated.push(tab);
+  panel._renderAnalysis = () => {};
   await panel._adoptAssistantFile();
-  assert.deepEqual(calls.map(req => req.type), [
+  assert.deepEqual(calls.map(x => x.type), [
     "ha_voice_label_sync/inspect_assistant_entity_file",
-    "ha_voice_label_sync/set_entity_label",
-    "ha_voice_label_sync/set_entity_label",
+    "ha_voice_label_sync/prepare_manual_label_preview",
   ]);
-  assert.match(nodes.assistantAdoptResult.textContent, /1 label/);
-  assert.match(nodes.assistantAdoptResult.textContent, /interruption/);
+  assert.equal(panel._stagedRestore.recovery, true);
+  assert.deepEqual(navigated, ["preview"]);
   assert.equal(panel._assistantAdoptBusy, false);
+});
+
+test("Recovery preserves previously labeled entities absent from the old YAML", async () => {
+  const {panel} = standardAdoptionFixture(async req => {
+    if (req.type === "ha_voice_label_sync/inspect_assistant_entity_file") {
+      return cloneAdoptionReport(panel._assistantFileReport);
+    }
+    assert.equal(req.type, "ha_voice_label_sync/prepare_manual_label_preview");
+    assert.ok(!req.changes.some(x => x.entity_id === "light.extra"));
+    assert.ok(req.changes.some(x => x.entity_id === "light.custom" && x.enabled === true));
+    return {mode: "label_preview", recovery: true,
+      projection: {ready: true}, changes: req.changes,
+      preview_sha256: "c".repeat(64), label_plan_sha256: "b".repeat(64),
+      production_sha256: "a".repeat(64), path: "Recovery",
+      content: "light.new:\n  expose: true\n", summary: {total: 4}};
+  });
+  panel._entityCatalog.entities.push({
+    entity_id: "light.extra", eligible: true, has_label: true,
+  });
+  panel._ownershipManaged = true;
+  panel._recoveryPending = true;
+  panel._loadEntities = async () => true;
+  panel._activateTab = () => {};
+  await panel._adoptAssistantFile();
+  assert.equal(panel._stagedRestore?.recovery, true);
+});
+
+test("Recovery stage fails closed when the original YAML has changed", async () => {
+  const calls = [];
+  const {panel,nodes} = standardAdoptionFixture(async req => {
+    calls.push(req.type);
+    return {...cloneAdoptionReport(panel._assistantFileReport),
+      file_sha256: "f".repeat(64)};
+  });
+  panel._ownershipManaged = true;
+  panel._recoveryPending = true;
+  panel._loadEntities = async () => true;
+  await panel._adoptAssistantFile();
+  assert.deepEqual(calls, ["ha_voice_label_sync/inspect_assistant_entity_file"]);
+  assert.equal(panel._stagedRestore, null);
+  assert.match(nodes.assistantAdoptResult.textContent, /refusée/);
+});
+
+test("Unmanaged file cannot stage a recovery even with a forged click", async () => {
+  const {panel} = standardAdoptionFixture(async () => {
+    throw Error("No WS call accepted");
+  });
+  panel._recoveryPending = true;
+  await panel._adoptAssistantFile();
+  assert.equal(panel._stagedRestore, undefined);
+});
+
+test("Empty label changes can still Apply a recovery cleanup of obsolete YAML", () => {
+  const {panel, controls} = makePanel(async () => {});
+  panel._stagedRestore = {mode: "label_preview", recovery: true,
+    changes: [], projection: {ready: true},
+    label_plan: {review: []}, label_plan_sha256: "a".repeat(64),
+    comparison: {status: "ok"},};
+  panel._updateApplyButton();
+  assert.equal(controls.apply.disabled, false);
 });

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import logging
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -55,6 +56,8 @@ from .preview_guard import PreviewChangedError, preview_digest
 from .restore_guard import assert_not_guarded, create_guard, read_guard
 from .services import DEFAULT_DOMAINS, async_run_workflow
 from .workflow_lock import get_workflow_lock
+
+_LOGGER = logging.getLogger(__name__)
 
 WS_TYPE_RECOVERY_HISTORY = f"{DOMAIN}/get_migration_investigation_history"
 WS_TYPE_RECOVERY_HISTORY_PREPARE = (
@@ -764,6 +767,7 @@ async def websocket_prepare_existing_output_takeover(
                 registry_path=Path(hass.config.path(".hvls", "ownership.json")),
                 entry_id=entries[0].entry_id,
                 selected_relative_path=msg["path"],
+                active_entry_ids=frozenset(e.entry_id for e in entries),
             )
         )
     except Exception:
@@ -783,6 +787,10 @@ async def websocket_prepare_existing_output_takeover(
     vol.Required("production_sha256"): str,
     vol.Required("preview_sha256"): str,
     vol.Required("confirmed"): bool,
+    vol.Optional("previous_entry_id"): vol.Any(None, str),
+    vol.Optional("previous_sha256"): vol.Any(None, str),
+    vol.Optional("ownership_revision"): vol.Any(None, int),
+    vol.Optional("acknowledge_changed_output"): bool,
 })
 async def websocket_confirm_existing_output_takeover(
     hass: HomeAssistant,
@@ -809,13 +817,37 @@ async def websocket_confirm_existing_output_takeover(
                     production_sha256=msg["production_sha256"],
                     preview_sha256=msg["preview_sha256"],
                     confirmed=msg["confirmed"],
+                    previous_entry_id=msg.get("previous_entry_id"),
+                    previous_sha256=msg.get("previous_sha256"),
+                    ownership_revision=msg.get("ownership_revision"),
+                    acknowledge_changed_output=msg.get(
+                        "acknowledge_changed_output", False
+                    ),
+                    active_entry_ids=frozenset(e.entry_id for e in entries),
                 )
             )
-        except Exception:
+        except Exception as exc:
+            _LOGGER.exception(
+                "HVLS recovery: confirmation failed; current YAML is preserved"
+            )
+            from .assistant_output_takeover import ExistingOutputTakeoverError
+
+            if (
+                isinstance(exc, ExistingOutputTakeoverError)
+                and str(exc) == "ownership_registration_failed_after_backup"
+            ):
+                reason = (
+                    "ownership_registration_failed_after_backup: "
+                    "Backup completed, but ownership was not transferred. "
+                    "Inspect Home Assistant logs; do not retry blindly."
+                )
+            else:
+                reason = (
+                    "Takeover incomplete or refused. Inspect ownership and backups; "
+                    "refresh Preview before retrying."
+                )
             connection.send_error(
-                msg["id"], "assistant_takeover_confirm_refused",
-                "Takeover incomplete or refused. Inspect ownership and backups; "
-                "refresh Preview before retrying.",
+                msg["id"], "assistant_takeover_confirm_refused", reason,
             )
             return
     connection.send_result(msg["id"], result)
@@ -1266,6 +1298,15 @@ async def websocket_get_preview(
         "count": len(excluded),
         "entities": excluded,
     }
+    # Purely a navigation hint for the Assistant. It grants no permission
+    # to adopt, label, or write an existing file.
+    mode = settings.get("onboarding_mode")
+    result["onboarding_mode"] = mode if mode in {"new", "existing"} else None
+    result["recovery_pending"] = (
+        mode == "existing" and settings.get("recovery_completed") is not True
+    )
+    if result["recovery_pending"]:
+        result["can_apply"] = False  # Old YAML must not be replaced by a normal Apply.
     connection.send_result(msg["id"], result)
 
 
@@ -1279,6 +1320,7 @@ WS_TYPE_APPLY_PREVIEW = f"{DOMAIN}/apply_preview"
         vol.Required("type"): WS_TYPE_APPLY_PREVIEW,
         vol.Required("preview_sha256"): str,
         vol.Required("production_sha256"): vol.Any(None, str),
+        vol.Optional("rebuild_missing", default=False): bool,
     }
 )
 async def websocket_apply_preview(
@@ -1296,6 +1338,11 @@ async def websocket_apply_preview(
             return
 
         settings = {**entries[0].data, **entries[0].options}
+        if (settings.get("onboarding_mode") == "existing"
+                and settings.get("recovery_completed") is not True):
+            connection.send_error(msg["id"], "recovery_pending",
+                                  "Complete reviewed recovery before ordinary Apply.")
+            return
         output_path = Path(settings.get(CONF_OUTPUT, DEFAULT_OUTPUT))
         if not output_path.is_absolute():
             output_path = Path(hass.config.config_dir) / output_path
@@ -1309,10 +1356,25 @@ async def websocket_apply_preview(
         preview_path = Path(hass.config.path(".hvls", "preview.yaml"))
 
         try:
-            assert_not_guarded(
-                Path(hass.config.path(".hvls", "ownership.json")),
-                entries[0].entry_id, output_path,
+            ownership_path = Path(
+                hass.config.path(".hvls", "ownership.json")
             )
+            assert_not_guarded(
+                ownership_path, entries[0].entry_id, output_path,
+            )
+            if msg.get("rebuild_missing", False):
+                ownership = await hass.async_add_executor_job(
+                    evaluate_registered_output,
+                    output_path, entries[0].entry_id, ownership_path,
+                )
+                if (
+                    ownership.reason_code != "managed_output_missing"
+                    or msg["production_sha256"] is not None
+                ):
+                    raise FileWriterError(
+                        "Missing-file recovery no longer applies. "
+                        "Refresh Preview and inspect production."
+                    )
             registries = get_live_registries(hass)
             result = await hass.async_add_executor_job(
                 partial(
@@ -1330,9 +1392,8 @@ async def websocket_apply_preview(
                     settings.get(CONF_CREATE_BACKUP, DEFAULT_CREATE_BACKUP),
                     expected_production_digest=msg["production_sha256"],
                     entry_id=entries[0].entry_id,
-                    ownership_registry_path=Path(
-                        hass.config.path(".hvls", "ownership.json")
-                    ),
+                    ownership_registry_path=ownership_path,
+                    rebuild_missing=msg.get("rebuild_missing", False),
                 )
             )
         except (
@@ -1513,6 +1574,7 @@ _MANUAL_LABEL_CHANGES_SCHEMA = [{
 @websocket_api.websocket_command({
     vol.Required("type"): WS_TYPE_PREPARE_MANUAL_LABEL_PREVIEW,
     vol.Required("changes"): _MANUAL_LABEL_CHANGES_SCHEMA,
+    vol.Optional("recovery", default=False): bool,
 })
 async def websocket_prepare_manual_label_preview(
     hass: HomeAssistant,
@@ -1537,13 +1599,19 @@ async def websocket_prepare_manual_label_preview(
                     "Production ownership is not verified; labels unchanged."
                 )
             settings = {**entry.data, **entry.options}
+            pending = (settings.get("onboarding_mode") == "existing"
+                       and settings.get("recovery_completed") is not True)
+            if pending != msg.get("recovery", False):
+                raise BackupRestoreError("Finish the selected recovery Preview first.")
             label = settings.get(CONF_LABEL, DEFAULT_LABEL)
             snapshot = get_live_registries(hass)
             catalog = build_entity_catalog(snapshot, label, DEFAULT_DOMAINS)
             result = await hass.async_add_executor_job(
-                prepare_manual_label_preview,
-                output, catalog, snapshot, label, DEFAULT_DOMAINS,
-                msg["changes"],
+                partial(
+                    prepare_manual_label_preview,
+                    output, catalog, snapshot, label, DEFAULT_DOMAINS,
+                    msg["changes"], recovery=msg.get("recovery", False),
+                )
             )
         except (
             BackupRestoreError, FileWriterError, LabelUpdateError,
@@ -1562,6 +1630,7 @@ async def websocket_prepare_manual_label_preview(
 @websocket_api.websocket_command({
     vol.Required("type"): WS_TYPE_APPLY_MANUAL_LABEL_PREVIEW,
     vol.Required("changes"): _MANUAL_LABEL_CHANGES_SCHEMA,
+    vol.Optional("recovery", default=False): bool,
     vol.Required("preview_sha256"): str,
     vol.Required("production_sha256"): vol.Any(None, str),
     vol.Required("label_plan_sha256"): str,
@@ -1585,6 +1654,10 @@ async def websocket_apply_manual_label_preview(
             settings = {**entry.data, **entry.options}
             output = _configured_output(hass)
             ownership_path = Path(hass.config.path(".hvls", "ownership.json"))
+            pending = (settings.get("onboarding_mode") == "existing"
+                       and settings.get("recovery_completed") is not True)
+            if pending != msg.get("recovery", False):
+                raise BackupRestoreError("Recovery mode is out of date; review again.")
             label = settings.get(CONF_LABEL, DEFAULT_LABEL)
             assert_not_guarded(ownership_path, entry.entry_id, output)
             ownership = await hass.async_add_executor_job(
@@ -1601,9 +1674,11 @@ async def websocket_apply_manual_label_preview(
             registries = get_live_registries(hass)
             catalog = build_entity_catalog(registries, label, DEFAULT_DOMAINS)
             plan = await hass.async_add_executor_job(
-                prepare_manual_label_preview,
-                output, catalog, registries, label, DEFAULT_DOMAINS,
-                msg["changes"],
+                partial(
+                    prepare_manual_label_preview,
+                    output, catalog, registries, label, DEFAULT_DOMAINS,
+                    msg["changes"], recovery=msg.get("recovery", False),
+                )
             )
             if (
                 plan["production_sha256"] != msg["production_sha256"]
@@ -1700,6 +1775,12 @@ async def websocket_apply_manual_label_preview(
                     backup_sha256=plan["preview_sha256"],
                 )
             )
+            if msg.get("recovery", False):
+                # Unlock normal generation only after verification of
+                # the updated YAML and all HA labels.
+                hass.config_entries.async_update_entry(
+                    entry, data={**entry.data, "recovery_completed": True}
+                )
         except (
             BackupRestoreError, PreviewChangedError, FileWriterError,
             LabelUpdateError, RegistryError, WorkflowError, PreviewFormatError,
@@ -1882,7 +1963,7 @@ async def websocket_review_backup(
     vol.Required("type"): WS_TYPE_PREPARE_BACKUP_PREVIEW,
     vol.Required("backup_id"): str,
     vol.Required("backup_sha256"): str,
-    vol.Required("production_sha256"): str,
+    vol.Required("production_sha256"): vol.Any(None, str),
     vol.Optional("ignored_entities", default=[]): [str],
 })
 async def websocket_prepare_backup_preview(
@@ -1900,6 +1981,15 @@ async def websocket_prepare_backup_preview(
             registry_path = Path(hass.config.path(".hvls", "ownership.json"))
             # Legacy restores must be reconciled before starting another plan.
             assert_not_guarded(registry_path, entries[0].entry_id, output_path)
+            if msg["production_sha256"] is None:
+                owner = await hass.async_add_executor_job(
+                    evaluate_registered_output,
+                    output_path, entries[0].entry_id, registry_path,
+                )
+                if owner.reason_code != "managed_output_missing":
+                    raise BackupRestoreError(
+                        "Backup recovery requires missing HVLS-owned production."
+                    )
             settings = {**entries[0].data, **entries[0].options}
             registries = get_live_registries(hass)
             catalog = await hass.async_add_executor_job(
@@ -1937,7 +2027,7 @@ async def websocket_prepare_backup_preview(
     vol.Required("type"): WS_TYPE_APPLY_BACKUP_PREVIEW,
     vol.Required("backup_id"): str,
     vol.Required("backup_sha256"): str,
-    vol.Required("production_sha256"): str,
+    vol.Required("production_sha256"): vol.Any(None, str),
     vol.Required("label_plan_sha256"): str,
     vol.Optional("ignored_entities", default=[]): [str],
 })
@@ -1966,6 +2056,15 @@ async def websocket_apply_backup_preview(
                 hass.config.path(".hvls", "ownership.json")
             )
             assert_not_guarded(ownership_path, entry.entry_id, output_path)
+            if msg["production_sha256"] is None:
+                owner = await hass.async_add_executor_job(
+                    evaluate_registered_output,
+                    output_path, entry.entry_id, ownership_path,
+                )
+                if owner.reason_code != "managed_output_missing":
+                    raise BackupRestoreError(
+                        "Backup recovery requires missing HVLS-owned production."
+                    )
 
             # A fresh HA snapshot and file digest must reproduce the exact
             # labels and YAML which the administrator reviewed.
@@ -1990,7 +2089,8 @@ async def websocket_apply_backup_preview(
                 or review["label_plan"]["review"]
                 or not review["projection"]["ready"]
                 or (
-                    review["comparison"]["identical_text"]
+                    review["comparison"]["status"] == "ok"
+                    and review["comparison"]["identical_text"]
                     and not review["label_plan"]["add"]
                     and not review["label_plan"]["remove"]
                 )

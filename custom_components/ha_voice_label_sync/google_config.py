@@ -399,16 +399,17 @@ def inspect_initial_setup(
 
 
 def initial_setup_output_error(report: dict[str, Any]) -> str | None:
-    """Validate a new installation's output destination, not ownership."""
-    if report.get("source_matches_output"):
-        return "source_output_conflict"
+    """Refuse unsafe paths, not the presence of an existing YAML file.
 
-    status = report.get("output_status")
-    if status == "existing":
-        return "existing_output_not_owned"
-    if status != "absent":
+    Initial configuration creates an HVLS entry, NOT a claim on the output
+    file. Ownership and any later YAML writes are checked separately by the
+    managed writer / Assistant takeover flow, with explicit user approval.
+    """
+    # The user can configure HVLS while an existing/manual entity file is
+    # present, including when it is referenced by Google Assistant.
+    # A regular existing file MUST NOT be overwritten or adopted here.
+    if report.get("output_status") not in {"absent", "existing"}:
         return "unsafe_output_path"
-
     return None
 
 
@@ -423,14 +424,17 @@ def render_initial_setup_diagnostic(
         return fr if french else en
 
     def safe(value: Any) -> str:
-        value = str(value).replace("\\r", " ").replace("\\n", " ")[:240]
+        value = str(value).replace("\r", " ").replace("\n", " ")[:240]
         for char in ("\\", "`", "*", "_", "[", "]", "(", ")", "<", ">", "|"):
             value = value.replace(char, "\\" + char)
         return value
 
     discoveries = {
         "found": tr("Fichier détecté", "File detected"),
-        "not_found": tr("Aucun fichier détecté", "No file detected"),
+        "not_found": tr(
+            "Aucune source Google Assistant identifiée",
+            "No Google Assistant source identified",
+        ),
         "file_missing": tr("Fichier déclaré mais absent", "Declared file missing"),
         "ambiguous": tr("Configuration ambiguë", "Ambiguous configuration"),
         "unsafe_path": tr("Chemin source non sûr", "Unsafe source path"),
@@ -438,7 +442,10 @@ def render_initial_setup_diagnostic(
 
     outputs = {
         "absent": tr("Fichier absent", "File does not exist"),
-        "existing": tr("Fichier déjà présent", "File already exists"),
+        "existing": tr(
+            "Fichier existant détecté",
+            "Existing file detected",
+        ),
         "unsafe": tr("Chemin non sûr", "Unsafe path"),
     }
 
@@ -446,12 +453,12 @@ def render_initial_setup_diagnostic(
     output = report.get("output_status", "unsafe")
 
     lines = [
-        "### " + tr("Diagnostic Google Assistant", "Google Assistant diagnostic"),
-        "**" + tr("Configuration", "Configuration") + " :** "
+        "### " + tr("Diagnostic initial HVLS", "HVLS initial diagnostic"),
+        "**" + tr("Source Google Assistant", "Google Assistant source") + " :** "
         + safe(discoveries.get(discovery, discoveries["ambiguous"])),
         "**" + tr("Fichier source", "Source file") + " :** "
         + safe(report.get("source_path") or tr("Non identifié", "Not identified")),
-        "**" + tr("Destination HVLS", "HVLS output") + " :** "
+        "**" + tr("Fichier YAML HVLS", "HVLS YAML file") + " :** "
         + safe(outputs.get(output, outputs["unsafe"])),
     ]
 
@@ -471,6 +478,16 @@ def render_initial_setup_diagnostic(
             )
         )
 
+    if output == "existing":
+        lines.append(tr(
+            "Vous pouvez installer HVLS : le fichier existant restera intact. "
+            "Ouvrez ensuite l'Assistant HVLS pour l'examiner et confirmer "
+            "séparément sa prise en charge dans le Preview.",
+            "You can install HVLS: the existing file will remain unchanged. "
+            "Then open the HVLS Assistant to review it and separately confirm "
+            "its takeover before applying any changes.",
+        ))
+
     lines.append(
         tr(
             "La détection ne donne aucune autorisation de modification.",
@@ -478,4 +495,4 @@ def render_initial_setup_diagnostic(
         )
     )
 
-    return "\\n\\n".join(lines)
+    return "\n\n".join(lines)

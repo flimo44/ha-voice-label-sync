@@ -10,6 +10,7 @@ from typing import Any
 from hvls import GenerationRequest, run_google_assistant_workflow
 from hvls.owned_writer import write_owned_output
 
+from .missing_output_rebuild import rebuild_missing_owned_output
 from .preview_guard import (
     PreviewChangedError,
     preview_digest,
@@ -29,6 +30,7 @@ def apply_reviewed_preview(
     expected_production_digest: str | None,
     entry_id: str,
     ownership_registry_path: Path,
+    rebuild_missing: bool = False,
 ):
     """Regenerate, verify and write exactly the approved YAML."""
     if not isinstance(reviewed_digest, str) or not re.fullmatch(
@@ -66,6 +68,21 @@ def apply_reviewed_preview(
 
     validate_preview_content(reviewed_content, generated.content)
     validate_production_unchanged(request.output_path, expected_production_digest)
+
+    # Missing-file recovery is deliberately NOT a normal overwrite: it
+    # requires a distinct explicit Apply action, a null prior digest and
+    # a verified existing managed claim. The helper rechecks under lock.
+    if rebuild_missing:
+        if expected_production_digest is not None:
+            raise PreviewChangedError(
+                "Missing-output recovery requires an absent production file."
+            )
+        return rebuild_missing_owned_output(
+            output_path=request.output_path,
+            content=generated.content,
+            entry_id=entry_id,
+            ownership_registry_path=ownership_registry_path,
+        )
 
     # Write exactly the content that passed validation.
     return write_owned_output(

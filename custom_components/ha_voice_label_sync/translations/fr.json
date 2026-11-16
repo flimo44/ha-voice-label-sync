@@ -4,7 +4,15 @@
     "step": {
       "user": {
         "title": "Configurer HA Voice Label Sync",
-        "description": "Configurez HVLS et vérifiez la configuration Google Assistant.\n\n{diagnostic}",
+        "description": "Comment souhaitez-vous commencer ?\n\n{detected_file}\n\nGoogle Assistant n'a pas besoin d'être connecté.",
+        "menu_options": {
+          "new": "Créer une nouvelle configuration",
+          "existing": "Reprendre une configuration existante"
+        }
+      },
+      "new": {
+        "title": "Créer une nouvelle configuration",
+        "description": "HVLS créera un nouveau fichier uniquement après votre validation dans le Preview. Après installation, ouvrez **HA Voice Label Sync** dans le menu latéral : la sélection des entités s’ouvrira directement.\n\n{diagnostic}",
         "data": {
           "backend": "Assistant vocal",
           "label": "Étiquette Home Assistant",
@@ -17,7 +25,25 @@
           "label": "Les entités portant cette étiquette Home Assistant seront incluses.",
           "output": "Chemin du fichier YAML généré dans Home Assistant.",
           "backup_retention": "Nombre maximal d’anciens fichiers générés à conserver. Utilisez 0 pour désactiver la rétention.",
-          "create_backup": "Sauvegarde le fichier de sortie actuel avant de le remplacer."
+          "create_backup": "Une sauvegarde est créée avant un futur remplacement validé dans le Preview. Aucun fichier n'est écrasé pendant l'installation."
+        }
+      },
+      "existing": {
+        "title": "Reprendre une configuration existante",
+        "description": "Votre YAML existant sera conservé sans modification. Après « Valider », terminez les écrans standards de Home Assistant (« Nommer et attribuer »), puis ouvrez **HA Voice Label Sync** dans le menu latéral : le panneau vous guidera directement dans l’Assistant.\n\n{diagnostic}",
+        "data": {
+          "backend": "Assistant vocal",
+          "label": "Étiquette Home Assistant",
+          "output": "Fichier de sortie",
+          "backup_retention": "Sauvegardes à conserver",
+          "create_backup": "Créer une sauvegarde avant remplacement"
+        },
+        "data_description": {
+          "backend": "Sélectionnez la configuration d’assistant vocal à générer.",
+          "label": "Les entités portant cette étiquette Home Assistant seront incluses.",
+          "output": "Chemin du fichier YAML généré dans Home Assistant.",
+          "backup_retention": "Nombre maximal d’anciens fichiers générés à conserver. Utilisez 0 pour désactiver la rétention.",
+          "create_backup": "Une sauvegarde est créée avant un futur remplacement validé dans le Preview. Aucun fichier n'est écrasé pendant l'installation."
         }
       }
     },
@@ -28,7 +54,9 @@
       "label_setup_failed": "Impossible de créer ou de retrouver l’étiquette Home Assistant. Vérifiez les étiquettes existantes et les autorisations.",
       "source_output_conflict": "La destination correspond au fichier Google Assistant. Choisissez un fichier distinct.",
       "existing_output_not_owned": "Ce fichier existe déjà. Choisissez une autre destination.",
-      "unsafe_output_path": "Chemin de sortie non sûr ou extérieur à Home Assistant."
+      "unsafe_output_path": "Chemin de sortie non sûr ou extérieur à Home Assistant.",
+      "new_output_exists": "Ce fichier existe déjà. Choisissez une nouvelle destination ou revenez à « Reprendre une configuration existante ».",
+      "existing_source_missing": "Aucun fichier YAML régulier à cet emplacement. Choisissez le fichier existant ou revenez à « Créer une nouvelle configuration »."
     }
   },
   "options": {

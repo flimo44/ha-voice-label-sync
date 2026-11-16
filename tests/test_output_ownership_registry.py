@@ -698,3 +698,65 @@ def test_lock_released_after_registry_exception(tmp_path, monkeypatch):
         fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
     assert registry_path.exists() is False
+
+
+def test_orphaned_ownership_transfer_supports_new_explicitly_approved_sha(
+    tmp_path,
+):
+    import hashlib
+
+    registry = OwnershipRegistry(tmp_path / "ownership.json")
+    output = tmp_path / "entities.yaml"
+    old_content = b"switch.original:\n  expose: true\n"
+    new_content = old_content + b"switch.added:\n  expose: true\n"
+    output.write_bytes(new_content)
+    old_sha = hashlib.sha256(old_content).hexdigest()
+    new_sha = hashlib.sha256(new_content).hexdigest()
+
+    registry.record_generation(
+        entry_id="installation-old",
+        output_path=str(output), sha256=old_sha,
+    )
+    revision = registry._load()["revision"]
+    registry.transfer_inactive_owner(
+        previous_entry_id="installation-old",
+        entry_id="installation-new", output_path=str(output),
+        previous_sha256=old_sha, sha256=new_sha,
+        expected_revision=revision,
+    )
+    assert registry.get_record("installation-old") is None
+    assert registry.get_record("installation-new") == {
+        "state": "managed", "output_path": str(output), "sha256": new_sha,
+    }
+    assert output.read_bytes() == new_content
+
+
+def test_orphaned_ownership_transfer_rejects_stale_revision_and_sha(
+    tmp_path,
+):
+    import hashlib
+
+    registry = OwnershipRegistry(tmp_path / "ownership.json")
+    output = tmp_path / "entities.yaml"
+    content = b"switch.original:\n  expose: true\n"
+    output.write_bytes(content)
+    sha = hashlib.sha256(content).hexdigest()
+    registry.record_generation(
+        entry_id="installation-old", output_path=str(output), sha256=sha,
+    )
+    version = registry._load()["revision"]
+    kwargs = dict(
+        previous_entry_id="installation-old",
+        entry_id="installation-new", output_path=str(output),
+        previous_sha256=sha, sha256="f" * 64,
+    )
+    with pytest.raises(ValueError, match="revision|changed"):
+        registry.transfer_inactive_owner(**kwargs, expected_revision=version - 1)
+    with pytest.raises(ValueError, match="Previous ownership"):
+        registry.transfer_inactive_owner(
+            **{**kwargs, "previous_sha256": "e" * 64},
+            expected_revision=version,
+        )
+    assert registry.get_record("installation-old")["sha256"] == sha
+    assert registry.get_record("installation-new") is None
+    assert output.read_bytes() == content
