@@ -590,6 +590,123 @@ test("Generate Preview regenerates YAML and refreshes panel", async () => {
   assert.match(panel.status, /32 entités/);
 });
 
+test("Pending label draft survives ordinary Preview reload without any write", async () => {
+  const calls = [], tabs = [];
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request.type);
+    return preview(true);
+  });
+  panel._activateTab = tab => tabs.push(tab);
+  const staged = {
+    mode: "label_preview", projection: {ready: true},
+    changes: [{entity_id: "climate.thermostat_sejour_2_2", enabled: true}],
+    label_plan: {review: []}, comparison: {status: "ok"},
+    label_plan_sha256: "a".repeat(64),
+  };
+  panel._stagedRestore = staged;
+  panel._manualLabelChanges = new Map([["climate.thermostat_sejour_2_2", true]]);
+  await panel._loadPreview();
+
+  assert.deepEqual(calls, [], "reloading draft must not fetch/replace normal Preview");
+  assert.deepEqual(tabs, ["preview"]);
+  assert.strictEqual(panel._stagedRestore, staged);
+  assert.equal(panel._manualLabelChanges.get("climate.thermostat_sejour_2_2"), true);
+  assert.equal(controls.apply.disabled, true,
+    "without a current safety evaluation the test fixture cannot approve");
+  assert.match(panel.status, /proposition non appliquée/);
+});
+
+test("Pending backup draft also blocks normal generation and global refresh", async () => {
+  const calls = [], tabs = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request.type);
+    return preview(true);
+  });
+  panel._activateTab = tab => tabs.push(tab);
+  const stage = {mode: "restore_preview", backup_id: "save-1",
+    label_plan: {add: [], remove: [], review: []},
+    comparison: {status: "ok"}, projection: {ready: true}};
+  panel._stagedRestore = stage;
+  await panel._generatePreview();
+  await panel._refreshAll();
+  await panel._restoreBackup();
+
+  assert.deepEqual(calls, []);
+  assert.strictEqual(panel._stagedRestore, stage);
+  assert.deepEqual(tabs, ["preview", "preview", "preview"]);
+  assert.match(panel.status, /appliquez-la ou annulez-la/);
+});
+
+test("Pending draft blocks takeover and recovery preparation before any WS action", async () => {
+  const calls = [], tabs = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request.type);
+    return {};
+  });
+  panel._activateTab = tab => tabs.push(tab);
+  panel._stagedRestore = {
+    mode: "label_preview", changes: [{entity_id: "switch.test", enabled: true}],
+  };
+  await panel._takeOverAssistantFile();
+  await panel._adoptAssistantFile();
+  assert.deepEqual(calls, []);
+  assert.deepEqual(tabs, ["preview", "preview"]);
+  assert.equal(panel._stagedRestore.mode, "label_preview");
+});
+
+test("After explicit Cancel or Apply, ordinary Preview fetch is allowed", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request.type);
+    return preview(true);
+  });
+  panel._activateTab = () => {};
+  panel._stagedRestore = {
+    mode: "label_preview", changes: [{entity_id: "switch.test", enabled: true}],
+  };
+  panel._manualLabelChanges = new Map([["switch.test", true]]);
+  await panel._cancelPreview();
+  assert.deepEqual(calls, ["ha_voice_label_sync/get_preview"]);
+  assert.equal(panel._stagedRestore, null);
+  assert.equal(panel._manualLabelChanges, null);
+
+  panel._stagedRestore = {mode: "restore_preview"};
+  await panel._loadPreview(true); // completed/failed server Apply refresh only
+  assert.equal(panel._stagedRestore, null);
+  assert.equal(calls.length, 2);
+});
+
+test("Interrupted recovery and reconciliation always block normal Apply", async () => {
+  for (const scenario of [
+    {recovery_pending: true},
+    {ownership: {
+      status: "pending", write_allowed: false, reason_code: "pending_operation",
+    }},
+    {ownership: {
+      status: "unknown", write_allowed: false,
+      reason_code: "restore_reconciliation_required",
+    }},
+  ]) {
+    const calls = [];
+    const {panel, controls} = makePanel(async request => {
+      calls.push(request.type);
+      return {
+        ...managedPreviewWithComparison({
+          added: ["switch.unapplied"], identical_entities: false,
+          identical_text: false,
+        }),
+        ...scenario,
+      };
+    });
+    await panel._loadPreview();
+    assert.equal(panel._review, null, JSON.stringify(scenario));
+    assert.equal(controls.apply.disabled, true, JSON.stringify(scenario));
+    await panel._applyPreview();
+    assert.deepEqual(calls, ["ha_voice_label_sync/get_preview"],
+      "never issue Apply while recovery is not finalized");
+  }
+});
+
 test("Generating normal Preview must not discard a pending HA label proposal", async () => {
   const calls = [], tabs = [];
   const {panel, controls} = makePanel(async request => {

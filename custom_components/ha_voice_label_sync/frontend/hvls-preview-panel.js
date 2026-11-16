@@ -344,7 +344,8 @@ const HVLS_TRANSLATIONS = {
     manualLabelPending: "À valider",
     manualLabelPreparing: "Simulation des étiquettes et du YAML, sans écriture…",
     manualLabelPrepared: "{count} changement(s) d'étiquette prêt(s) dans le Preview. Aucun label ni YAML modifié.",
-    manualLabelHelp: "Modifications proposées aux étiquettes HA et au YAML de production. Rien ne sera écrit avant votre validation.",
+    manualLabelHelp: "Modifications proposées aux étiquettes HA et au YAML de production. Rien ne sera écrit avant votre validation. Ce brouillon n'est pas conservé après un rechargement du navigateur : appliquez-le ou annulez-le avant de quitter.",
+    pendingDraftProtect: "Une proposition non appliquée est en attente. Examinez-la dans le Preview puis appliquez-la ou annulez-la avant de recharger ou de lancer une autre opération.",
     manualLabelApply: "Appliquer les changements d'étiquettes",
     manualLabelConfirm: "Appliquer les changements d'étiquettes et le YAML proposés dans le Preview ? Une sauvegarde de sécurité sera créée si un fichier de production existe.",
     manualLabelApplied: "Modification validée : {added} étiquette(s) ajoutée(s), {removed} retirée(s). YAML et labels vérifiés.",
@@ -878,7 +879,8 @@ const HVLS_TRANSLATIONS = {
     manualLabelPending: "Pending review",
     manualLabelPreparing: "Simulating labels and YAML without writing…",
     manualLabelPrepared: "{count} label change(s) prepared in Preview. No labels or YAML modified.",
-    manualLabelHelp: "Proposed HA label and production YAML changes. Nothing is written until you approve.",
+    manualLabelHelp: "Proposed HA label and production YAML changes. Nothing is written until you approve. This draft does not survive a browser reload: apply or cancel it before leaving.",
+    pendingDraftProtect: "An unapplied proposal is still pending. Review it in Preview and apply or cancel it before refreshing or starting another operation.",
     manualLabelApply: "Apply label changes",
     manualLabelConfirm: "Apply the reviewed label changes and YAML? A safety backup will be made when production exists.",
     manualLabelApplied: "Changes applied: {added} label(s) added, {removed} removed. YAML and labels verified.",
@@ -1363,8 +1365,19 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  _protectPendingDraft() {
+    // Only explicit Cancel and completed/failed Apply may clear a staged
+    // proposal. A navigation, refresh or migration must never silently
+    // discard the user's unpublished selection.
+    if (!this._stagedRestore) return false;
+    this._activateTab("preview");
+    this._setStatusKey("pendingDraftProtect");
+    return true;
+  }
+
   async _loadPreview(afterApply = false) {
     if (!this._hass || (this._applying && !afterApply)) return;
+    if (!afterApply && this._protectPendingDraft()) return;
     const loadId = (this._loadId || 0) + 1;
     this._loadId = loadId;
     this._stagedRestore = null; // Normal Preview replaces an obsolete staging plan.
@@ -1619,12 +1632,9 @@ class HVLSPreviewPanel extends HTMLElement {
 
   async _generatePreview(fromRefresh = false) {
     if (!this._hass || this._generating || this._applying || this._restoring || (this._refreshing && !fromRefresh)) return;
-    // A normal generation uses only SAVED HA labels. It must not discard
-    // a separately reviewed, not-yet-applied change in the label Preview.
-    if (this._stagedRestore?.mode === "label_preview") {
-      this._activateTab("preview");
-      return;
-    }
+    // Normal generation uses only SAVED HA labels; it would replace either
+    // a staged label or backup Preview. Preserve both kinds of proposal.
+    if (this._protectPendingDraft()) return;
 
     this._generating = true;
     this._loadId = (this._loadId || 0) + 1;
@@ -1650,6 +1660,7 @@ class HVLSPreviewPanel extends HTMLElement {
   async _refreshAll() {
     if (!this._hass || this._refreshing || this._generating ||
         this._applying || this._restoring || this._entityWritePending || this._entityLoading) return;
+    if (this._protectPendingDraft()) return;
 
     this._refreshing = true;
     // A refresh can change the input registry or the YAML. Invalidate any
@@ -4759,6 +4770,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
   async _restoreBackup() {
     // A backup is only a proposed configuration at this point. Do not write
     // google_assistant_entities.yaml or modify native HA labels here.
+    if (this._protectPendingDraft()) return;
     const data = this._backupReview;
     if (!data || this._restoring || this._applying ||
         this._refreshing || this._generating || this._entityWritePending ||
@@ -5308,6 +5320,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
   }
 
   async _takeOverAssistantFile() {
+    if (this._protectPendingDraft()) return;
     if (!this._hass || !this._assistantAdoptionAvailable() ||
         !["unmanaged_output", "owned_by_other_installation"].includes(
           this._applyBlockReasonCode
@@ -5383,6 +5396,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
   }
 
   async _adoptAssistantFile() {
+    if (this._protectPendingDraft()) return;
     const plan = this._assistantAdoptionPlan();
     if (!this._hass || !plan?.complete || !plan.canWrite ||
         !plan.recoverable.length || !this._ownershipManaged ||
