@@ -21,7 +21,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function makePanel(callWS, confirm = () => true) {
+function makePanel(callWS, confirm = () => true, storage = undefined) {
   let Panel;
 
   const context = vm.createContext({
@@ -32,7 +32,7 @@ function makePanel(callWS, confirm = () => true) {
         Panel = component;
       },
     },
-    window: { confirm, alert: () => {} },
+    window: { confirm, alert: () => {}, localStorage: storage },
     document: {
       createElement(tag) {
         return {
@@ -85,6 +85,16 @@ function makePanel(callWS, confirm = () => true) {
   return { panel, controls };
 }
 
+function fakeLocalStorage() {
+  const items = new Map();
+  return {
+    items,
+    getItem: key => items.get(key) ?? null,
+    setItem: (key, value) => items.set(key, String(value)),
+    removeItem: key => items.delete(key),
+  };
+}
+
 function preview(canApply = true) {
   return {
     available: true,
@@ -101,6 +111,204 @@ function preview(canApply = true) {
     production_sha256: null,
   };
 }
+
+test("Unapplied checkbox selection survives leaving and reopening the HA panel", async () => {
+  const store = fakeLocalStorage();
+  const calls = [];
+  const userId = "a12345678-user";
+  const entity = {entity_id: "climate.thermostat_sejour_2_2",
+    eligible: true, has_label: false};
+  const baseline = {
+    ...preview(true), production_sha256: "a".repeat(64),
+    ownership: {status: "managed", write_allowed: true},
+  };
+  const server = async request => {
+    calls.push(request.type);
+    if (request.type === "ha_voice_label_sync/get_preview") return baseline;
+    if (request.type === "ha_voice_label_sync/prepare_manual_label_preview")
+      return {...manualStage(request.changes),
+        production_path: baseline.production_path};
+    throw Error("Unexpected server request: " + request.type);
+  };
+
+  // Panel instance 1: stage a label without Apply.
+  const first = makePanel(server, () => true, store).panel;
+  first._hass.user = {id: userId};
+  first._entityCatalog = {entities: [entity]};
+  first._lastAnalysis = baseline; // normal Preview was already loaded
+  first._activateTab = () => {};
+  await first._setEntityLabel(entity, {checked: true});
+  assert.equal(first._manualLabelChanges.get(entity.entity_id), true);
+  assert.equal(store.items.size, 1);
+  assert.equal(JSON.parse([...store.items.values()][0]).changes[0].base_label,
+    false);
+  assert.ok(!calls.some(c => /apply|set_entity_label/.test(c)));
+
+  // Home Assistant destroys the panel while another app is open.
+  // A *new* panel with an empty memory cache reads the saved intent.
+  const reopened = makePanel(server, () => true, store);
+  reopened.panel._hass.user = {id: userId};
+  reopened.panel._entityCatalog = {entities: [entity]};
+  reopened.panel._lastAnalysis = baseline;
+  reopened.panel._activateTab = tab => {reopened.panel.openedTab = tab;};
+  assert.equal(reopened.panel._draftStorageKey(),
+    "hvls:label-draft:v1:" + userId);
+  assert.notEqual(reopened.panel._readSavedLabelDraft(), null,
+    JSON.stringify([...store.items]));
+  await reopened.panel._resumeSavedLabelDraft();
+  assert.equal(reopened.panel._manualLabelChanges.get(entity.entity_id), true);
+  assert.equal(reopened.panel._stagedRestore.mode, "label_preview");
+  assert.equal(reopened.panel.openedTab, "preview");
+  assert.equal(reopened.controls.apply.disabled, false);
+  assert.match(reopened.panel.status, /retrouvée/);
+  assert.equal(calls.filter(c =>
+    c === "ha_voice_label_sync/prepare_manual_label_preview").length, 2);
+  assert.ok(!calls.some(c => /apply|set_entity_label/.test(c)));
+});
+
+test("Saved draft is blocked when production or HA label state changed", async () => {
+  for (const changed of ["production", "label", "ownership"]) {
+    const store = fakeLocalStorage();
+    const userId = "a12345678-user";
+    const key = "hvls:label-draft:v1:" + userId;
+    const changes = [{entity_id: "switch.garage", enabled: true,
+      base_label: false}];
+    store.setItem(key, JSON.stringify({
+      version: 1,
+      productionPath: "/config/google_assistant_entities.yaml",
+      productionSha: "a".repeat(64),
+      changes,
+    }));
+    const calls = [];
+    const {panel, controls} = makePanel(async req => {
+      calls.push(req.type);
+      throw Error("Must not call backend to replay stale draft");
+    }, () => true, store);
+    panel._hass.user = {id: userId};
+    panel._entityCatalog = {entities: [{
+      entity_id: "switch.garage", eligible: true,
+      has_label: changed === "label",
+    }]};
+    panel._lastAnalysis = {
+      ...preview(true),
+      production_sha256: changed === "production" ?
+        "f".repeat(64) : "a".repeat(64),
+      ownership: changed === "ownership" ?
+        {status: "unknown", write_allowed: false} :
+        {status: "managed", write_allowed: true},
+    };
+    panel._activateTab = () => {};
+    await panel._resumeSavedLabelDraft();
+    assert.equal(panel._stagedRestore.mode, "saved_draft_blocked", changed);
+    assert.equal(controls.apply.disabled, true, changed);
+    assert.equal(panel._manualLabelChanges.get("switch.garage"), true);
+    assert.equal(store.getItem(key) !== null, true);
+    assert.deepEqual(calls, []);
+    await panel._applyPreview();
+    assert.deepEqual(calls, []);
+    await panel._cancelPreview();
+    assert.equal(store.getItem(key), null);
+  }
+});
+
+test("A failed second checkbox preparation preserves the earlier saved draft", async () => {
+  const storage = fakeLocalStorage(), calls = [];
+  const entities = [
+    {entity_id: "switch.first", has_label: false, eligible: true},
+    {entity_id: "switch.second", has_label: false, eligible: true},
+  ];
+  const baseline = {
+    ...preview(true),
+    production_sha256: "a".repeat(64),
+    ownership: {status: "managed", write_allowed: true},
+  };
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request.type);
+    if (request.changes.length === 1) return {
+      ...manualStage(request.changes),
+      production_path: baseline.production_path,
+    };
+    throw Error("New proposal failed");
+  }, () => true, storage);
+  panel._hass.user = {id: "alice-user-12"};
+  panel._lastAnalysis = baseline;
+  panel._entityCatalog = {entities};
+  panel._activateTab = () => {};
+
+  await panel._setEntityLabel(entities[0], {checked: true});
+  const earlier = panel._stagedRestore;
+  assert.equal(panel._manualLabelChanges.size, 1);
+  const secondCheckbox = {checked: true};
+  await panel._setEntityLabel(entities[1], secondCheckbox);
+  assert.strictEqual(panel._stagedRestore, earlier);
+  assert.equal(panel._manualLabelChanges.size, 1);
+  assert.equal(panel._manualLabelChanges.get("switch.first"), true);
+  assert.equal(secondCheckbox.checked, false);
+  assert.equal(controls.apply.disabled, false);
+  const saved = panel._readSavedLabelDraft();
+  assert.equal(saved.changes.length, 1);
+  assert.equal(saved.changes[0].entity_id, "switch.first");
+  assert.deepEqual(calls, [
+    "ha_voice_label_sync/prepare_manual_label_preview",
+    "ha_voice_label_sync/prepare_manual_label_preview",
+  ]);
+});
+
+test("A saved proposal is isolated to the authenticated HA user", async () => {
+  const storage = fakeLocalStorage();
+  storage.setItem("hvls:label-draft:v1:alice-user-12", JSON.stringify({
+    version: 1, productionPath: "/config/google_assistant_entities.yaml",
+    productionSha: null,
+    changes: [{entity_id: "light.bedroom", enabled: true, base_label: false}],
+  }));
+  const {panel} = makePanel(async () => {
+    throw Error("No backend requests expected");
+  }, () => true, storage);
+  panel._hass.user = {id: "bob-user-123"};
+  await panel._resumeSavedLabelDraft();
+  assert.equal(panel._stagedRestore, undefined);
+  assert.equal(storage.items.size, 1);
+});
+
+test("Saved draft never reuses previous Preview approval when backend rejects", async () => {
+  const storage = fakeLocalStorage();
+  const key = "hvls:label-draft:v1:alice-user-12";
+  storage.setItem(key, JSON.stringify({
+    version: 1, productionPath: "/config/google_assistant_entities.yaml",
+    productionSha: "a".repeat(64),
+    changes: [{entity_id: "light.bedroom", enabled: true, base_label: false}],
+  }));
+  const calls = [];
+  const {panel, controls} = makePanel(async request => {
+    calls.push(request.type);
+    throw Error("Preview changed");
+  }, () => true, storage);
+  panel._hass.user = {id: "alice-user-12"};
+  panel._entityCatalog = {entities: [{
+    entity_id: "light.bedroom", has_label: false, eligible: true,
+  }]};
+  panel._lastAnalysis = {
+    ...preview(true), production_sha256: "a".repeat(64),
+    ownership: {status: "managed", write_allowed: true},
+  };
+  panel._activateTab = () => {};
+  assert.notEqual(panel._readSavedLabelDraft(), null,
+    JSON.stringify([...storage.items]));
+  await panel._resumeSavedLabelDraft();
+  assert.deepEqual(calls, ["ha_voice_label_sync/prepare_manual_label_preview"]);
+  assert.equal(panel._stagedRestore.mode, "saved_draft_blocked");
+  assert.equal(panel._review, null);
+  assert.equal(controls.apply.disabled, true);
+  assert.notEqual(storage.getItem(key), null);
+});
+
+test("Initial panel loading resumes saved proposals only after both fresh snapshots", () => {
+  const start = source.indexOf("set hass(hass) {");
+  const end = source.indexOf("  set narrow(narrow)", start);
+  const text = source.slice(start, end);
+  assert.match(text, /Promise\.all\(\[this\._loadPreview\(\), this\._loadEntities\(\)\]\)/);
+  assert.match(text, /\.then\(\(\) => this\._resumeSavedLabelDraft\(\)\)/);
+});
 
 test("À valider opens Preview without toggling pending HVLS selection", () => {
   const ws = [];
