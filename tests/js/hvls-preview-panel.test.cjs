@@ -6135,8 +6135,9 @@ test("Statistics keeps expanded room and domain lists during analysis refresh", 
 test("New entity management defaults to eligible entities without HVLS", () => {
   const option = '<option value="eligible_no" selected>';
   assert.ok(source.includes(option));
-  assert.match(source,
-    /const filter = this\\.querySelector\\("#entityFilter"\\)\\?\\.value \\|\\| "eligible_no"/);
+  assert.ok(source.includes(
+    'const filter = this.querySelector("#entityFilter")?.value || "eligible_no";'
+  ));
 });
 
 test("Removing the last selected HVLS entity requires explicit confirmation", () => {
