@@ -24,6 +24,7 @@ from .const import (
 )
 from .label_setup import ensure_configured_label
 from .orphaned_new_install import retire_missing_inactive_owner
+from .output_path import UnsafeOutputPath, resolve_output_path
 from .services import async_register_services
 from .websocket import async_register_websocket_api
 
@@ -95,14 +96,16 @@ async def async_setup_entry(
     # output claimed by the old entry. Retire only that orphaned metadata:
     # no YAML or label is created/modified until a reviewed Preview Apply.
     if settings.get("onboarding_mode") == "new":
-        output = Path(settings.get(CONF_OUTPUT, DEFAULT_OUTPUT))
-        if not output.is_absolute():
-            output = Path(hass.config.config_dir) / output
-        registry = Path(hass.config.path(".hvls", "ownership.json"))
-        active_ids = frozenset(
-            item.entry_id for item in hass.config_entries.async_entries(DOMAIN)
-        )
         try:
+            output = await hass.async_add_executor_job(
+                resolve_output_path,
+                hass.config.config_dir,
+                settings.get(CONF_OUTPUT, DEFAULT_OUTPUT),
+            )
+            registry = Path(hass.config.path(".hvls", "ownership.json"))
+            active_ids = frozenset(
+                item.entry_id for item in hass.config_entries.async_entries(DOMAIN)
+            )
             retired = await hass.async_add_executor_job(
                 partial(
                     retire_missing_inactive_owner,
@@ -112,7 +115,7 @@ async def async_setup_entry(
                     active_entry_ids=active_ids,
                 )
             )
-        except (OSError, ValueError, FileWriterError) as exc:
+        except (UnsafeOutputPath, OSError, ValueError, FileWriterError) as exc:
             _LOGGER.warning("HVLS new output ownership remains protected: %s", exc)
         else:
             if retired:

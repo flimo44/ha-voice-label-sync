@@ -180,3 +180,30 @@ def test_missing_google_source_still_requires_review(tmp_path):
     assert report["source_matches_output"] is True
     assert report["output_status"] == "absent"
     assert report["review_required"] is True
+
+
+
+def test_setup_accepts_home_assistant_root_alias(tmp_path):
+    actual = tmp_path / "homeassistant"
+    actual.mkdir()
+    alias = tmp_path / "config"
+    alias.symlink_to(actual, target_is_directory=True)
+    (actual / "configuration.yaml").write_text("default_config:\n")
+
+    output = alias / "google_assistant_entities.yaml"
+    report = inspect(actual, output)
+    assert report["output_status"] == "absent"
+    assert report["source_matches_output"] is False
+
+
+def test_setup_rejects_internal_symlink_alias(tmp_path):
+    actual = tmp_path / "homeassistant"
+    actual.mkdir()
+    subdir = actual / "subdir"
+    subdir.mkdir()
+    alias = actual / "subdir_alias"
+    alias.symlink_to(subdir, target_is_directory=True)
+    (actual / "configuration.yaml").write_text("default_config:\n")
+
+    report = inspect(actual, alias / "out.yaml")
+    assert report["output_status"] == "unsafe"

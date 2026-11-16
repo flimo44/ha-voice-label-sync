@@ -191,6 +191,16 @@ def websocket_module(monkeypatch):
     lock_module.get_workflow_lock = lambda hass: asyncio.Lock()
     monkeypatch.setitem(sys.modules, f"{prefix}.workflow_lock", lock_module)
 
+    # Load the real path validator in this isolated package.
+    output_name = f"{prefix}.output_path"
+    output_path = path.with_name("output_path.py")
+    output_spec = importlib.util.spec_from_file_location(
+        output_name, output_path,
+    )
+    output_module = importlib.util.module_from_spec(output_spec)
+    monkeypatch.setitem(sys.modules, output_name, output_module)
+    output_spec.loader.exec_module(output_module)
+
     spec.loader.exec_module(module)
 
     module._read_and_compare_real = module._read_and_compare
@@ -1177,7 +1187,7 @@ def test_preview_refuses_apply_from_persistent_restore_hold(websocket_module):
     ))
     ws.read_guard.return_value = {
         "entry_id": "test-installation",
-        "output_path": ws.DEFAULT_OUTPUT,
+        "output_path": "/config/" + ws.DEFAULT_OUTPUT,
         "original_sha256": "c" * 64,
         "restored_sha256": "d" * 64,
     }
@@ -1411,3 +1421,51 @@ def test_recovery_apply_unlocks_only_after_guarded_yaml_and_labels(
     hass.config_entries.async_update_entry.assert_called_once_with(
         entry, data={**entry.data, "recovery_completed": True},
     )
+
+
+
+def test_get_preview_refuses_unsafe_configured_path(websocket_module):
+    ws = websocket_module.websocket
+    hass = make_hass()
+    hass.config_entries.async_entries = lambda domain: [
+        SimpleNamespace(
+            data={"output": "../outside.yaml", "label": "google_assistant"},
+            options={},
+            entry_id="test-installation",
+        )
+    ]
+    connection = SimpleNamespace(send_error=Mock(), send_result=Mock())
+
+    asyncio.run(ws.websocket_get_preview(hass, connection, {"id": 1301}))
+
+    connection.send_error.assert_called_once()
+    assert connection.send_error.call_args.args[1] == "unsafe_output_path"
+    connection.send_result.assert_not_called()
+    ws._read_and_compare.assert_not_called()
+
+
+def test_apply_refuses_unsafe_configured_path_without_writer(websocket_module):
+    ws = websocket_module.websocket
+    hass = make_hass()
+    hass.config_entries.async_entries = lambda domain: [
+        SimpleNamespace(
+            data={"output": "../outside.yaml", "label": "google_assistant"},
+            options={},
+            entry_id="test-installation",
+        )
+    ]
+    connection = SimpleNamespace(send_error=Mock(), send_result=Mock())
+    ws.apply_reviewed_preview = Mock()
+
+    asyncio.run(ws.websocket_apply_preview(
+        hass, connection, {
+            "id": 1302,
+            "preview_sha256": "a" * 64,
+            "production_sha256": None,
+        },
+    ))
+
+    connection.send_error.assert_called_once()
+    assert connection.send_error.call_args.args[1] == "unsafe_output_path"
+    connection.send_result.assert_not_called()
+    ws.apply_reviewed_preview.assert_not_called()

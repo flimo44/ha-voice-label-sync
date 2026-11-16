@@ -49,6 +49,7 @@ from .entity_catalog import build_entity_catalog
 from .entity_label_writer import update_entity_label
 from .ha_registries import get_live_registries
 from .label_update import LabelUpdateError, ensure_entity_eligible_for_addition
+from .output_path import UnsafeOutputPath, resolve_output_path
 from .preview_apply import apply_reviewed_preview
 from .preview_compare import PreviewFormatError, analyze_preview
 from .preview_exclusions import analyze_exclusions
@@ -762,7 +763,7 @@ async def websocket_prepare_existing_output_takeover(
             partial(
                 prepare_existing_output_takeover,
                 config_dir=hass.config.config_dir,
-                output_path=_configured_output(hass),
+                output_path=await _configured_output(hass),
                 preview_path=Path(hass.config.path(".hvls", "preview.yaml")),
                 registry_path=Path(hass.config.path(".hvls", "ownership.json")),
                 entry_id=entries[0].entry_id,
@@ -809,7 +810,7 @@ async def websocket_confirm_existing_output_takeover(
                 partial(
                     confirm_existing_output_takeover,
                     config_dir=hass.config.config_dir,
-                    output_path=_configured_output(hass),
+                    output_path=await _configured_output(hass),
                     preview_path=Path(hass.config.path(".hvls", "preview.yaml")),
                     registry_path=Path(hass.config.path(".hvls", "ownership.json")),
                     entry_id=entries[0].entry_id,
@@ -1201,9 +1202,18 @@ async def websocket_get_preview(
     preview_path = Path(hass.config.path(".hvls", "preview.yaml"))
     entries = hass.config_entries.async_entries(DOMAIN)
     settings = {**entries[0].data, **entries[0].options} if entries else {}
-    output_path = Path(settings.get(CONF_OUTPUT, DEFAULT_OUTPUT))
-    if not output_path.is_absolute():
-        output_path = Path(hass.config.config_dir) / output_path
+    try:
+        output_path = await hass.async_add_executor_job(
+            resolve_output_path,
+            hass.config.config_dir,
+            settings.get(CONF_OUTPUT, DEFAULT_OUTPUT),
+        )
+    except UnsafeOutputPath:
+        connection.send_error(
+            msg["id"], "unsafe_output_path",
+            "Configured HVLS output path is unsafe. No changes made.",
+        )
+        return
     # Native HA registries must be accessed on the event-loop thread.
     try:
         registries = get_live_registries(hass)
@@ -1347,9 +1357,18 @@ async def websocket_apply_preview(
             connection.send_error(msg["id"], "recovery_pending",
                                   "Complete reviewed recovery before ordinary Apply.")
             return
-        output_path = Path(settings.get(CONF_OUTPUT, DEFAULT_OUTPUT))
-        if not output_path.is_absolute():
-            output_path = Path(hass.config.config_dir) / output_path
+        try:
+            output_path = await hass.async_add_executor_job(
+                resolve_output_path,
+                hass.config.config_dir,
+                settings.get(CONF_OUTPUT, DEFAULT_OUTPUT),
+            )
+        except UnsafeOutputPath:
+            connection.send_error(
+                msg["id"], "unsafe_output_path",
+                "Configured HVLS output path is unsafe. Apply refused.",
+            )
+            return
 
         request = GenerationRequest(
             label=settings.get(CONF_LABEL, DEFAULT_LABEL),
@@ -1592,7 +1611,7 @@ async def websocket_prepare_manual_label_preview(
             if len(entries) != 1:
                 raise BackupRestoreError("HVLS installation unavailable.")
             entry = entries[0]
-            output = _configured_output(hass)
+            output = await _configured_output(hass)
             guard_path = Path(hass.config.path(".hvls", "ownership.json"))
             assert_not_guarded(guard_path, entry.entry_id, output)
             owner = await hass.async_add_executor_job(
@@ -1656,7 +1675,7 @@ async def websocket_apply_manual_label_preview(
                 raise BackupRestoreError("HVLS installation unavailable.")
             entry = entries[0]
             settings = {**entry.data, **entry.options}
-            output = _configured_output(hass)
+            output = await _configured_output(hass)
             ownership_path = Path(hass.config.path(".hvls", "ownership.json"))
             pending = (settings.get("onboarding_mode") == "existing"
                        and settings.get("recovery_completed") is not True)
@@ -1816,23 +1835,17 @@ WS_TYPE_APPLY_BACKUP_PREVIEW = f"{DOMAIN}/apply_backup_preview"
 WS_TYPE_RESOLVE_RESTORE = f"{DOMAIN}/resolve_restored_output"
 
 
-def _configured_output(hass: HomeAssistant) -> Path:
-    """Resolve the output path from the active HA integration settings."""
+async def _configured_output(hass: HomeAssistant) -> Path:
+    """Validate the configured YAML path before backup/label/restore actions."""
     entries = hass.config_entries.async_entries(DOMAIN)
     if not entries:
         raise BackupRestoreError("HVLS is not configured.")
     settings = {**entries[0].data, **entries[0].options}
-    path = Path(settings.get(CONF_OUTPUT, DEFAULT_OUTPUT))
-    if not path.is_absolute():
-        path = Path(hass.config.config_dir) / path
-    config_root = Path(hass.config.config_dir).resolve()
-    if not path.resolve().is_relative_to(config_root):
-        raise BackupRestoreError(
-            "Production output must be inside the HA config directory."
-        )
-    if path.is_symlink():
-        raise BackupRestoreError("Production output cannot be a symbolic link.")
-    return path
+    return await hass.async_add_executor_job(
+        resolve_output_path,
+        hass.config.config_dir,
+        settings.get(CONF_OUTPUT, DEFAULT_OUTPUT),
+    )
 
 
 @websocket_api.require_admin
@@ -1845,7 +1858,7 @@ async def websocket_list_backups(
 ) -> None:
     """List known HVLS backups without exposing arbitrary file paths."""
     try:
-        path = _configured_output(hass)
+        path = await _configured_output(hass)
         result = await hass.async_add_executor_job(list_backups, path)
     except (BackupRestoreError, OSError, ValueError) as exc:
         connection.send_error(msg["id"], "backup_list_failed", str(exc))
@@ -1866,7 +1879,7 @@ async def websocket_preview_backup_cleanup(
     """Read-only list of old snapshots proposed for explicit cleanup."""
     async with get_workflow_lock(hass):
         try:
-            path = _configured_output(hass)
+            path = await _configured_output(hass)
             entries = hass.config_entries.async_entries(DOMAIN)
             if len(entries) != 1:
                 raise BackupRestoreError("HVLS installation unavailable")
@@ -1907,7 +1920,7 @@ async def websocket_apply_backup_cleanup(
     """Delete a reviewed set of backups, never implicitly on upgrade."""
     async with get_workflow_lock(hass):
         try:
-            path = _configured_output(hass)
+            path = await _configured_output(hass)
             entries = hass.config_entries.async_entries(DOMAIN)
             if len(entries) != 1:
                 raise BackupRestoreError("HVLS installation unavailable")
@@ -1951,7 +1964,7 @@ async def websocket_review_backup(
 ) -> None:
     """Compare a selected backup with the current production file."""
     try:
-        path = _configured_output(hass)
+        path = await _configured_output(hass)
         result = await hass.async_add_executor_job(
             review_backup, path, msg["backup_id"]
         )
@@ -1981,7 +1994,7 @@ async def websocket_prepare_backup_preview(
             entries = hass.config_entries.async_entries(DOMAIN)
             if len(entries) != 1:
                 raise BackupRestoreError("HVLS installation unavailable or ambiguous")
-            output_path = _configured_output(hass)
+            output_path = await _configured_output(hass)
             registry_path = Path(hass.config.path(".hvls", "ownership.json"))
             # Legacy restores must be reconciled before starting another plan.
             assert_not_guarded(registry_path, entries[0].entry_id, output_path)
@@ -2055,7 +2068,7 @@ async def websocket_apply_backup_preview(
             entry = entries[0]
             settings = {**entry.data, **entry.options}
             configured_label = settings.get(CONF_LABEL, DEFAULT_LABEL)
-            output_path = _configured_output(hass)
+            output_path = await _configured_output(hass)
             ownership_path = Path(
                 hass.config.path(".hvls", "ownership.json")
             )
@@ -2257,7 +2270,7 @@ async def websocket_resolve_restored_output(
             entries = hass.config_entries.async_entries(DOMAIN)
             if len(entries) != 1:
                 raise BackupRestoreError("HVLS entry unavailable or ambiguous")
-            path = _configured_output(hass)
+            path = await _configured_output(hass)
             settings = {**entries[0].data, **entries[0].options}
             registries = get_live_registries(hass)
             request = GenerationRequest(
