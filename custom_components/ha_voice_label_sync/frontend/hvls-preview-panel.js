@@ -18,6 +18,7 @@ const HVLS_TRANSLATIONS = {
     migrationGuideStepVerify: "Étape 2 sur 2 — Vérifiez les points indiqués",
     assistantProvenanceStepVerify: "Vérifiez le fichier YAML à reprendre",
     migrationAdvancedTitle: "Outils de diagnostic et de migration (avancé)",
+    migrationManagedNotice: "Le fichier de production est pris en charge par HVLS. Pour modifier les entités, utilisez le Preview. Les anciens diagnostics restent disponibles dans les outils avancés.",
     migrationRecoveryAttention: "Une opération antérieure nécessite une vérification. Ouvrez les outils avancés avant de continuer.",
     migrationGuideDetected: "Aucune déclaration google_assistant: détectée. Cela n'empêche pas HVLS de gérer et générer le fichier d'entités.",
     migrationGuideCandidate: "Un fichier google_assistant_entities.yaml existe. Vous pouvez le reprendre pour initialiser vos labels HVLS, même sans connexion Google Assistant.",
@@ -551,6 +552,7 @@ const HVLS_TRANSLATIONS = {
     migrationGuideStepVerify: "Step 2 of 2 — Review the recommended checks",
     assistantProvenanceStepVerify: "Inspect the YAML file you want to reuse",
     migrationAdvancedTitle: "Diagnostics and migration tools (advanced)",
+    migrationManagedNotice: "HVLS now manages the production entity file. Use Preview for changes. Earlier diagnostics remain available under advanced tools.",
     migrationRecoveryAttention: "A previous operation needs review. Open the advanced tools before continuing.",
     migrationGuideDetected: "No google_assistant: declaration detected. This does not prevent HVLS from managing and generating an entity YAML file.",
     migrationGuideCandidate: "A google_assistant_entities.yaml file exists. You can reuse it to initialize HVLS labels, even without a Google Assistant connection.",
@@ -1482,6 +1484,7 @@ class HVLSPreviewPanel extends HTMLElement {
 
       this._updateApplyButton();
       this._renderAssistantAdoption();
+      this._renderMigrationAdvanced();
       this._setContent(this._recoveryPending ? "" : result.content || "");
       if (this._recoveryPending) this._previewContent = "";
       this._renderAnalysis(result);
@@ -3459,6 +3462,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
           <button id="migrationAnalyze" type="button" class="secondary">
             ${this._t("migrationAnalyze")}
           </button>
+          <p id="migrationManagedNotice" role="status" class="diagnostic-note" hidden></p>
           <p id="migrationRecoveryAttention" role="alert" class="diagnostic-note" hidden></p>
           <details id="migrationAdvanced">
             <summary>${this._t("migrationAdvancedTitle")}</summary>
@@ -4819,18 +4823,34 @@ entity_config: !include google_assistant_entities.yaml</pre>
     const recovery = this._migrationRecoveryReport;
     const recoveryNeedsAttention = recovery?.needs_review === true ||
       ["review_required", "snapshot_changed", "unavailable"].includes(recovery?.status);
+    // The legacy global migration audit is NOT the reviewed YAML takeover.
+    // Once ownership is verified and the recovery Apply has finished, keep
+    // its thousands of historical decisions behind the optional expert panel.
+    // An interrupted recovery or ownership reconciliation still takes priority.
+    const managed = this._ownershipManaged === true &&
+      this._recoveryPending === false &&
+      this._restoreReconcilePending !== true;
+    const normalOperation = managed && !recoveryNeedsAttention;
+    const managedNotice = this.querySelector("#migrationManagedNotice");
+    if (managedNotice) {
+      managedNotice.hidden = !normalOperation;
+      managedNotice.textContent = normalOperation
+        ? this._t("migrationManagedNotice") : "";
+    }
     const alert = this.querySelector("#migrationRecoveryAttention");
     if (alert) {
       alert.hidden = !recoveryNeedsAttention;
       alert.textContent = recoveryNeedsAttention
         ? this._t("migrationRecoveryAttention") : "";
     }
-    // Never conceal recovery needing attention behind a collapsed section.
-    // For an unblocked new-configuration diagnosis, keep the tools folded.
-    const key = String(mode || "loading") + ":" + String(recoveryNeedsAttention);
+    // Open serious recovery warnings, not a stale "pending_review" audit
+    // after successful YAML adoption. Preserve manual expand/collapse.
+    const key = String(mode || "loading") + ":" +
+      String(recoveryNeedsAttention) + ":" + String(normalOperation);
     if (this._migrationAdvancedContext !== key) {
-      if (mode || recoveryNeedsAttention) {
-        advanced.open = recoveryNeedsAttention || mode !== "new_configuration";
+      if (mode || recoveryNeedsAttention || normalOperation) {
+        advanced.open = recoveryNeedsAttention ||
+          (!normalOperation && mode !== "new_configuration");
         this._migrationAdvancedContext = key;
       }
     }

@@ -4251,6 +4251,67 @@ test("Assistant leaves the migration tools reachable when migration is detected"
   assert.equal(controls.migrationAdvanced.open, false);
 });
 
+test("Assistant folds the legacy audit after an existing YAML recovery", () => {
+  const calls = [];
+  const {panel} = makePanel(async request => { calls.push(request); });
+  const controls = {
+    migrationAdvanced: {open: true},
+    migrationRecoveryAttention: {hidden: true, textContent: ""},
+    migrationManagedNotice: {hidden: true, textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {
+    mode: "assisted_migration",
+    review_status: "pending_review",
+    entities: Array.from({length: 6408}, (_, i) => ({
+      entity_id: "sensor.test_" + i,
+    })),
+  }};
+  panel._ownershipManaged = true;
+  panel._recoveryPending = false;
+  panel._renderMigrationAdvanced();
+  assert.equal(controls.migrationAdvanced.open, false);
+  assert.equal(controls.migrationManagedNotice.hidden, false);
+  assert.match(controls.migrationManagedNotice.textContent, /pris en charge/);
+  assert.equal(controls.migrationRecoveryAttention.hidden, true);
+  // The expert can still expand the audit deliberately.
+  controls.migrationAdvanced.open = true;
+  panel._renderMigrationAdvanced();
+  assert.equal(controls.migrationAdvanced.open, true);
+  assert.deepEqual(calls, []);
+});
+
+test("Assistant never hides interrupted recovery despite managed ownership", () => {
+  const {panel} = makePanel(async () => {});
+  const controls = {
+    migrationAdvanced: {open: false},
+    migrationRecoveryAttention: {hidden: true, textContent: ""},
+    migrationManagedNotice: {hidden: true, textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  panel._migrationReport = {diagnostic: {mode: "assisted_migration"}};
+  panel._ownershipManaged = true;
+  panel._recoveryPending = false;
+  panel._renderMigrationAdvanced();
+  assert.equal(controls.migrationAdvanced.open, false);
+  panel._migrationRecoveryReport = {status: "review_required", needs_review: true};
+  panel._renderMigrationAdvanced();
+  assert.equal(controls.migrationAdvanced.open, true);
+  assert.equal(controls.migrationRecoveryAttention.hidden, false);
+  assert.equal(controls.migrationManagedNotice.hidden, true);
+  // A pending recovery and restore reconciliation are not completed.
+  panel._migrationRecoveryReport = null;
+  panel._recoveryPending = true;
+  panel._renderMigrationAdvanced();
+  assert.equal(controls.migrationAdvanced.open, true);
+  assert.equal(controls.migrationManagedNotice.hidden, true);
+  panel._recoveryPending = false;
+  panel._restoreReconcilePending = true;
+  panel._renderMigrationAdvanced();
+  assert.equal(controls.migrationAdvanced.open, true);
+  assert.equal(controls.migrationManagedNotice.hidden, true);
+});
+
 test("Assistant raises a visible alert and opens tools for interrupted recovery", () => {
   const {panel} = makePanel(async () => {});
   const controls = {

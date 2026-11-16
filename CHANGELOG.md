@@ -6,6 +6,19 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.1.0-beta.4] - 2026-11-15
+
+### Fixed
+- After successful existing-YAML takeover and reviewed Apply, the Assistant no longer automatically expands the legacy global migration audit (which may list thousands of unrelated HA entities as `pending_review`).
+- Show a concise managed-output status; the full diagnostic remains available on deliberate expansion.
+- Interrupted recovery, stale recovery snapshots, and incomplete ownership reconciliation must still surface their safety warnings; the code does not alter YAML generation, labels, backups or Apply guards.
+
+### Regression tests
+- Completed migration with a legacy 6,408-entity report remains folded.
+- User-invoked advanced diagnostics remain accessible.
+- Genuine interrupted recovery and incomplete reconciliation stay visible.
+
+
 ## [1.1.0-beta.3] - 2026-11-15
 
 ### Fixed
