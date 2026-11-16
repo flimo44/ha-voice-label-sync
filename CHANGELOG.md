@@ -6,6 +6,19 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-16
+
+### Fixed
+- Allow a deliberate, reviewed removal of the last selected HVLS entity (1 → 0). The empty selection is staged in Preview and requires explicit confirmation before Apply; accidental empty generations and empty recoveries remain refused.
+- Default Entity Management to « Sans HVLS — éligibles » so first-time users can immediately select an eligible entity, while allowing manual filter changes.
+- Add a direct GitHub Issues reporting link in the Assistant, localized in French and English.
+
+### Validation
+- Regression tests added for deliberate final-entity removal, refusal of unsafe empty plans, default filter and confirmation behavior.
+- All five PR #185 CI checks passed; the change was exercised successfully on an isolated Synology Home Assistant VM before merge.
+- No changes to the review/Apply safety architecture, ownership checks, SHA verification, or backup policy.
+
+
 ## [1.1.0] - Release candidate (date set at publication)
 
 ### Added and improved

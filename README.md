@@ -16,7 +16,7 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 >
 > HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. You can select entities, inspect a Preview and manage the YAML **without Google Assistant being connected**; configure Google Assistant separately only when you want to expose the selected entities to Google Home.
 
-**Latest published stable before v1.1.0:** [`v1.0.1`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.0.1). **v1.1.0 stable release candidate:** see the [releases page](https://github.com/flimo44/ha-voice-label-sync/releases) for publication status. Do not install from an unreleased tag.  
+**Latest published stable:** [`v1.1.0`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.1.0). **v1.1.1 maintenance release:** prepared to fix first-use issues (remove the last selected entity, show eligible unselected entities by default, and add a GitHub Issues link). See [releases](https://github.com/flimo44/ha-voice-label-sync/releases) for publication status; do not install from an unreleased tag.  
 **Python core dependency:** `ha-voice-label-sync==0.3.6` (separate from the Home Assistant integration version).
 
 > **Release history:** `v1.1.0-beta.1` was tagged from the wrong branch and carried the `1.0.1` integration; use the latest correctly tagged pre-release for migration tests.
