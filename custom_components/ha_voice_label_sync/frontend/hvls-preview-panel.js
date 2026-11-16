@@ -508,6 +508,7 @@ const HVLS_TRANSLATIONS = {
     applyReasonNotConfigured: "HVLS n'est pas encore configuré.",
     applyVerificationUnavailable: "Impossible de valider Apply : informations de sécurité manquantes ou incohérentes. Actualisez le Preview.",
     bulkRemovalWarning: "ATTENTION : {removed} entités sur {before} disparaîtront du YAML de production (après Apply : {after}). Vérifiez les suppressions rouges avant de continuer.",
+    emptySelectionConfirm: "Cette suppression retirera la dernière entité HVLS : aucune entité ne restera exposée dans le YAML. Confirmez-vous ce retrait total ?",
     bulkRemovalConfirm: "SUPPRESSION IMPORTANTE : {removed} entités sur {before} seront retirées du YAML (nouveau total : {after}). Cette action peut également retirer des étiquettes HA. Confirmez-vous expressément ces suppressions ?",
     applyConfirm: "Appliquer ce Preview à la configuration Google Assistant ?",
     applyWarning: "Le fichier actuel sera sauvegardé si les sauvegardes sont activées. Toute modification détectée depuis l’examen entraînera un refus.",
@@ -1049,6 +1050,7 @@ const HVLS_TRANSLATIONS = {
     applyReasonNotConfigured: "HVLS is not configured yet.",
     applyVerificationUnavailable: "Cannot validate Apply: missing or inconsistent security information. Refresh the Preview.",
     bulkRemovalWarning: "WARNING: {removed} of {before} entities will be removed from production YAML (after Apply: {after}). Review the red removals before continuing.",
+    emptySelectionConfirm: "This removes the last HVLS entity: no entities will remain exposed in the YAML. Confirm removing all entities?",
     bulkRemovalConfirm: "LARGE REMOVAL: {removed} of {before} entities will be removed from production YAML (new total: {after}). This operation may also remove HA labels. Do you explicitly confirm these removals?",
     applyConfirm: "Apply this Preview to the Google Assistant configuration?",
     applyWarning: "The current file will be backed up if backups are enabled. The operation will be rejected if changes are detected since your review.",
@@ -2098,9 +2100,19 @@ class HVLSPreviewPanel extends HTMLElement {
 
   _confirmWithBulkRemoval(result, regularMessage) {
     const bulk = this._bulkRemovalDetails(result);
+    const removalToEmpty =
+      result?.mode === "label_preview" &&
+      result?.summary?.total === 0 &&
+      Number.isSafeInteger(result?.production_summary?.total) &&
+      result.production_summary.total > 0 &&
+      result?.comparison?.status === "ok" &&
+      Array.isArray(result.comparison.removed) &&
+      result.comparison.removed.length > 0;
     const message = bulk
       ? this._tf("bulkRemovalConfirm", bulk) + "\n\n" + regularMessage
-      : regularMessage;
+      : removalToEmpty
+        ? this._t("emptySelectionConfirm") + "\n\n" + regularMessage
+        : regularMessage;
     if (!window.confirm(message)) return null;
     // Exact count is a one-time intent, not a reusable or saved approval.
     return bulk?.removed || 0;
@@ -3560,7 +3572,7 @@ class HVLSPreviewPanel extends HTMLElement {
               <option value="all">Toutes les entités</option>
               <option value="yes">Avec HVLS</option>
               <option value="no">Sans HVLS</option>
-              <option value="eligible_no">Sans HVLS — éligibles</option>
+              <option value="eligible_no" selected>Sans HVLS — éligibles</option>
               <option value="ineligible">Non éligibles</option>
             </select>
           </div>
@@ -4244,7 +4256,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
 
     const query = (this.querySelector("#entitySearch")?.value || "")
       .trim().toLocaleLowerCase();
-    const filter = this.querySelector("#entityFilter")?.value || "all";
+    const filter = this.querySelector("#entityFilter")?.value || "eligible_no";
 
     // Mémoriser les domaines ouverts.
     const openDomains = new Set(
