@@ -12,6 +12,7 @@ The format is inspired by Keep a Changelog.
 - Python core: strip control characters, lone surrogates and Unicode noncharacters from entity and room names so the generated YAML always loads.
 
 ### Upgrade notes
+- Backups created before the entity name fix may contain the previous generic names (for example "Temperature"). Their label-based restoration is then not exact: ignore the affected entities in the restore Preview, or restore them later after renaming.
 - The two Python core fixes require publishing a new `ha-voice-label-sync` package and updating the `manifest.json` requirement; the entity name fix ships with the integration itself.
 
 ## [1.1.2] - Release candidate (pending Synology VM validation)
