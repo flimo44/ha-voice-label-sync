@@ -6,6 +6,23 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.1.2] - Release candidate (pending Synology VM validation)
+
+### Security
+- Prevent Google Assistant YAML injection through Home Assistant area/room names, including newlines and Unicode line separators (U+0085, U+2028, U+2029). Room comments cannot create additional YAML entity keys.
+- Always serialize entity names and room values as quoted YAML strings. Numeric-looking names, booleans and special scalars remain strings, while accented characters and emoji stay readable.
+- Require the published Python core package `ha-voice-label-sync==0.3.7` containing the hardened YAML backend.
+
+### Fixes
+- Request explicit approval for high-impact removal of at least 3 entities representing at least 50% of the production configuration, including small HA installations; backend and JavaScript UI agree on the threshold.
+- Add the missing `unsafe_output_path` options error translation in English and French.
+
+### Validation and upgrade notes
+- PRs #187 and #188 passed Python, JS, Hassfest, HACS, packaging and Home Assistant sandbox checks before merge; the final combined candidate requires fresh checks.
+- The Python core 0.3.7 package was published to PyPI on 2026-11-17. Install the integration candidate on an isolated Home Assistant VM and verify core availability, the Preview/Apply workflow and removal confirmation before publishing a stable release.
+- No change to YAML ownership, production SHA checks, backups or required Preview -> explicit Apply.
+- The independent path-alias/write-path consistency concern and sidebar cleanup on uninstall are not covered by this release.
+
 ## [1.1.1] - 2026-11-16
 
 ### Fixed
