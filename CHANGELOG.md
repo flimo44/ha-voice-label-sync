@@ -6,6 +6,15 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixes
+- Prefix the device name for entities that only have a generic entity name (`has_entity_name` entities such as "Température" or "Humidité"), which previously gave several devices the same Google name. User-defined names, entities without a name and legacy entities keep exactly their previous name, so existing voice names do not change. Affected entities appear in the next Preview; nothing is written before an explicit Apply.
+- Python core: a label made only of non-Latin characters or emoji no longer matches every other such label through an empty slug.
+- Python core: strip control characters, lone surrogates and Unicode noncharacters from entity and room names so the generated YAML always loads.
+
+### Upgrade notes
+- Backups created before the entity name fix may contain the previous generic names (for example "Temperature"). Their label-based restoration is then not exact: ignore the affected entities in the restore Preview, or restore them later after renaming.
+- The two Python core fixes require publishing a new `ha-voice-label-sync` package and updating the `manifest.json` requirement; the entity name fix ships with the integration itself.
+
 ## [1.1.2] - Release candidate (pending Synology VM validation)
 
 ### Security

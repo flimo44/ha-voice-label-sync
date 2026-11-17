@@ -73,14 +73,20 @@ def resolve_label_ids(
         Matching label identifiers and any generated warnings.
     """
     wanted_slug = slugify(label_name)
-    identifiers = {label_name, wanted_slug}
+    # A name made only of non-Latin characters or emoji slugifies to "".
+    # Never let two such labels match each other through that empty slug.
+    identifiers = {label_name, wanted_slug} if wanted_slug else {label_name}
     found = False
 
     for label in labels:
         name = str(label.get("name") or "")
         label_id = str(label.get("label_id") or "")
 
-        if label_id == label_name or name == label_name or slugify(name) == wanted_slug:
+        if (
+            label_id == label_name
+            or name == label_name
+            or (wanted_slug and slugify(name) == wanted_slug)
+        ):
             if label_id:
                 identifiers.add(label_id)
             found = True
