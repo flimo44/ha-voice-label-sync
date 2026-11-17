@@ -47,36 +47,29 @@ def _text(value: Any) -> str | None:
     return (value.strip() or None) if isinstance(value, str) else None
 
 
-def _display_name(
-    hass: HomeAssistant, entry: Any, device_entries: dict[str, Any],
-) -> str | None:
-    """Return the name Home Assistant itself shows for an entity.
+def _display_name(entry: Any, device_entries: dict[str, Any]) -> str | None:
+    """Return the entity name written to the Google Assistant YAML.
 
     Entities using ``has_entity_name`` store only their own part (for
     example "Temperature") in ``original_name``; Home Assistant prefixes the
-    device name. Writing the bare part to ``name:`` would give Google several
-    identical names, so prefer the live friendly name and otherwise rebuild
-    it the way Home Assistant does.
-    """
-    states = getattr(hass, "states", None)
-    state = states.get(entry.entity_id) if states is not None else None
-    if state is not None:
-        friendly = _text(state.attributes.get("friendly_name"))
-        if friendly:
-            return friendly
+    device name. Writing that bare part gave Google several identical names,
+    so only that case is prefixed with the device name.
 
-    # A user-defined registry name replaces the whole friendly name.
+    Every other name is deliberately kept as before, so existing voice names
+    do not change: a user-defined registry name is used as typed, and an
+    entity without any name keeps the engine's object ID fallback.
+    """
     if user_name := _text(getattr(entry, "name", None)):
         return user_name
 
     original = _text(getattr(entry, "original_name", None))
-    if getattr(entry, "has_entity_name", False) is True:
+    if original and getattr(entry, "has_entity_name", False) is True:
         device = device_entries.get(entry.device_id) if entry.device_id else None
         device_name = _text(getattr(device, "name_by_user", None)) or _text(
             getattr(device, "name", None)
         )
-        if device_name:
-            return f"{device_name} {original}" if original else device_name
+        if device_name and not original.startswith(device_name):
+            return f"{device_name} {original}"
     return original
 
 
@@ -106,7 +99,7 @@ def get_live_registries(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
                     {
                         "entity_id": entry.entity_id,
                         # Effective display name (see _display_name).
-                        "name": _display_name(hass, entry, device_entries),
+                        "name": _display_name(entry, device_entries),
                         "original_name": entry.original_name,
                         "device_id": entry.device_id,
                         "area_id": entry.area_id,

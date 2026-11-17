@@ -194,51 +194,60 @@ def test_has_entity_name_is_prefixed_with_device_name(monkeypatch):
                     has_entity_name=True, device_id="dev"),
             _entity("sensor.h", original_name="Humidité",
                     has_entity_name=True, device_id="dev"),
-            # Main feature of the device: no entity part.
-            _entity("switch.p", has_entity_name=True, device_id="dev2"),
+            _entity("sensor.p", original_name="Puissance",
+                    has_entity_name=True, device_id="dev2"),
+            # Never duplicate a device name already present.
+            _entity("sensor.b", original_name="Capteur salon batterie",
+                    has_entity_name=True, device_id="dev"),
         ],
         devices=[device, renamed],
     )
     assert names == {
         "sensor.t": "Capteur salon Température",
         "sensor.h": "Capteur salon Humidité",
-        "switch.p": "Prise bureau",
+        "sensor.p": "Prise bureau Puissance",
+        "sensor.b": "Capteur salon batterie",
     }
 
 
-def test_user_name_and_legacy_entities_are_unchanged(monkeypatch):
-    device = SimpleNamespace(id="dev", area_id=None, name="Hub", name_by_user=None)
+def test_existing_names_are_not_changed(monkeypatch):
+    """Do not break voice names already used by existing installations."""
+    device = SimpleNamespace(
+        id="dev", area_id=None, name="Garage_Relai_double", name_by_user=None,
+    )
     names = _names(
         monkeypatch,
         [
-            # A registry name override replaces the whole friendly name.
-            _entity("light.a", name="  Plafonnier ", original_name="Light",
-                    has_entity_name=True, device_id="dev"),
+            # User-defined name: kept exactly as typed, without device prefix.
+            _entity("climate.t", name="  thermostat_sejour_2 ",
+                    original_name="Thermostat", has_entity_name=True,
+                    device_id="dev"),
+            # Main feature of a device: keep the object ID fallback.
+            _entity("switch.main", has_entity_name=True, device_id="dev"),
             _entity("light.b", original_name="Lampe legacy", device_id="dev"),
-            _entity("light.c"),
+            _entity("switch.piscine_chauffage"),
+            # Unknown device: no prefix.
+            _entity("sensor.x", original_name="Température",
+                    has_entity_name=True, device_id="missing"),
         ],
         devices=[device],
     )
     assert names == {
-        "light.a": "Plafonnier",
+        "climate.t": "thermostat_sejour_2",
+        "switch.main": None,
         "light.b": "Lampe legacy",
-        "light.c": None,  # The engine then falls back to the object ID.
+        "switch.piscine_chauffage": None,  # Engine: "Piscine Chauffage".
+        "sensor.x": "Température",
     }
 
 
-def test_live_friendly_name_takes_priority(monkeypatch):
+def test_live_friendly_name_is_not_used(monkeypatch):
+    """HA may prefix user names with technical device names: ignore it."""
     states = {
-        "sensor.t": SimpleNamespace(attributes={"friendly_name": "Salon T°"}),
-        "sensor.u": SimpleNamespace(attributes={"friendly_name": "   "}),
+        "switch.p": SimpleNamespace(
+            attributes={"friendly_name": "Piscine_Chauffage"}
+        ),
     }
     hass = SimpleNamespace(states=SimpleNamespace(get=states.get))
-    names = _names(
-        monkeypatch,
-        [
-            _entity("sensor.t", original_name="Température",
-                    has_entity_name=True),
-            _entity("sensor.u", original_name="Humidité"),
-        ],
-        hass=hass,
-    )
-    assert names == {"sensor.t": "Salon T°", "sensor.u": "Humidité"}
+    names = _names(monkeypatch, [_entity("switch.p")], hass=hass)
+    assert names == {"switch.p": None}
