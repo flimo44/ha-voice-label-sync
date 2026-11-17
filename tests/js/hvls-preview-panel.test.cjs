@@ -6227,3 +6227,85 @@ test("Small configuration removal sends exact count after confirmation", async (
   assert.equal(calls.length, 1);
   assert.equal(calls[0].acknowledged_bulk_removals, 7);
 });
+
+function blockingRestore(overrides = {}) {
+  return {
+    mode: "restore_preview", backup_id: "backup.bak",
+    backup_sha256: "b".repeat(64), production_sha256: "a".repeat(64),
+    label_plan_sha256: "c".repeat(64), ignored_entities: [],
+    ignore_candidates: ["sensor.temp", "sensor.smoke", "switch.gone"],
+    comparison: {status: "ok", added: [], removed: [], modified: [],
+      identical_entities: false},
+    label_plan: {add: [], remove: [], review: []},
+    projection: {ready: false, comparison: {
+      status: "ok",
+      added: ["light.extra"],
+      removed: ["switch.gone"],
+      modified: [
+        {entity_id: "sensor.temp", fields: {name: {
+          before: "Temperature", after: "Piscine mesure ZB Temperature"}}},
+        {entity_id: "sensor.smoke", fields: {room: {
+          before: "Salon", after: null}}},
+      ],
+    }},
+    ...overrides,
+  };
+}
+
+test("Restore blockers explain each difference and which can be ignored", () => {
+  const {panel} = makePanel(async () => ({}));
+  const blockers = panel._restoreBlockers(blockingRestore());
+
+  assert.deepEqual([...blockers.map(item => item.entity_id)],
+    ["light.extra", "sensor.smoke", "sensor.temp", "switch.gone"]);
+  const byId = Object.fromEntries(blockers.map(item => [item.entity_id, item]));
+  assert.equal(byId["sensor.temp"].ignorable, true);
+  assert.match(byId["sensor.temp"].reasons[0],
+    /nom : sauvegarde « Temperature » → Home Assistant aujourd'hui « Piscine mesure ZB Temperature »/);
+  assert.match(byId["sensor.smoke"].reasons[0], /pièce : .*« absent »/);
+  assert.match(byId["switch.gone"].reasons[0], /ne peut pas être régénérée/);
+  assert.match(byId["light.extra"].reasons[0], /absente de la sauvegarde/);
+  assert.equal(byId["light.extra"].ignorable, false);
+});
+
+test("Restore blockers hide ignored entities and disappear once exact", () => {
+  const {panel} = makePanel(async () => ({}));
+  const partly = panel._restoreBlockers(
+    blockingRestore({ignored_entities: ["sensor.temp"]})
+  );
+  assert.equal(partly.some(item => item.entity_id === "sensor.temp"), false);
+  assert.equal(
+    panel._restoreBlockers(blockingRestore({projection: {ready: true}})).length,
+    0,
+  );
+});
+
+test("Ignoring all blocking entities sends one server-side recalculation", async () => {
+  const calls = [];
+  const staged = blockingRestore();
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {
+      ...staged, ignored_entities: request.ignored_entities,
+      projection: {ready: true},
+    };
+  });
+  panel._stagedRestore = staged;
+  await panel._setRestoreIgnored(["sensor.temp", "sensor.smoke"], true);
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].type, "ha_voice_label_sync/prepare_backup_preview");
+  assert.deepEqual([...calls[0].ignored_entities],
+    ["sensor.smoke", "sensor.temp"]);
+  assert.deepEqual([...panel._stagedRestore.ignored_entities],
+    ["sensor.smoke", "sensor.temp"]);
+});
+
+test("Bulk ignore refuses any entity the server did not offer", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => { calls.push(request); });
+  panel._stagedRestore = blockingRestore();
+  await panel._setRestoreIgnored(["sensor.temp", "light.extra"], true);
+  assert.equal(calls.length, 0);
+  assert.equal(panel._stagedRestore.ignored_entities.length, 0);
+});

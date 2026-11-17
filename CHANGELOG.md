@@ -6,13 +6,16 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+### Improvements
+- Restore Preview: when HA labels cannot reproduce a backup exactly, list each blocking entity with a readable reason (for example name in the backup vs current Home Assistant name, missing or ineligible entity) and offer an **Ignore** button per entity plus **Ignore these N entities**. Ignored entities are not restored and keep their current state; the server still recalculates and verifies every choice before Apply.
+
 ### Fixes
 - Prefix the device name for entities that only have a generic entity name (`has_entity_name` entities such as "Température" or "Humidité"), which previously gave several devices the same Google name. User-defined names, entities without a name and legacy entities keep exactly their previous name, so existing voice names do not change. Affected entities appear in the next Preview; nothing is written before an explicit Apply.
 - Python core: a label made only of non-Latin characters or emoji no longer matches every other such label through an empty slug.
 - Python core: strip control characters, lone surrogates and Unicode noncharacters from entity and room names so the generated YAML always loads.
 
 ### Upgrade notes
-- Backups created before the entity name fix may contain the previous generic names (for example "Temperature"). Their label-based restoration is then not exact: ignore the affected entities in the restore Preview, or restore them later after renaming.
+- Backups created before the entity name fix may contain the previous generic names (for example "Temperature"). Their label-based restoration is then not exact: use **Ignore** on the affected entities in the restore Preview, or restore them later after renaming.
 - The two Python core fixes require publishing a new `ha-voice-label-sync` package and updating the `manifest.json` requirement; the entity name fix ships with the integration itself.
 
 ## [1.1.2] - Release candidate (pending Synology VM validation)
