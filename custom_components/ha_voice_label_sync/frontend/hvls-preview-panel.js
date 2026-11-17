@@ -2099,7 +2099,7 @@ class HVLSPreviewPanel extends HTMLElement {
         !Number.isSafeInteger(before) || before <= 0 ||
         !Array.isArray(removed) || !Array.isArray(added)) return null;
     const count = removed.length;
-    if (count < 10 || count * 2 < before) return null;
+    if (count < 3 || count * 2 < before) return null;
     return {removed: count, before, after: before - count + added.length};
   }
 

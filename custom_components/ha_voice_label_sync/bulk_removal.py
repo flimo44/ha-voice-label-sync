@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-MIN_BULK_REMOVALS = 10
+MIN_BULK_REMOVALS = 3
 
 
 class BulkRemovalApprovalError(ValueError):

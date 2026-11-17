@@ -96,7 +96,8 @@
       }
     },
     "error": {
-      "label_setup_failed": "Impossible de créer ou de retrouver l’étiquette Home Assistant. Vérifiez les étiquettes existantes et les autorisations."
+      "label_setup_failed": "Impossible de créer ou de retrouver l’étiquette Home Assistant. Vérifiez les étiquettes existantes et les autorisations.",
+      "unsafe_output_path": "Chemin de sortie non sûr ou extérieur à Home Assistant."
     }
   }
 }
