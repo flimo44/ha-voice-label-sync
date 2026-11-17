@@ -3,17 +3,29 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 
 from ..models import GenerationResult, SelectionResult
+
+# YAML refuses these characters even inside a quoted scalar or a comment.
+_NONCHARACTERS = frozenset({"\ufffe", "\uffff"})
+
+
+def _yaml_printable(char: str) -> str:
+    """Replace control characters, lone surrogates and noncharacters."""
+    if char in _NONCHARACTERS or unicodedata.category(char) in {"Cc", "Cs"}:
+        return " "
+    return char
 
 
 def _one_line(value: object) -> str:
     """Collapse ALL Unicode whitespace, including YAML line separators.
 
     A Home Assistant room name is also rendered in a YAML comment, so raw
-    newlines and Unicode separators must never reach that comment.
+    newlines and Unicode separators must never reach that comment. Control
+    characters (DEL, C1, ...) would make the whole generated file unreadable.
     """
-    return " ".join(str(value).split())
+    return " ".join("".join(map(_yaml_printable, str(value))).split())
 
 
 def yaml_escape(value: object) -> str:

@@ -6,6 +6,14 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixes
+- Generate Google entity names from the name Home Assistant displays (live friendly name, or device name + entity name for `has_entity_name` entities) instead of the bare entity part, which gave several devices the same name (for example "Température"). The next Preview shows these name changes; nothing is written before an explicit Apply.
+- Python core: a label made only of non-Latin characters or emoji no longer matches every other such label through an empty slug.
+- Python core: strip control characters, lone surrogates and Unicode noncharacters from entity and room names so the generated YAML always loads.
+
+### Upgrade notes
+- The two Python core fixes require publishing a new `ha-voice-label-sync` package and updating the `manifest.json` requirement; the entity name fix ships with the integration itself.
+
 ## [1.1.2] - Release candidate (pending Synology VM validation)
 
 ### Security
