@@ -140,7 +140,9 @@ async def async_setup_entry(
         identifiers={(DOMAIN, entry.entry_id)},
         name=PANEL_TITLE,
         manufacturer="HA Voice Label Sync",
-        model="HVLS integration",
+        # Device models are not translated by Home Assistant: keep a
+        # language-neutral product name instead of an English phrase.
+        model="Google Assistant",
         entry_type=dr.DeviceEntryType.SERVICE,
         configuration_url=f"homeassistant://{PANEL_URL_PATH}",
     )

@@ -96,7 +96,7 @@ def test_post_install_device_exposes_visit_link_without_buttons(entry_setup_env)
         identifiers={("ha_voice_label_sync", "hvls-instance-1")},
         name="HA Voice Label Sync",
         manufacturer="HA Voice Label Sync",
-        model="HVLS integration",
+        model="Google Assistant",
         entry_type="service",
         configuration_url="homeassistant://hvls-preview",
     )
