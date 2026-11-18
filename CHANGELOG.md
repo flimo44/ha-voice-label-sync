@@ -6,6 +6,9 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixes
+- Panel: the bucket for entities without an area is shown in the panel language ("No area" in English) in Statistics breakdowns and entity lists, instead of the French "Sans pièce".
+
 ### Improvements
 - Restore Preview redesigned as a three-column plan: **Not restored** (impossible entities locked, others restorable with one click), **Name or room changed** (restored with current Home Assistant values) and **Result for Google** (exactly what will be written: added, already exposed, current name/room, and in red the entities exposed today but absent from the backup, with **Keep** / **Keep all**). Each column has an ⓘ help. A single summary (exposed after restoration, added, already exposed, no longer exposed) is reused by the final confirmation, and HA label details move to a collapsed technical section.
 - Opening a backup restore now starts from the recommended selection computed by the server: entities that cannot be regenerated are not restored, renamed or moved ones use current values, and the result follows the backup. **Back to the recommendation** resets manual choices.

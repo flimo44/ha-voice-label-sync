@@ -2779,6 +2779,12 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  // The server uses the French "Sans pièce" bucket for entities without an
+  // area; always display it in the panel language.
+  _roomLabel(room) {
+    return !room || room === "Sans pièce" ? this._t("noArea") : room;
+  }
+
   _addMetric(parent, label, value) {
     const card = document.createElement("div");
     card.className = "metric";
@@ -3470,7 +3476,7 @@ class HVLSPreviewPanel extends HTMLElement {
         const row = document.createElement("div");
         row.className = "breakdown-row";
         const label = document.createElement("span");
-        label.textContent = name;
+        label.textContent = type === "area" ? this._roomLabel(name) : name;
         const total = document.createElement("strong");
         total.textContent = String(count);
         row.append(label, total);
@@ -3513,7 +3519,7 @@ class HVLSPreviewPanel extends HTMLElement {
 
             const info = document.createElement("small");
             info.textContent = type === "domain"
-              ? `${entity.entity_id} · ${entity.room || this._t("noArea")}`
+              ? `${entity.entity_id} · ${this._roomLabel(entity.room)}`
               : `${entity.entity_id} · ${entity.domain}`;
 
             entityButton.append(friendlyName, info);
@@ -5062,6 +5068,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
         entity.name,
         entity.entity_id,
         entity.room,
+        this._roomLabel(entity.room),
         entity.domain
       ].join(" ").toLocaleLowerCase();
 
@@ -5162,7 +5169,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
 
           const description = document.createElement("small");
           description.textContent =
-            `${entity.entity_id} · ${entity.room || this._t("noArea")}`;
+            `${entity.entity_id} · ${this._roomLabel(entity.room)}`;
 
           entityButton.append(name, description);
           entityButton.addEventListener("click", () => {

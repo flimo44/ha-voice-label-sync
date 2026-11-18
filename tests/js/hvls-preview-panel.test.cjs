@@ -6701,3 +6701,14 @@ test("Plan confirmation summarises the final result and every change", () => {
   assert.match(message, /Non restaurées \(2\) : climate\.bureau_ha, switch\.custom/);
   assert.match(message, /Appliquer la sauvegarde après contrôle/);
 });
+
+test("The no-area bucket is displayed in the panel language", () => {
+  const {panel} = makePanel(async () => ({}));
+  assert.equal(panel._roomLabel("Sans pièce"), panel._t("noArea"));
+  assert.equal(panel._roomLabel(""), panel._t("noArea"));
+  assert.equal(panel._roomLabel(null), panel._t("noArea"));
+  assert.equal(panel._roomLabel("Séjour"), "Séjour");
+  panel._language = "en";
+  assert.equal(panel._roomLabel("Sans pièce"), "No area");
+  assert.equal(panel._roomLabel("Garage"), "Garage");
+});
