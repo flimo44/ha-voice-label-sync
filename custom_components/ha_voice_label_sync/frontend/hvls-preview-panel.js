@@ -484,7 +484,7 @@ const HVLS_TRANSLATIONS = {
     backupIgnoreEntity: "Ignorer cette entité",
     backupIgnoreUpdating: "Recalcul du Preview après exclusion…",
     backupIgnoreFailed: "Impossible de recalculer le Preview : {error}. Aucun fichier ni label modifié.",
-    backupIgnoreSelected: "Entités ignorées : {count}.",
+    backupIgnoreSelected: "Choix enregistrés : {count} entité(s) ignorée(s), {refreshed} restaurée(s) avec le nom et la pièce actuels. Aucun fichier ni label modifié.",
     restoreBlockersTitle: "{count} entité(s) empêchent la restauration exacte de cette sauvegarde",
     restoreBlockersHelp: "« Restaurer avec le nom et la pièce actuels » remet l'entité en gardant ses valeurs actuelles dans Home Assistant (seulement si le nom ou la pièce diffèrent). « Ignorer » la retire de cette restauration : elle n'est pas restaurée et garde sa configuration et ses étiquettes actuelles. Le Preview est recalculé et revérifié après chaque choix.",
     restoreBlockerField: "{field} : sauvegarde « {before} » → Home Assistant aujourd'hui « {after} »",
@@ -1051,7 +1051,7 @@ const HVLS_TRANSLATIONS = {
     backupIgnoreEntity: "Ignore this entity",
     backupIgnoreUpdating: "Recalculating Preview with exclusions…",
     backupIgnoreFailed: "Unable to recalculate Preview: {error}. No YAML or labels changed.",
-    backupIgnoreSelected: "Ignored entities: {count}.",
+    backupIgnoreSelected: "Choices saved: {count} ignored entity(ies), {refreshed} restored with current name and room. No file or label changed.",
     restoreBlockersTitle: "{count} entity(ies) prevent an exact restoration of this backup",
     restoreBlockersHelp: "\"Restore with current name and room\" brings the entity back with its current Home Assistant values (only when the name or room differ). \"Ignore\" removes it from this restoration: it is not restored and keeps its current configuration and labels. Preview is recalculated and verified after each choice.",
     restoreBlockerField: "{field}: backup \"{before}\" → Home Assistant today \"{after}\"",
@@ -2145,7 +2145,9 @@ class HVLSPreviewPanel extends HTMLElement {
       this._applyBlockReasonCode = null;
       this._renderAnalysis(result);
       this._setContent(result.content);
-      this._setStatusKey("backupIgnoreSelected", {count: proposed.length});
+      this._setStatusKey("backupIgnoreSelected", {
+        count: proposed.length, refreshed: proposedRefreshed.length,
+      });
     } catch (error) {
       if (this._loadId === requestId) {
         this._stagedRestore = staged;
@@ -2818,6 +2820,7 @@ class HVLSPreviewPanel extends HTMLElement {
               const list = document.createElement("ul");
               for (const item of blockers) {
                 const entry = document.createElement("li");
+                entry.style = "display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin:6px 0;";
                 const text = document.createElement("span");
                 const reasons = item.ignorable
                   ? item.reasons
@@ -2830,7 +2833,6 @@ class HVLSPreviewPanel extends HTMLElement {
                   keep.type = "button";
                   keep.className = "secondary";
                   keep.textContent = this._t("restoreRefreshOne");
-                  keep.style = "margin-left:8px;";
                   keep.setAttribute("aria-label",
                     this._t("restoreRefreshOne") + ": " + item.entity_id);
                   keep.addEventListener("click", () =>
@@ -2844,7 +2846,6 @@ class HVLSPreviewPanel extends HTMLElement {
                   one.type = "button";
                   one.className = "secondary";
                   one.textContent = this._t("restoreBlockerIgnoreOne");
-                  one.style = "margin-left:8px;";
                   one.setAttribute("aria-label",
                     this._t("backupIgnoreEntity") + ": " + item.entity_id);
                   one.addEventListener("click", () =>
@@ -2878,6 +2879,7 @@ class HVLSPreviewPanel extends HTMLElement {
               const refreshedList = document.createElement("ul");
               for (const entityId of refreshedNow) {
                 const entry = document.createElement("li");
+                entry.style = "display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin:6px 0;";
                 const text = document.createElement("span");
                 text.textContent = entityId;
                 const undo = this._restoreIgnoreControl(
@@ -2885,7 +2887,6 @@ class HVLSPreviewPanel extends HTMLElement {
                 undo.type = "button";
                 undo.className = "secondary";
                 undo.textContent = this._t("restoreRefreshUndoOne");
-                undo.style = "margin-left:8px;";
                 undo.setAttribute("aria-label",
                   this._t("restoreRefreshUndoOne") + ": " + entityId);
                 undo.addEventListener("click", () =>
@@ -2918,6 +2919,7 @@ class HVLSPreviewPanel extends HTMLElement {
               const ignoredList = document.createElement("ul");
               for (const entityId of ignoredNow) {
                 const entry = document.createElement("li");
+                entry.style = "display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin:6px 0;";
                 const text = document.createElement("span");
                 text.textContent = entityId;
                 const undo = this._restoreIgnoreControl(
@@ -2925,7 +2927,6 @@ class HVLSPreviewPanel extends HTMLElement {
                 undo.type = "button";
                 undo.className = "secondary";
                 undo.textContent = this._t("restoreIgnoredUndoOne");
-                undo.style = "margin-left:8px;";
                 undo.setAttribute("aria-label",
                   this._t("restoreIgnoredUndoOne") + ": " + entityId);
                 undo.addEventListener("click", () =>
@@ -2956,7 +2957,9 @@ class HVLSPreviewPanel extends HTMLElement {
           for (const entityId of otherCandidates) {
             const label = document.createElement("label");
             label.className = "entity-hvls-control";
-            label.style = "display:flex; margin:8px 0; white-space:normal;";
+            label.style = "display:flex; justify-content:flex-start; " +
+              "justify-self:start; text-align:left; margin:8px 0; " +
+              "white-space:normal;";
             const checkbox = this._restoreIgnoreControl(
               document.createElement("input"));
             checkbox.type = "checkbox";

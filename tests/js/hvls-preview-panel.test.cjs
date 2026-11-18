@@ -6469,6 +6469,8 @@ test("Restore with current values sends both lists and keeps choices exclusive",
   assert.deepEqual([...calls[0].refreshed_entities],
     ["sensor.smoke", "sensor.temp"]);
   assert.deepEqual([...calls[0].ignored_entities], []);  // no longer ignored
+  assert.match(panel.status,
+    /0 entité\(s\) ignorée\(s\), 2 restaurée\(s\) avec le nom et la pièce actuels/);
 
   // Undo one entity: only allowed for entities currently refreshed.
   await panel._setRestoreRefreshed("sensor.smoke", false);
