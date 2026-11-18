@@ -6429,3 +6429,108 @@ test("Ignore buttons rendered during restore preparation become usable", () => {
   panel._updateApplyButton();
   assert.ok(buttons.every(button => button.disabled === true));
 });
+
+test("Name/room-only blockers offer restore with current values", () => {
+  const {panel} = makePanel(async () => ({}));
+  const staged = blockingRestore({
+    refresh_candidates: ["sensor.temp", "sensor.smoke"],
+  });
+  const byId = Object.fromEntries(
+    panel._restoreBlockers(staged).map(item => [item.entity_id, item]));
+  assert.equal(byId["sensor.temp"].refreshable, true);
+  assert.equal(byId["switch.gone"].refreshable, false);
+
+  const notice = renderRestoreNotice(panel, staged);
+  const labels = findNodes(notice, node => node.tag === "button")
+    .map(node => node.textContent);
+  assert.ok(labels.includes(
+    "Restaurer ces 2 entités avec leur nom et pièce actuels"));
+  assert.equal(labels.filter(text =>
+    text === "Restaurer avec le nom et la pièce actuels").length, 2);
+});
+
+test("Restore with current values sends both lists and keeps choices exclusive", async () => {
+  const calls = [];
+  const staged = blockingRestore({
+    ignored_entities: ["sensor.temp"],
+    refresh_candidates: ["sensor.temp", "sensor.smoke"],
+    refreshed_entities: [],
+  });
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {...staged, ignored_entities: request.ignored_entities,
+      refreshed_entities: request.refreshed_entities,
+      projection: {ready: true}};
+  });
+  panel._stagedRestore = staged;
+  await panel._setRestoreRefreshed(["sensor.temp", "sensor.smoke"], true);
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual([...calls[0].refreshed_entities],
+    ["sensor.smoke", "sensor.temp"]);
+  assert.deepEqual([...calls[0].ignored_entities], []);  // no longer ignored
+
+  // Undo one entity: only allowed for entities currently refreshed.
+  await panel._setRestoreRefreshed("sensor.smoke", false);
+  assert.equal(calls.length, 2);
+  assert.deepEqual([...calls[1].refreshed_entities], ["sensor.temp"]);
+});
+
+test("Restore with current values refuses entities the server did not offer", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => { calls.push(request); });
+  panel._stagedRestore = blockingRestore({refresh_candidates: ["sensor.temp"]});
+  await panel._setRestoreRefreshed(["sensor.temp", "switch.gone"], true);
+  await panel._setRestoreRefreshed("sensor.temp", false);  // not refreshed yet
+  assert.equal(calls.length, 0);
+});
+
+test("Refreshed entities are listed with undo and named in the confirmation", async () => {
+  const confirmations = [];
+  const {panel} = makePanel(async () => {
+    throw new Error("No request expected after a refused confirmation");
+  }, message => { confirmations.push(message); return false; });
+  const staged = blockingRestore({
+    projection: {ready: true},
+    refresh_candidates: ["sensor.temp"],
+    refreshed_entities: ["sensor.temp"],
+    ignored_entities: ["switch.gone"],
+    label_plan: {add: ["sensor.temp"], remove: [], review: []},
+  });
+  const notice = renderRestoreNotice(panel, staged);
+  assert.ok(findNodes(notice, node =>
+    /Restaurées avec le nom et la pièce actuels de Home Assistant \(1\)/
+      .test(node.textContent)).length);
+  assert.equal(findNodes(notice, node =>
+    node.tag === "button" && node.textContent === "Annuler").length, 1);
+
+  await panel._applyStagedRestore();
+  assert.equal(confirmations.length, 1);
+  assert.match(confirmations[0],
+    /1 entité\(s\) seront restaurées avec leur nom et leur pièce actuels.*sensor\.temp/);
+  assert.match(confirmations[0], /1 entité\(s\) ignorée\(s\).*switch\.gone/);
+});
+
+test("Apply sends the refreshed entities with the approval", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    if (request.type === "ha_voice_label_sync/apply_backup_preview") {
+      return {applied: true, reconciled: true, yaml_entities: 2,
+        label_additions: 1, label_removals: 0, safety_backup: "safety.bak"};
+    }
+    return {generated: true};
+  });
+  panel._stagedRestore = blockingRestore({
+    projection: {ready: true},
+    refresh_candidates: ["sensor.temp"],
+    refreshed_entities: ["sensor.temp"],
+    label_plan: {add: ["sensor.temp"], remove: [], review: []},
+  });
+  panel._loadPreview = async () => {};
+  panel._loadEntities = async () => {};
+  await panel._applyStagedRestore();
+  const apply = calls.find(call =>
+    call.type === "ha_voice_label_sync/apply_backup_preview");
+  assert.deepEqual([...apply.refreshed_entities], ["sensor.temp"]);
+});

@@ -404,6 +404,21 @@ def _project_restored_yaml(
     domains: frozenset[str],
     ignored: frozenset[str] = frozenset(),
 ) -> dict:
+    """Public projection summary (see _project_with_generated)."""
+    projection, _ = _project_with_generated(
+        candidate, output_path, registries, label, domains, ignored,
+    )
+    return projection
+
+
+def _project_with_generated(
+    candidate: str,
+    output_path: Path,
+    registries: dict,
+    label: str,
+    domains: frozenset[str],
+    ignored: frozenset[str] = frozenset(),
+) -> tuple[dict, str | None]:
     """Simulate desired labels using copies of the live HA registries.
 
     Report differences that cannot be reconstructed from labels alone
@@ -428,7 +443,7 @@ def _project_restored_yaml(
             "ready": False,
             "reason": "HVLS label unavailable or ambiguous",
             "comparison": None,
-        }
+        }, None
     label_id = next(iter(matches))
     for entity in projected["entity_registry"]["data"]["entities"]:
         if entity["entity_id"] in ignored:
@@ -453,7 +468,48 @@ def _project_restored_yaml(
         and comparison["identical_entities"] is True,
         "reason": None,
         "comparison": comparison,
+    }, generated
+
+
+# Only these YAML fields may take their current Home Assistant value when an
+# administrator restores an entity "with current values". Exposure, entity
+# IDs and any other option still have to match the backup exactly.
+REFRESHABLE_FIELDS = frozenset({"name", "room"})
+
+
+def _refresh_candidates(projection: dict | None) -> list[str]:
+    """Entities whose only projected differences are their name or room."""
+    comparison = (projection or {}).get("comparison") or {}
+    if comparison.get("status") != "ok":
+        return []
+    return sorted(
+        row["entity_id"] for row in comparison.get("modified", [])
+        if row.get("fields") and set(row["fields"]) <= REFRESHABLE_FIELDS
+    )
+
+
+def _apply_current_values(
+    content: str, generated: str, refreshed: frozenset[str],
+) -> str:
+    """Use the generated name/room for the selected entities only."""
+    if not refreshed:
+        return content
+    from .preview_compare import _entities
+
+    desired = {
+        entity_id: dict(options)
+        for entity_id, options in _entities(content).items()
     }
+    current = _entities(generated)
+    for entity_id in sorted(refreshed):
+        if entity_id not in desired or entity_id not in current:
+            raise BackupRestoreError("Current values unavailable; review again.")
+        for field in REFRESHABLE_FIELDS:
+            if field in current[entity_id]:
+                desired[entity_id][field] = current[entity_id][field]
+            else:
+                desired[entity_id].pop(field, None)
+    return yaml.safe_dump(desired, sort_keys=False, allow_unicode=True)
 
 
 def _compose_reviewed_restore(
@@ -488,11 +544,15 @@ def prepare_backup_preview(
     catalog: dict,
     *,
     ignored_entities: list[str] | None = None,
+    refreshed_entities: list[str] | None = None,
     registries: dict | None = None,
     label: str | None = None,
     domains: frozenset[str] | None = None,
 ) -> dict:
     """Review the selected backup as a proposal; never write YAML or labels.
+
+    ``refreshed_entities`` restores entities whose only differences are
+    their name/room with the values Home Assistant generates today.
 
     The review includes a projected HA generation when live registry data is
     available. Its readiness is informational until the write transaction
@@ -586,6 +646,33 @@ def prepare_backup_preview(
     if not _entities(content):
         raise BackupRestoreError("Refusing to restore an empty configuration.")
 
+    # Name/room-only differences can be restored with current HA values.
+    # Candidates are derived from the ignore-composed backup, so they do not
+    # depend on the refresh choice itself.
+    refresh_candidates: list[str] = []
+    if refreshed_entities is None:
+        refreshed_entities = []
+    if (
+        not isinstance(refreshed_entities, list)
+        or len(refreshed_entities) > 1000
+        or any(not isinstance(eid, str) for eid in refreshed_entities)
+        or len(refreshed_entities) != len(set(refreshed_entities))
+    ):
+        raise BackupRestoreError("Invalid current-value selection.")
+    if registries is not None and isinstance(label, str) and domains is not None:
+        first, generated = _project_with_generated(
+            content, output_path, registries, label, domains, ignored,
+        )
+        refresh_candidates = _refresh_candidates(first)
+    if (
+        not set(refreshed_entities).issubset(refresh_candidates)
+        or set(refreshed_entities) & ignored
+    ):
+        raise BackupRestoreError("Invalid current-value selection.")
+    refreshed = frozenset(refreshed_entities)
+    if refreshed:
+        content = _apply_current_values(content, generated, refreshed)
+
     targets = _entities(content)
     exposed = {
         entity_id for entity_id, fields in targets.items()
@@ -646,6 +733,7 @@ def prepare_backup_preview(
             "backup_sha256": backup_sha256,
             "production_sha256": production_sha256,
             "ignored_entities": sorted(ignored),
+            "refreshed_entities": sorted(refreshed),
             "target_sha256": preview_digest(content),
         },
         sort_keys=True, ensure_ascii=False,
@@ -658,6 +746,8 @@ def prepare_backup_preview(
         "content": content,
         "ignored_entities": sorted(ignored),
         "ignore_candidates": sorted(eligible_to_ignore),
+        "refreshed_entities": sorted(refreshed),
+        "refresh_candidates": refresh_candidates,
         "production_path": str(output_path),
         "path": f"Backup: {backup_id}",
         "preview_sha256": preview_digest(content),

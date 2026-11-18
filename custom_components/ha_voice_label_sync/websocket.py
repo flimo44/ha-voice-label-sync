@@ -1995,6 +1995,7 @@ async def websocket_review_backup(
     vol.Required("backup_sha256"): str,
     vol.Required("production_sha256"): vol.Any(None, str),
     vol.Optional("ignored_entities", default=[]): [str],
+    vol.Optional("refreshed_entities", default=[]): [str],
 })
 async def websocket_prepare_backup_preview(
     hass: HomeAssistant,
@@ -2035,6 +2036,7 @@ async def websocket_prepare_backup_preview(
                     msg["backup_sha256"], msg["production_sha256"],
                     catalog,
                     ignored_entities=msg.get("ignored_entities", []),
+                    refreshed_entities=msg.get("refreshed_entities", []),
                     registries=registries,
                     label=settings.get(CONF_LABEL, DEFAULT_LABEL),
                     domains=DEFAULT_DOMAINS,
@@ -2060,6 +2062,7 @@ async def websocket_prepare_backup_preview(
     vol.Required("production_sha256"): vol.Any(None, str),
     vol.Required("label_plan_sha256"): str,
     vol.Optional("ignored_entities", default=[]): [str],
+    vol.Optional("refreshed_entities", default=[]): [str],
     vol.Optional("acknowledged_bulk_removals", default=0): int,
 })
 async def websocket_apply_backup_preview(
@@ -2109,6 +2112,7 @@ async def websocket_apply_backup_preview(
                     output_path, msg["backup_id"], msg["backup_sha256"],
                     msg["production_sha256"], catalog,
                     ignored_entities=msg.get("ignored_entities", []),
+                    refreshed_entities=msg.get("refreshed_entities", []),
                     registries=registries, label=configured_label,
                     domains=DEFAULT_DOMAINS,
                 )
