@@ -479,7 +479,7 @@ const HVLS_TRANSLATIONS = {
     applyInfoLabel: "Pourquoi Apply est-il désactivé ?",
     cancelPreview: "Annuler",
     previewCancelled: "Preview annulé : aucune modification effectuée.",
-    backupIgnoreTitle: "Entités à ignorer pour cette restauration",
+    backupIgnoreTitle: "Autres entités pouvant être ignorées",
     backupIgnoreHelp: "Une entité ignorée conserve sa configuration et ses étiquettes actuelles. Le Preview est recalculé après chaque choix.",
     backupIgnoreEntity: "Ignorer cette entité",
     backupIgnoreUpdating: "Recalcul du Preview après exclusion…",
@@ -497,6 +497,11 @@ const HVLS_TRANSLATIONS = {
     restoreFieldRoom: "pièce",
     restoreFieldExpose: "exposition",
     restoreValueAbsent: "absent",
+    restoreIgnoredTitle: "Restauration partielle : {count} entité(s) ignorée(s)",
+    restoreIgnoredHeading: "Entités ignorées ({count}) — elles ne seront pas restaurées",
+    restoreIgnoredUndoOne: "Rétablir",
+    restoreIgnoredUndoAll: "Tout rétablir",
+    restoreIgnoredConfirm: "Attention : {count} entité(s) ignorée(s) ne seront pas restaurées et garderont leur état actuel : {entities}.",
     applyNoChanges: "Aucune modification à appliquer : le Preview est déjà identique à la production.",
     applyReasonMissingIdentity: "L'identité de l'installation HVLS est indisponible.",
     applyReasonUnsafePath: "Le chemin du fichier ou du registre n'est pas sûr. Vérifiez notamment les liens symboliques.",
@@ -1034,7 +1039,7 @@ const HVLS_TRANSLATIONS = {
     applyInfoLabel: "Why is Apply disabled?",
     cancelPreview: "Cancel",
     previewCancelled: "Preview canceled: nothing changed.",
-    backupIgnoreTitle: "Entities to ignore for this restoration",
+    backupIgnoreTitle: "Other entities that can be ignored",
     backupIgnoreHelp: "Ignored entities retain their current configuration and HA labels. Preview is recalculated after each choice.",
     backupIgnoreEntity: "Ignore this entity",
     backupIgnoreUpdating: "Recalculating Preview with exclusions…",
@@ -1052,6 +1057,11 @@ const HVLS_TRANSLATIONS = {
     restoreFieldRoom: "room",
     restoreFieldExpose: "exposure",
     restoreValueAbsent: "absent",
+    restoreIgnoredTitle: "Partial restoration: {count} ignored entity(ies)",
+    restoreIgnoredHeading: "Ignored entities ({count}) — they will not be restored",
+    restoreIgnoredUndoOne: "Restore",
+    restoreIgnoredUndoAll: "Restore all",
+    restoreIgnoredConfirm: "Warning: {count} ignored entity(ies) will not be restored and keep their current state: {entities}.",
     applyNoChanges: "No changes to apply: the Preview already matches production.",
     applyReasonMissingIdentity: "The HVLS installation identity is unavailable.",
     applyReasonUnsafePath: "The output or registry path is unsafe. Check for symbolic links.",
@@ -2043,6 +2053,7 @@ class HVLSPreviewPanel extends HTMLElement {
     const requestId = (this._loadId || 0) + 1;
     this._loadId = requestId;
     this._restoring = true;
+    this._setRestoreControlsDisabled(true);
     this._stagedRestore = null;  // Existing approval is now invalid.
     this._review = null;
     this._updateApplyButton();
@@ -2085,8 +2096,23 @@ class HVLSPreviewPanel extends HTMLElement {
       }
     } finally {
       this._restoring = false;
+      this._setRestoreControlsDisabled(false);
       this._updateApplyButton();
     }
+  }
+
+  // Ignore/restore controls of the rendered restore Preview.
+  _setRestoreControlsDisabled(disabled) {
+    for (const control of this._restoreIgnoreControls || []) {
+      control.disabled = disabled;
+    }
+  }
+
+  _restoreIgnoreControl(control) {
+    control.disabled = Boolean(this._restoring);
+    if (!this._restoreIgnoreControls) this._restoreIgnoreControls = [];
+    this._restoreIgnoreControls.push(control);
+    return control;
   }
 
   async _applyStagedRestore() {
@@ -2100,7 +2126,7 @@ class HVLSPreviewPanel extends HTMLElement {
          !(staged.label_plan?.add?.length || staged.label_plan?.remove?.length)) ||
         !/^[0-9a-f]{64}$/.test(staged.label_plan_sha256 || "")) return;
     const bulkApproved = this._confirmWithBulkRemoval(
-      staged, this._t("backupPreviewConfirm"),
+      staged, this._restoreConfirmMessage(staged),
     );
     if (bulkApproved === null) return;
 
@@ -2173,6 +2199,17 @@ class HVLSPreviewPanel extends HTMLElement {
     const count = removed.length;
     if (count < 3 || count * 2 < before) return null;
     return {removed: count, before, after: before - count + added.length};
+  }
+
+  // A partial restoration must be visible in the final confirmation itself.
+  _restoreConfirmMessage(staged) {
+    const ignored = [...(staged?.ignored_entities || [])].sort();
+    if (!ignored.length) return this._t("backupPreviewConfirm");
+    const shown = ignored.slice(0, 10).join(", ") +
+      (ignored.length > 10 ? ", …" : "");
+    return this._tf("restoreIgnoredConfirm", {
+      count: ignored.length, entities: shown,
+    }) + "\n\n" + this._t("backupPreviewConfirm");
   }
 
   _confirmWithBulkRemoval(result, regularMessage) {
@@ -2628,6 +2665,9 @@ class HVLSPreviewPanel extends HTMLElement {
           });
         previewNotice.appendChild(description);
         const projection = this._stagedRestore.projection;
+        // Entities already explained in the blockers box are not repeated.
+        const shownInBox = new Set();
+        this._restoreIgnoreControls = [];
         if (projection && !isManual) {
           const warning = document.createElement("p");
           warning.className = "diagnostic-note";
@@ -2638,13 +2678,17 @@ class HVLSPreviewPanel extends HTMLElement {
               : this._t("backupProjectionMismatch");
           previewNotice.appendChild(warning);
           const blockers = this._restoreBlockers(this._stagedRestore);
-          if (blockers.length) {
+          const ignoredNow = [...(this._stagedRestore.ignored_entities || [])]
+            .sort();
+          for (const item of blockers) shownInBox.add(item.entity_id);
+          for (const entityId of ignoredNow) shownInBox.add(entityId);
+          if (blockers.length || ignoredNow.length) {
             const details = document.createElement("details");
             details.open = true;
             const heading = document.createElement("summary");
-            heading.textContent = this._tf("restoreBlockersTitle", {
-              count: blockers.length,
-            });
+            heading.textContent = blockers.length
+              ? this._tf("restoreBlockersTitle", {count: blockers.length})
+              : this._tf("restoreIgnoredTitle", {count: ignoredNow.length});
             details.appendChild(heading);
             const help = document.createElement("p");
             help.className = "diagnostic-note";
@@ -2654,7 +2698,8 @@ class HVLSPreviewPanel extends HTMLElement {
               .filter(item => item.ignorable)
               .map(item => item.entity_id);
             if (ignorable.length > 1) {
-              const all = document.createElement("button");
+              const all = this._restoreIgnoreControl(
+                document.createElement("button"));
               all.type = "button";
               all.className = "secondary";
               all.textContent = this._tf("restoreBlockerIgnoreAll", {
@@ -2666,39 +2711,84 @@ class HVLSPreviewPanel extends HTMLElement {
               );
               details.appendChild(all);
             }
-            const list = document.createElement("ul");
-            for (const item of blockers) {
-              const entry = document.createElement("li");
-              const text = document.createElement("span");
-              const reasons = item.ignorable
-                ? item.reasons
-                : [...item.reasons, this._t("restoreBlockerNotIgnorable")];
-              text.textContent = `${item.entity_id} — ${reasons.join(" ; ")}`;
-              entry.appendChild(text);
-              if (item.ignorable) {
-                const one = document.createElement("button");
-                one.type = "button";
-                one.className = "secondary";
-                one.textContent = this._t("restoreBlockerIgnoreOne");
-                one.style = "margin-left:8px;";
-                one.setAttribute("aria-label",
-                  this._t("backupIgnoreEntity") + ": " + item.entity_id);
-                one.addEventListener("click", () =>
-                  this._setRestoreIgnored(item.entity_id, true)
-                );
-                entry.appendChild(one);
+            if (blockers.length) {
+              const list = document.createElement("ul");
+              for (const item of blockers) {
+                const entry = document.createElement("li");
+                const text = document.createElement("span");
+                const reasons = item.ignorable
+                  ? item.reasons
+                  : [...item.reasons, this._t("restoreBlockerNotIgnorable")];
+                text.textContent = `${item.entity_id} — ${reasons.join(" ; ")}`;
+                entry.appendChild(text);
+                if (item.ignorable) {
+                  const one = this._restoreIgnoreControl(
+                    document.createElement("button"));
+                  one.type = "button";
+                  one.className = "secondary";
+                  one.textContent = this._t("restoreBlockerIgnoreOne");
+                  one.style = "margin-left:8px;";
+                  one.setAttribute("aria-label",
+                    this._t("backupIgnoreEntity") + ": " + item.entity_id);
+                  one.addEventListener("click", () =>
+                    this._setRestoreIgnored(item.entity_id, true)
+                  );
+                  entry.appendChild(one);
+                }
+                list.appendChild(entry);
               }
-              list.appendChild(entry);
+              details.appendChild(list);
             }
-            details.appendChild(list);
+            if (ignoredNow.length) {
+              const ignoredHeading = document.createElement("p");
+              ignoredHeading.className = "diagnostic-note";
+              ignoredHeading.textContent = this._tf("restoreIgnoredHeading", {
+                count: ignoredNow.length,
+              });
+              details.appendChild(ignoredHeading);
+              if (ignoredNow.length > 1) {
+                const undoAll = this._restoreIgnoreControl(
+                  document.createElement("button"));
+                undoAll.type = "button";
+                undoAll.className = "secondary";
+                undoAll.textContent = this._t("restoreIgnoredUndoAll");
+                undoAll.style = "margin:4px 0 8px;";
+                undoAll.addEventListener("click", () =>
+                  this._setRestoreIgnored(ignoredNow, false)
+                );
+                details.appendChild(undoAll);
+              }
+              const ignoredList = document.createElement("ul");
+              for (const entityId of ignoredNow) {
+                const entry = document.createElement("li");
+                const text = document.createElement("span");
+                text.textContent = entityId;
+                const undo = this._restoreIgnoreControl(
+                  document.createElement("button"));
+                undo.type = "button";
+                undo.className = "secondary";
+                undo.textContent = this._t("restoreIgnoredUndoOne");
+                undo.style = "margin-left:8px;";
+                undo.setAttribute("aria-label",
+                  this._t("restoreIgnoredUndoOne") + ": " + entityId);
+                undo.addEventListener("click", () =>
+                  this._setRestoreIgnored(entityId, false)
+                );
+                entry.append(text, undo);
+                ignoredList.appendChild(entry);
+              }
+              details.appendChild(ignoredList);
+            }
             previewNotice.appendChild(details);
           }
         }
         // An ignored entity retains its production YAML and HA labels.
         // Recalculation and all approval fingerprints are server-side.
-        if (this._stagedRestore.ignore_candidates?.length) {
+        const otherCandidates = (this._stagedRestore.ignore_candidates || [])
+          .filter(entityId => !shownInBox.has(entityId));
+        if (otherCandidates.length) {
           const details = document.createElement("details");
-          details.open = true;
+          details.open = false;
           const heading = document.createElement("summary");
           heading.textContent = this._t("backupIgnoreTitle");
           details.appendChild(heading);
@@ -2706,11 +2796,12 @@ class HVLSPreviewPanel extends HTMLElement {
           note.className = "diagnostic-note";
           note.textContent = this._t("backupIgnoreHelp");
           details.appendChild(note);
-          for (const entityId of this._stagedRestore.ignore_candidates) {
+          for (const entityId of otherCandidates) {
             const label = document.createElement("label");
             label.className = "entity-hvls-control";
             label.style = "display:flex; margin:8px 0; white-space:normal;";
-            const checkbox = document.createElement("input");
+            const checkbox = this._restoreIgnoreControl(
+              document.createElement("input"));
             checkbox.type = "checkbox";
             checkbox.className = "entity-hvls-checkbox";
             checkbox.checked = (this._stagedRestore.ignored_entities || []).includes(entityId);

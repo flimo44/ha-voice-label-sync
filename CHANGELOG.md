@@ -8,6 +8,7 @@ The format is inspired by Keep a Changelog.
 
 ### Improvements
 - Restore Preview: when HA labels cannot reproduce a backup exactly, list each blocking entity with a readable reason (for example name in the backup vs current Home Assistant name, missing or ineligible entity) and offer an **Ignore** button per entity plus **Ignore these N entities**. Ignored entities are not restored and keep their current state; the server still recalculates and verifies every choice before Apply.
+- Restore Preview: ignored entities stay listed with **Restore** / **Restore all** buttons, the final confirmation names the ignored entities that will not be restored, the remaining "Other entities that can be ignored" list is collapsed and no longer repeats them, and ignore controls are disabled while the Preview is recalculated.
 
 ### Fixes
 - Prefix the device name for entities that only have a generic entity name (`has_entity_name` entities such as "Température" or "Humidité"), which previously gave several devices the same Google name. User-defined names, entities without a name and legacy entities keep exactly their previous name, so existing voice names do not change. Affected entities appear in the next Preview; nothing is written before an explicit Apply.

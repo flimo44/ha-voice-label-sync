@@ -6309,3 +6309,103 @@ test("Bulk ignore refuses any entity the server did not offer", async () => {
   assert.equal(calls.length, 0);
   assert.equal(panel._stagedRestore.ignored_entities.length, 0);
 });
+
+function renderRestoreNotice(panel, staged) {
+  const notice = {hidden: true, children: [],
+    replaceChildren(...items) {this.children = items;},
+    appendChild(item) {this.children.push(item);},
+  };
+  const originalQuery = panel.querySelector.bind(panel);
+  panel.querySelector = selector => selector === "#backupPreviewNotice"
+    ? notice : originalQuery(selector);
+  panel._stagedRestore = staged;
+  panel._renderStagedRestorePlan();
+  return notice;
+}
+
+function findNodes(node, predicate, found = []) {
+  if (!node || typeof node !== "object") return found;
+  if (predicate(node)) found.push(node);
+  for (const child of node.children || []) findNodes(child, predicate, found);
+  return found;
+}
+
+test("Restore box lists ignored entities with undo and dedupes other list", () => {
+  const {panel} = makePanel(async () => ({}));
+  const notice = renderRestoreNotice(panel, blockingRestore({
+    ignored_entities: ["sensor.smoke"],
+    ignore_candidates: ["sensor.temp", "sensor.smoke", "switch.gone",
+      "switch.other"],
+  }));
+  const summaries = findNodes(notice, node => node.tag === "summary")
+    .map(node => node.textContent);
+  assert.ok(summaries.some(text =>
+    /3 entité\(s\) empêchent la restauration exacte/.test(text)));
+  assert.ok(findNodes(notice, node =>
+    /Entités ignorées \(1\) — elles ne seront pas restaurées/
+      .test(node.textContent)).length);
+  const undo = findNodes(notice, node =>
+    node.tag === "button" && node.textContent === "Rétablir");
+  assert.equal(undo.length, 1);
+  assert.match(undo[0]["aria-label"], /sensor\.smoke/);
+
+  // The other list only contains entities not already shown, collapsed.
+  const other = findNodes(notice, node => node.tag === "details" &&
+    node.children[0]?.textContent === "Autres entités pouvant être ignorées");
+  assert.equal(other.length, 1);
+  assert.equal(other[0].open, false);
+  const otherIds = findNodes(other[0], node => node.tag === "span")
+    .map(node => node.textContent);
+  assert.equal(otherIds.length, 1);
+  assert.match(otherIds[0], /^switch\.other/);
+});
+
+test("Partial restoration box stays visible once nothing blocks", () => {
+  const {panel} = makePanel(async () => ({}));
+  const notice = renderRestoreNotice(panel, blockingRestore({
+    ignored_entities: ["sensor.temp", "sensor.smoke"],
+    projection: {ready: true},
+  }));
+  const summaries = findNodes(notice, node => node.tag === "summary")
+    .map(node => node.textContent);
+  assert.ok(summaries.includes(
+    "Restauration partielle : 2 entité(s) ignorée(s)"));
+  assert.equal(findNodes(notice, node =>
+    node.tag === "button" && node.textContent === "Tout rétablir").length, 1);
+});
+
+test("Ignore controls are disabled while the Preview is recalculated", async () => {
+  const pending = deferred();
+  const {panel} = makePanel(async () => pending.promise);
+  const staged = blockingRestore();
+  const notice = renderRestoreNotice(panel, staged);
+  const buttons = findNodes(notice, node => node.tag === "button");
+  assert.ok(buttons.length >= 3);
+  assert.ok(buttons.every(button => button.disabled === false));
+
+  const updating = panel._setRestoreIgnored("sensor.temp", true);
+  assert.ok(buttons.every(button => button.disabled === true));
+  pending.resolve({...staged, ignored_entities: ["sensor.temp"]});
+  await updating;
+  assert.ok(buttons.every(button => button.disabled === false));
+});
+
+test("Final restore confirmation names the ignored entities", async () => {
+  const confirmations = [];
+  const {panel} = makePanel(async () => {
+    throw new Error("No request expected after a refused confirmation");
+  }, message => { confirmations.push(message); return false; });
+  panel._stagedRestore = blockingRestore({
+    ignored_entities: ["sensor.temp", "sensor.smoke"],
+    projection: {ready: true},
+    label_plan: {add: ["switch.gone"], remove: [], review: []},
+  });
+  await panel._applyStagedRestore();
+  assert.equal(confirmations.length, 1);
+  assert.match(confirmations[0],
+    /2 entité\(s\) ignorée\(s\) ne seront pas restaurées.*sensor\.smoke, sensor\.temp/);
+  assert.match(confirmations[0], /Appliquer la sauvegarde après contrôle/);
+
+  assert.equal(panel._restoreConfirmMessage(blockingRestore()),
+    panel._t("backupPreviewConfirm"));
+});
