@@ -6712,3 +6712,31 @@ test("The no-area bucket is displayed in the panel language", () => {
   assert.equal(panel._roomLabel("Sans pièce"), "No area");
   assert.equal(panel._roomLabel("Garage"), "Garage");
 });
+
+test("Removed Preview entities explain why they leave the YAML", () => {
+  const {panel} = makePanel(async () => ({}));
+  panel._entityCatalog = {entities: [
+    {entity_id: "binary_sensor.proposal", eligible: true, has_label: true},
+    {entity_id: "binary_sensor.unlabeled", eligible: true, has_label: false},
+    {entity_id: "light.disabled", eligible: false, has_label: true,
+      exclusion_reason: "disabled"},
+  ]};
+  panel._stagedRestore = {mode: "label_preview",
+    label_plan: {add: [], remove: ["binary_sensor.proposal"], review: []}};
+  assert.equal(panel._removalReason("binary_sensor.proposal"),
+    "Raison : étiquette HVLS retirée dans cette proposition.");
+  assert.equal(panel._removalReason("binary_sensor.unlabeled"),
+    "Raison : n'a plus l'étiquette HVLS dans Home Assistant.");
+  assert.equal(panel._removalReason("light.disabled"),
+    "Raison : elle est désactivée dans Home Assistant.");
+  assert.equal(panel._removalReason("switch.gone"),
+    "Raison : n'existe plus dans Home Assistant.");
+
+  panel._stagedRestore = planRestore();
+  assert.equal(panel._removalReason("climate.sejour"),
+    "Raison : exposée aujourd'hui, mais absente de la sauvegarde.");
+
+  panel._entityCatalog = null;
+  panel._stagedRestore = null;
+  assert.equal(panel._removalReason("switch.unknown"), null);
+});

@@ -468,6 +468,11 @@ const HVLS_TRANSLATIONS = {
     identicalEntities: "✓ Même configuration par entité (différences de présentation YAML uniquement).",
     entitiesAdded: "Entités ajoutées",
     entitiesRemoved: "Entités supprimées",
+    removalReasonProposal: "Raison : étiquette HVLS retirée dans cette proposition.",
+    removalReasonBackup: "Raison : exposée aujourd'hui, mais absente de la sauvegarde.",
+    removalReasonNoLabel: "Raison : n'a plus l'étiquette HVLS dans Home Assistant.",
+    removalReasonMissing: "Raison : n'existe plus dans Home Assistant.",
+    removalReasonIneligible: "Raison : {detail}",
     entitiesModified: "Entités modifiées",
     previewLoading: "Chargement du Preview…",
     previewMissing: "Aucun Preview disponible. Lancez d’abord une génération.",
@@ -1078,6 +1083,11 @@ const HVLS_TRANSLATIONS = {
     identicalEntities: "✓ Same configuration per entity (YAML formatting differences only).",
     entitiesAdded: "Added entities",
     entitiesRemoved: "Removed entities",
+    removalReasonProposal: "Reason: HVLS label removed in this proposal.",
+    removalReasonBackup: "Reason: exposed today, but absent from the backup.",
+    removalReasonNoLabel: "Reason: no longer has the HVLS label in Home Assistant.",
+    removalReasonMissing: "Reason: no longer exists in Home Assistant.",
+    removalReasonIneligible: "Reason: {detail}",
     entitiesModified: "Modified entities",
     previewLoading: "Loading Preview…",
     previewMissing: "No Preview available. Generate one first.",
@@ -2821,6 +2831,37 @@ class HVLSPreviewPanel extends HTMLElement {
     parent.appendChild(section);
   }
 
+  // Why an entity leaves the generated YAML. Display only, from data the
+  // panel already has; returns null when the cause cannot be determined.
+  _removalReason(entityId) {
+    const staged = this._stagedRestore;
+    if (staged?.mode === "restore_preview") {
+      const row = (staged.restore_rows || []).find(r => r.entity_id === entityId);
+      if (row?.case === "removed") return this._t("removalReasonBackup");
+    }
+    if (staged?.label_plan?.remove?.includes(entityId)) {
+      return this._t("removalReasonProposal");
+    }
+    if (!this._entityCatalog) return null;
+    const entity = (this._entityCatalog.entities || [])
+      .find(item => item.entity_id === entityId);
+    if (!entity) return this._t("removalReasonMissing");
+    if (entity.eligible !== true) {
+      const keys = {
+        domain_not_enabled: "reasonDomain",
+        unsupported_device_class: "reasonClass",
+        disabled: "reasonDisabled",
+        hidden: "reasonHidden",
+        entity_category: "reasonCategory",
+      };
+      return this._tf("removalReasonIneligible", {
+        detail: this._t(keys[entity.exclusion_reason] || "notEligible"),
+      });
+    }
+    if (entity.has_label !== true) return this._t("removalReasonNoLabel");
+    return null;
+  }
+
   _eligibilityExplanation(reason) {
     const keys = {
       domain_not_enabled: "reasonDomain",
@@ -3066,6 +3107,16 @@ class HVLSPreviewPanel extends HTMLElement {
           this._openEntityDetails(entityId);
         });
         row.appendChild(entityButton);
+
+        if (key === "entitiesRemoved") {
+          const reason = this._removalReason(entityId);
+          if (reason) {
+            const why = document.createElement("small");
+            why.className = "preview-removal-reason";
+            why.textContent = reason;
+            row.appendChild(why);
+          }
+        }
 
         if (typeof item !== "string") {
           for (const [field, values] of Object.entries(item.fields || {})) {
@@ -4275,6 +4326,7 @@ class HVLSPreviewPanel extends HTMLElement {
         }
         .preview-change-group > summary { font-weight:600; padding:14px 0; }
         .preview-change-list { padding-bottom:12px; }
+        .preview-removal-reason { display:block; color:var(--secondary-text-color); font-size:12px; margin:2px 0 0; }
         .preview-change-item {
           display:flex; flex-direction:column; gap:4px; min-width:0;
           padding:10px 0; border-top:1px solid var(--divider-color);
