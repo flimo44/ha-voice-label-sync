@@ -6552,7 +6552,8 @@ function planRestore(overrides = {}) {
     label_plan: {add: ["sensor.oregon", "switch.portail"],
       remove: ["climate.sejour"], review: []},
     projection: {ready: true},
-    restore_summary: {exposed_after: 3, added: 2, already_exposed: 1,
+    restore_summary: {backup_total: 5, restored_from_backup: 2,
+      exposed_after: 3, added: 2, already_exposed: 1,
       removed: 1, current_values: 1, not_restored: 2, pending: 0},
     restore_rows: [
       {entity_id: "climate.bureau_ha", case: "impossible", choice: "out",
@@ -6591,7 +6592,7 @@ test("Restore plan shows one column per outcome with the server summary", () => 
   assert.deepEqual([...out.ids], ["climate.bureau_ha", "switch.custom"]);
   assert.equal(current.title, "Nom ou pièce changés (1)");
   assert.deepEqual([...current.ids], ["sensor.oregon"]);
-  assert.equal(result.title, "Résultat pour Google (4)");
+  assert.equal(result.title, "Résultat pour Google (3)");  // removal excluded
   assert.deepEqual([...result.ids],
     ["sensor.oregon", "switch.portail", "switch.same", "climate.sejour"]);
 
@@ -6606,7 +6607,7 @@ test("Restore plan shows one column per outcome with the server summary", () => 
       .test(node.textContent)).length);
   const metrics = findNodes(notice, node => node.className === "metric")
     .map(node => node.children[0].textContent);
-  assert.deepEqual([...metrics], ["3", "2", "1", "1"]);
+  assert.deepEqual([...metrics], ["2 / 5", "3", "2", "1", "1"]);
 });
 
 test("Column help stays open across re-renders", () => {

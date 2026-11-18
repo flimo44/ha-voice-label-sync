@@ -1882,6 +1882,7 @@ def test_recommended_restore_starts_from_the_backup_result(
     assert rows["climate.thermostat_sejour"]["choice"] == "remove"
     assert rows["climate.thermostat_sejour"]["choices"] == ["remove", "keep"]
     assert result["restore_summary"] == {
+        "backup_total": 5, "restored_from_backup": 3,
         "exposed_after": 3, "added": 2, "already_exposed": 1, "removed": 1,
         "current_values": 1, "not_restored": 2, "pending": 0,
     }

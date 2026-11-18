@@ -863,6 +863,11 @@ def _restore_plan(result: dict, backup_content: str, catalog: dict) -> dict:
         eid for eid, item in entities.items() if item.get("has_label") is True
     }
     summary = {
+        "backup_total": len(backup),
+        "restored_from_backup": sum(
+            1 for row in rows
+            if row["case"] != "removed" and row["choice"] in {"in", "current"}
+        ),
         "exposed_after": len(final),
         "added": len(plan["add"]),
         "already_exposed": len(final & labeled_now),

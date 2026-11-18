@@ -519,6 +519,7 @@ const HVLS_TRANSLATIONS = {
     planHelp_out: "Entités de la sauvegarde qui ne seront pas remises. « Impossible » : elles n'existent plus, ne sont plus éligibles ou ont des options que HVLS ne génère pas. Les autres, vous avez choisi de ne pas les restaurer : leur état actuel ne change pas.",
     planHelp_current: "Ces entités ont été renommées ou déplacées dans Home Assistant depuis la sauvegarde. Elles seront restaurées avec leur nom et leur pièce d'aujourd'hui, pas ceux de la sauvegarde. « Retirer » les passe dans « Non restaurées ».",
     planHelp_result: "La liste exacte des entités exposées à Google après la restauration. « Ajoutée » : pas exposée aujourd'hui. « Déjà exposée » : aucun changement. En rouge : exposée aujourd'hui mais absente de la sauvegarde ; elle sera retirée, sauf si vous la gardez.",
+    planSumRestored: "Restaurées depuis la sauvegarde",
     planSumExposed: "Exposées après restauration",
     planSumAdded: "Ajoutées par la sauvegarde",
     planSumAlready: "Déjà exposées aujourd'hui",
@@ -1128,6 +1129,7 @@ const HVLS_TRANSLATIONS = {
     planHelp_out: "Backup entities that will not be brought back. \"Impossible\": they no longer exist, are no longer eligible or have options HVLS does not generate. For the others, you chose not to restore them: their current state does not change.",
     planHelp_current: "These entities were renamed or moved in Home Assistant since the backup. They will be restored with today's name and room, not the backup ones. \"Withdraw\" moves them to \"Not restored\".",
     planHelp_result: "The exact list of entities exposed to Google after the restoration. \"Added\": not exposed today. \"Already exposed\": no change. In red: exposed today but absent from the backup; it will be removed unless you keep it.",
+    planSumRestored: "Restored from the backup",
     planSumExposed: "Exposed after restoration",
     planSumAdded: "Added by the backup",
     planSumAlready: "Already exposed today",
@@ -2294,6 +2296,8 @@ class HVLSPreviewPanel extends HTMLElement {
 
     const metrics = document.createElement("div");
     metrics.className = "metrics";
+    this._addMetric(metrics, this._t("planSumRestored"),
+      `${summary.restored_from_backup ?? 0} / ${summary.backup_total ?? 0}`);
     this._addMetric(metrics, this._t("planSumExposed"), summary.exposed_after ?? 0);
     this._addMetric(metrics, this._t("planSumAdded"), summary.added ?? 0);
     this._addMetric(metrics, this._t("planSumAlready"),
@@ -2345,7 +2349,9 @@ class HVLSPreviewPanel extends HTMLElement {
     }
     if (!current.length) col2.appendChild(this._planEmpty());
 
-    const col3 = this._planColumn("result", result);
+    // The title counts what will be exposed, not the entities removed.
+    const col3 = this._planColumn("result", result.filter(row =>
+      !(row.case === "removed" && row.choice === "remove")));
     const removable = rows.filter(row => row.case === "removed" &&
       row.choices?.includes("keep"));
     if (removable.length) {
