@@ -6536,3 +6536,167 @@ test("Apply sends the refreshed entities with the approval", async () => {
     call.type === "ha_voice_label_sync/apply_backup_preview");
   assert.deepEqual([...apply.refreshed_entities], ["sensor.temp"]);
 });
+
+function planRestore(overrides = {}) {
+  return {
+    mode: "restore_preview", backup_id: "backup.bak",
+    backup_sha256: "b".repeat(64), production_sha256: "a".repeat(64),
+    label_plan_sha256: "c".repeat(64),
+    ignored_entities: ["climate.bureau_ha", "switch.custom"],
+    refreshed_entities: ["sensor.oregon"],
+    ignore_candidates: ["climate.bureau_ha", "switch.custom", "switch.portail",
+      "sensor.oregon", "climate.sejour"],
+    refresh_candidates: ["sensor.oregon"],
+    comparison: {status: "ok", added: [], removed: [], modified: [],
+      identical_entities: false},
+    label_plan: {add: ["sensor.oregon", "switch.portail"],
+      remove: ["climate.sejour"], review: []},
+    projection: {ready: true},
+    restore_summary: {exposed_after: 3, added: 2, already_exposed: 1,
+      removed: 1, current_values: 1, not_restored: 2, pending: 0},
+    restore_rows: [
+      {entity_id: "climate.bureau_ha", case: "impossible", choice: "out",
+        choices: [], reason: "missing_ha_entity", fields: null},
+      {entity_id: "switch.custom", case: "conflict", choice: "out",
+        choices: ["out"], reason: null, fields: ["aliases"]},
+      {entity_id: "sensor.oregon", case: "renamed", choice: "current",
+        choices: ["current", "out"], reason: null,
+        fields: {name: {before: "Température Oregon Ch2",
+          after: "Congelateur Température Oregon Ch2"}}},
+      {entity_id: "switch.portail", case: "added", choice: "in",
+        choices: ["in", "out"], reason: null, fields: null},
+      {entity_id: "switch.same", case: "unchanged", choice: "in",
+        choices: [], reason: null, fields: null},
+      {entity_id: "climate.sejour", case: "removed", choice: "remove",
+        choices: ["remove", "keep"], reason: null, fields: null},
+    ],
+    ...overrides,
+  };
+}
+
+function planColumns(notice) {
+  return findNodes(notice, node => node.tag === "section").map(section => ({
+    title: section.children[0].children[0].textContent,
+    ids: findNodes(section, node => node.className === "restore-row-id")
+      .map(node => node.textContent),
+    section,
+  }));
+}
+
+test("Restore plan shows one column per outcome with the server summary", () => {
+  const {panel} = makePanel(async () => ({}));
+  const notice = renderRestoreNotice(panel, planRestore());
+  const [out, current, result] = planColumns(notice);
+  assert.equal(out.title, "Non restaurées (2)");
+  assert.deepEqual([...out.ids], ["climate.bureau_ha", "switch.custom"]);
+  assert.equal(current.title, "Nom ou pièce changés (1)");
+  assert.deepEqual([...current.ids], ["sensor.oregon"]);
+  assert.equal(result.title, "Résultat pour Google (4)");
+  assert.deepEqual([...result.ids],
+    ["sensor.oregon", "switch.portail", "switch.same", "climate.sejour"]);
+
+  // Locked rows offer no action; the renamed reason shows before/after.
+  assert.equal(findNodes(out.section, node => node.tag === "button" &&
+    node.textContent === "Restaurer →").length, 0);
+  assert.ok(findNodes(current.section, node =>
+    /Température Oregon Ch2.*Congelateur Température Oregon Ch2/
+      .test(node.textContent)).length);
+  assert.ok(findNodes(result.section, node =>
+    /1 entité\(s\) exposées aujourd'hui sont absentes de la sauvegarde/
+      .test(node.textContent)).length);
+  const metrics = findNodes(notice, node => node.className === "metric")
+    .map(node => node.children[0].textContent);
+  assert.deepEqual([...metrics], ["3", "2", "1", "1"]);
+});
+
+test("Column help stays open across re-renders", () => {
+  const {panel} = makePanel(async () => ({}));
+  let notice = renderRestoreNotice(panel, planRestore());
+  const info = findNodes(notice, node => node.className === "restore-info")[0];
+  info.on_click();
+  notice = renderRestoreNotice(panel, planRestore());
+  const help = findNodes(notice, node => node.className === "restore-help");
+  assert.equal(help[0].hidden, false);
+  assert.equal(help[1].hidden, true);
+});
+
+for (const [entityId, choice, ignored, refreshed] of [
+  ["sensor.oregon", "out",
+    ["climate.bureau_ha", "sensor.oregon", "switch.custom"], []],
+  ["switch.portail", "out",
+    ["climate.bureau_ha", "switch.custom", "switch.portail"], ["sensor.oregon"]],
+  ["climate.sejour", "keep",
+    ["climate.bureau_ha", "climate.sejour", "switch.custom"], ["sensor.oregon"]],
+]) {
+  test(`Plan choice ${choice} for ${entityId} maps to explicit lists`, async () => {
+    const calls = [];
+    const staged = planRestore();
+    const {panel} = makePanel(async request => {
+      calls.push(request);
+      return {...staged, ignored_entities: request.ignored_entities,
+        refreshed_entities: request.refreshed_entities};
+    });
+    panel._stagedRestore = staged;
+    await panel._setRestoreRowChoice(entityId, choice);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].recommended, undefined);
+    assert.deepEqual([...calls[0].ignored_entities], ignored);
+    assert.deepEqual([...calls[0].refreshed_entities], refreshed);
+  });
+}
+
+test("Plan refuses choices the server did not allow", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => { calls.push(request); });
+  panel._stagedRestore = planRestore();
+  await panel._setRestoreRowChoice("climate.bureau_ha", "in");   // impossible
+  await panel._setRestoreRowChoice("switch.custom", "in");       // conflict
+  await panel._setRestoreRowChoice("switch.same", "out");        // unchanged
+  await panel._setRestoreRowChoice("sensor.oregon", "current");  // no-op
+  assert.equal(calls.length, 0);
+});
+
+test("Keep all and back to recommendation send one request each", async () => {
+  const calls = [];
+  const staged = planRestore();
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {...staged};
+  });
+  panel._stagedRestore = staged;
+  await panel._setRestoreKeepAll(true);
+  assert.deepEqual([...calls[0].ignored_entities],
+    ["climate.bureau_ha", "climate.sejour", "switch.custom"]);
+
+  await panel._restoreRecommended();
+  assert.equal(calls[1].recommended, true);
+  assert.equal(calls[1].ignored_entities, undefined);
+  assert.equal(calls[1].refreshed_entities, undefined);
+});
+
+test("Opening a backup restore starts from the recommendation", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return planRestore({available: true, can_apply: false,
+      content: "switch.portail:\n  expose: true\n"});
+  });
+  panel._backupReview = {backup_id: "backup.bak",
+    backup_sha256: "b".repeat(64), production_sha256: "a".repeat(64),
+    comparison: {status: "ok", identical_text: false}};
+  panel._activateTab = () => {};
+  await panel._restoreBackup();
+  assert.equal(calls[0].type, "ha_voice_label_sync/prepare_backup_preview");
+  assert.equal(calls[0].recommended, true);
+  assert.equal(calls[0].ignored_entities, undefined);
+});
+
+test("Plan confirmation summarises the final result and every change", () => {
+  const {panel} = makePanel(async () => ({}));
+  const message = panel._restoreConfirmMessage(planRestore());
+  assert.match(message, /Après restauration : 3 entité\(s\) exposées à Google \(2 ajoutée\(s\), 1 déjà exposée\(s\)\)/);
+  assert.match(message, /Ne seront plus exposées \(1\) : climate\.sejour/);
+  assert.match(message, /Avec le nom et la pièce actuels \(1\) : sensor\.oregon/);
+  assert.match(message, /Non restaurées \(2\) : climate\.bureau_ha, switch\.custom/);
+  assert.match(message, /Appliquer la sauvegarde après contrôle/);
+});

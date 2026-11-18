@@ -1996,6 +1996,7 @@ async def websocket_review_backup(
     vol.Required("production_sha256"): vol.Any(None, str),
     vol.Optional("ignored_entities", default=[]): [str],
     vol.Optional("refreshed_entities", default=[]): [str],
+    vol.Optional("recommended", default=False): bool,
 })
 async def websocket_prepare_backup_preview(
     hass: HomeAssistant,
@@ -2040,6 +2041,7 @@ async def websocket_prepare_backup_preview(
                     registries=registries,
                     label=settings.get(CONF_LABEL, DEFAULT_LABEL),
                     domains=DEFAULT_DOMAINS,
+                    recommended=msg.get("recommended", False),
                 )
             )
         except (

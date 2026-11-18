@@ -475,6 +475,8 @@ def _project_with_generated(
 # administrator restores an entity "with current values". Exposure, entity
 # IDs and any other option still have to match the backup exactly.
 REFRESHABLE_FIELDS = frozenset({"name", "room"})
+# Every option the HVLS generator writes for an entity.
+GENERATED_FIELDS = frozenset({"expose", "name", "room"})
 
 
 def _refresh_candidates(projection: dict | None) -> list[str]:
@@ -538,7 +540,7 @@ def _compose_reviewed_restore(
     return yaml.safe_dump(desired, sort_keys=False, allow_unicode=True)
 
 
-def prepare_backup_preview(
+def _prepare_backup_preview_core(
     output_path: Path, backup_id: str,
     backup_sha256: str, production_sha256: str | None,
     catalog: dict,
@@ -650,6 +652,7 @@ def prepare_backup_preview(
     # Candidates are derived from the ignore-composed backup, so they do not
     # depend on the refresh choice itself.
     refresh_candidates: list[str] = []
+    refresh_details: dict[str, dict] = {}
     if refreshed_entities is None:
         refreshed_entities = []
     if (
@@ -664,6 +667,11 @@ def prepare_backup_preview(
             content, output_path, registries, label, domains, ignored,
         )
         refresh_candidates = _refresh_candidates(first)
+        refresh_details = {
+            row["entity_id"]: row["fields"]
+            for row in (first.get("comparison") or {}).get("modified", [])
+            if row["entity_id"] in refresh_candidates
+        }
     if (
         not set(refreshed_entities).issubset(refresh_candidates)
         or set(refreshed_entities) & ignored
@@ -748,6 +756,7 @@ def prepare_backup_preview(
         "ignore_candidates": sorted(eligible_to_ignore),
         "refreshed_entities": sorted(refreshed),
         "refresh_candidates": refresh_candidates,
+        "refresh_details": refresh_details,
         "production_path": str(output_path),
         "path": f"Backup: {backup_id}",
         "preview_sha256": preview_digest(content),
@@ -760,6 +769,169 @@ def prepare_backup_preview(
         "projection": projection,
         "can_apply": False,  # The write API owns the final authorization.
     }
+
+
+def _projection_blockers(result: dict) -> set[str]:
+    """Entities still preventing labels from reproducing the restore YAML."""
+    comparison = (result.get("projection") or {}).get("comparison") or {}
+    if comparison.get("status") != "ok":
+        return set()
+    return (
+        set(comparison.get("added", [])) | set(comparison.get("removed", []))
+        | {row["entity_id"] for row in comparison.get("modified", [])}
+    )
+
+
+def _restore_plan(result: dict, backup_content: str, catalog: dict) -> dict:
+    """Classify every affected entity for the restore plan table.
+
+    Display data derived from an already validated result. It grants no
+    authority: Apply still re-runs the full preparation and approval checks.
+    """
+    from .preview_compare import _entities
+
+    entities = {
+        item["entity_id"]: item for item in catalog.get("entities", [])
+        if isinstance(item, dict) and isinstance(item.get("entity_id"), str)
+    }
+    backup = _entities(backup_content)
+    final = {
+        entity_id for entity_id, fields in _entities(result["content"]).items()
+        if fields.get("expose") is True
+    }
+    ignored = set(result["ignored_entities"])
+    refreshed = set(result["refreshed_entities"])
+    candidates = set(result["ignore_candidates"])
+    refreshable = set(result["refresh_candidates"])
+    blockers = _projection_blockers(result) - refreshed
+    rows = []
+    for entity_id in sorted(set(backup) | {
+        eid for eid, item in entities.items() if item.get("has_label") is True
+    }):
+        item = entities.get(entity_id)
+        labeled = bool(item and item.get("has_label") is True)
+        fields = backup.get(entity_id)
+        row = {"entity_id": entity_id, "reason": None, "fields": None}
+        if fields is None:
+            row["case"] = "removed"
+            row["choice"] = "keep" if entity_id in ignored else "remove"
+            row["choices"] = (
+                ["remove", "keep"] if entity_id in candidates else [row["choice"]]
+            )
+        elif fields.get("expose") is not True or item is None or (
+            item.get("eligible") is not True
+        ):
+            row["case"] = "impossible"
+            row["choice"] = "out"
+            row["choices"] = []
+            row["reason"] = (
+                "not_explicitly_exposed" if fields.get("expose") is not True
+                else "missing_ha_entity" if item is None
+                else item.get("exclusion_reason") or "ineligible"
+            )
+        elif entity_id in refreshable:
+            row["case"] = "renamed"
+            row["fields"] = result["refresh_details"].get(entity_id)
+            row["choice"] = (
+                "current" if entity_id in refreshed
+                else "out" if entity_id in ignored else "pending"
+            )
+            row["choices"] = ["current"] + (
+                ["out"] if entity_id in candidates else []
+            )
+        elif entity_id in blockers or set(fields) - GENERATED_FIELDS:
+            # HVLS only generates expose/name/room: other backup options
+            # (aliases, ...) can never be reproduced from HA labels.
+            row["case"] = "conflict"
+            row["fields"] = sorted(set(fields) - GENERATED_FIELDS) or None
+            row["choice"] = "out" if entity_id in ignored else "pending"
+            row["choices"] = ["out"] if entity_id in candidates else []
+        elif not labeled:
+            row["case"] = "added"
+            row["choice"] = "out" if entity_id in ignored else "in"
+            row["choices"] = (
+                ["in", "out"] if entity_id in candidates else [row["choice"]]
+            )
+        else:
+            row["case"] = "unchanged"
+            row["choice"] = "out" if entity_id in ignored else "in"
+            row["choices"] = []
+        rows.append(row)
+
+    plan = result["label_plan"]
+    labeled_now = {
+        eid for eid, item in entities.items() if item.get("has_label") is True
+    }
+    summary = {
+        "exposed_after": len(final),
+        "added": len(plan["add"]),
+        "already_exposed": len(final & labeled_now),
+        "removed": len(plan["remove"]),
+        "current_values": len(refreshed),
+        "not_restored": sum(
+            1 for row in rows
+            if row["case"] != "removed" and row["choice"] == "out"
+        ),
+        "pending": sum(1 for row in rows if row["choice"] == "pending"),
+    }
+    return {"rows": rows, "summary": summary}
+
+
+def prepare_backup_preview(
+    output_path: Path, backup_id: str,
+    backup_sha256: str, production_sha256: str | None,
+    catalog: dict,
+    *,
+    ignored_entities: list[str] | None = None,
+    refreshed_entities: list[str] | None = None,
+    registries: dict | None = None,
+    label: str | None = None,
+    domains: frozenset[str] | None = None,
+    recommended: bool = False,
+) -> dict:
+    """Review the selected backup as a proposal; never write YAML or labels.
+
+    With ``recommended``, start from the backup's intended result: entities
+    that cannot be regenerated (or differ in non-refreshable options) are not
+    restored, and name/room-only differences use current HA values. Every
+    step is a complete, validated preparation; the returned explicit lists
+    are what the administrator approves and what Apply re-checks.
+    """
+    def run(ignored: list[str], refreshed: list[str]) -> dict:
+        return _prepare_backup_preview_core(
+            output_path, backup_id, backup_sha256, production_sha256, catalog,
+            ignored_entities=ignored, refreshed_entities=refreshed,
+            registries=registries, label=label, domains=domains,
+        )
+
+    if recommended:
+        if ignored_entities or refreshed_entities:
+            raise BackupRestoreError(
+                "The recommended selection starts without explicit choices."
+            )
+        result = run([], [])
+        candidates = set(result["ignore_candidates"])
+        ignored = {
+            row["entity_id"] for row in result["label_plan"]["review"]
+        } & candidates
+        result = run(sorted(ignored), [])
+        refreshed = set(result["refresh_candidates"])
+        result = run(sorted(ignored), sorted(refreshed))
+        # Remaining differences (custom options, ...) cannot be reproduced:
+        # leave those entities out by default, once, then stop.
+        remaining = (_projection_blockers(result) - refreshed) & candidates
+        if remaining - ignored:
+            ignored |= remaining
+            result = run(sorted(ignored), [])
+            refreshed &= set(result["refresh_candidates"])
+            result = run(sorted(ignored), sorted(refreshed - ignored))
+    else:
+        result = run(ignored_entities, refreshed_entities)
+
+    backup_content = _read_yaml(_get_backup(output_path, backup_id))
+    plan = _restore_plan(result, backup_content, catalog)
+    return {**result, "restore_rows": plan["rows"],
+            "restore_summary": plan["summary"]}
 
 
 def complete_preview_restoration(
