@@ -1646,3 +1646,160 @@ def test_recovery_preserves_current_labeled_ha_entities_not_in_old_yaml(
     assert plan["label_plan"]["remove"] == []
     assert plan["label_plan"]["add"] == []
     assert output.read_text() == original
+
+
+def _refresh_fixture(tmp_path, backup_text, entities, production=None):
+    output = tmp_path / "google_entities.yaml"
+    output.write_text(production or "switch.old:\n  expose: true\n  name: Old\n")
+    backups = tmp_path / ".hvls_backups"
+    backups.mkdir()
+    backup_id = "google_entities.yaml.20261118-020000.bak"
+    (backups / backup_id).write_text(backup_text)
+    registries = {
+        "entity_registry": {"data": {"entities": [
+            {"area_id": None, "device_id": None, "disabled_by": None,
+             "hidden_by": None, "entity_category": None, **entity}
+            for entity in entities
+        ]}},
+        "device_registry": {"data": {"devices": []}},
+        "area_registry": {"data": {"areas": [
+            {"area_id": "garage", "name": "Garage"},
+        ]}},
+        "label_registry": {"data": {"labels": [
+            {"label_id": "hvls", "name": "HVLS"}
+        ]}},
+    }
+    catalog = {"labeled": 0, "entities": [
+        {"entity_id": entity["entity_id"], "eligible": True,
+         "has_label": "hvls" in entity.get("labels", [])}
+        for entity in entities
+    ]}
+    return output, backup_id, registries, catalog
+
+
+def _prepare(backup_module, output, backup_id, registries, catalog, **kwargs):
+    tokens = backup_module.review_backup(output, backup_id)
+    return backup_module.prepare_backup_preview(
+        output, backup_id, tokens["backup_sha256"],
+        tokens["production_sha256"], catalog,
+        registries=registries, label="HVLS",
+        domains=frozenset({"switch", "sensor"}), **kwargs,
+    )
+
+
+def test_name_and_room_changes_can_be_restored_with_current_values(
+    backup_module, tmp_path,
+):
+    output, backup_id, registries, catalog = _refresh_fixture(
+        tmp_path,
+        "switch.old:\n  expose: true\n  name: Old\n"
+        "sensor.oregon:\n  expose: true\n  name: Température Oregon Ch2\n"
+        "  room: Salon\n",
+        [
+            {"entity_id": "switch.old", "labels": ["hvls"]},
+            {"entity_id": "sensor.oregon", "labels": [],
+             "name": "Congelateur Température Oregon Ch2",
+             "area_id": "garage", "device_class": "temperature"},
+        ],
+    )
+    blocked = _prepare(backup_module, output, backup_id, registries, catalog)
+    assert blocked["projection"]["ready"] is False
+    assert blocked["refresh_candidates"] == ["sensor.oregon"]
+    assert blocked["refreshed_entities"] == []
+
+    result = _prepare(
+        backup_module, output, backup_id, registries, catalog,
+        refreshed_entities=["sensor.oregon"],
+    )
+    assert result["projection"]["ready"] is True
+    assert result["refreshed_entities"] == ["sensor.oregon"]
+    assert result["label_plan"]["add"] == ["sensor.oregon"]
+    import yaml
+    loaded = yaml.safe_load(result["content"])
+    assert loaded["sensor.oregon"] == {
+        "expose": True, "name": "Congelateur Température Oregon Ch2",
+        "room": "Garage",
+    }
+    assert loaded["switch.old"] == {"expose": True, "name": "Old"}
+    # The approval binds the choice: same backup, different decision.
+    assert result["label_plan_sha256"] != blocked["label_plan_sha256"]
+    assert output.read_text() == "switch.old:\n  expose: true\n  name: Old\n"
+
+
+def test_room_removed_in_ha_is_dropped_with_current_values(
+    backup_module, tmp_path,
+):
+    output, backup_id, registries, catalog = _refresh_fixture(
+        tmp_path,
+        "switch.old:\n  expose: true\n  name: Lampe\n  room: Bureau\n",
+        [{"entity_id": "switch.old", "labels": ["hvls"], "name": "Lampe"}],
+    )
+    result = _prepare(
+        backup_module, output, backup_id, registries, catalog,
+        refreshed_entities=["switch.old"],
+    )
+    assert result["projection"]["ready"] is True
+    assert "room" not in result["content"]
+
+
+@pytest.mark.parametrize("refreshed", [
+    ["switch.absent"],             # missing in HA: cannot be regenerated
+    ["sensor.oregon", "sensor.oregon"],
+    ["sensor.oregon", 42],
+    "sensor.oregon",
+])
+def test_restore_rejects_invalid_current_value_selection(
+    backup_module, tmp_path, refreshed,
+):
+    output, backup_id, registries, catalog = _refresh_fixture(
+        tmp_path,
+        "switch.old:\n  expose: true\n"
+        "switch.absent:\n  expose: true\n"
+        "sensor.oregon:\n  expose: true\n  name: Old\n",
+        [
+            {"entity_id": "switch.old", "labels": ["hvls"]},
+            {"entity_id": "sensor.oregon", "labels": [], "name": "New",
+             "device_class": "temperature"},
+        ],
+    )
+    with pytest.raises(backup_module.BackupRestoreError, match="current-value"):
+        _prepare(
+            backup_module, output, backup_id, registries, catalog,
+            refreshed_entities=refreshed,
+        )
+
+
+def test_entity_cannot_be_both_ignored_and_refreshed(backup_module, tmp_path):
+    output, backup_id, registries, catalog = _refresh_fixture(
+        tmp_path,
+        "switch.old:\n  expose: true\n"
+        "sensor.oregon:\n  expose: true\n  name: Old\n",
+        [
+            {"entity_id": "switch.old", "labels": ["hvls"]},
+            {"entity_id": "sensor.oregon", "labels": [], "name": "New",
+             "device_class": "temperature"},
+        ],
+    )
+    with pytest.raises(backup_module.BackupRestoreError):
+        _prepare(
+            backup_module, output, backup_id, registries, catalog,
+            ignored_entities=["sensor.oregon"],
+            refreshed_entities=["sensor.oregon"],
+        )
+
+
+def test_other_field_differences_are_never_refreshable(backup_module, tmp_path):
+    output, backup_id, registries, catalog = _refresh_fixture(
+        tmp_path,
+        "switch.old:\n  expose: true\n  name: Old\n"
+        "sensor.oregon:\n  expose: true\n  name: New\n"
+        "  aliases:\n    - Frigo\n",
+        [
+            {"entity_id": "switch.old", "labels": ["hvls"]},
+            {"entity_id": "sensor.oregon", "labels": [], "name": "New",
+             "device_class": "temperature"},
+        ],
+    )
+    result = _prepare(backup_module, output, backup_id, registries, catalog)
+    assert result["projection"]["ready"] is False
+    assert result["refresh_candidates"] == []
