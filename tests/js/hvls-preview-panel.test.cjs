@@ -161,6 +161,9 @@ test("Unapplied checkbox selection survives leaving and reopening the HA panel",
   assert.equal(reopened.panel.openedTab, "preview");
   assert.equal(reopened.controls.apply.disabled, false);
   assert.match(reopened.panel.status, /retrouvée/);
+  // The banner uses the same figures as the Preview tab.
+  assert.match(reopened.panel.status,
+    /1 changement\(s\) \(1 ajout\(s\), 0 suppression\(s\), 0 modification\(s\)\)/);
   assert.equal(calls.filter(c =>
     c === "ha_voice_label_sync/prepare_manual_label_preview").length, 2);
   assert.ok(!calls.some(c => /apply|set_entity_label/.test(c)));

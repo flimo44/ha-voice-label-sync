@@ -347,6 +347,7 @@ const HVLS_TRANSLATIONS = {
     manualLabelPrepared: "{count} changement(s) d'étiquette prêt(s) dans le Preview. Aucun label ni YAML modifié.",
     manualLabelHelp: "Proposition enregistrée dans ce navigateur pour votre compte Home Assistant. Au retour, le Preview sera revérifié. Aucun label ni YAML modifié avant Apply.",
     savedDraftRestored: "{count} modification(s) provisoire(s) retrouvée(s) et revérifiée(s). Vérifiez le Preview avant Appliquer.",
+    savedDraftRestoredDetail: "Proposition retrouvée et revérifiée : {count} changement(s) ({added} ajout(s), {removed} suppression(s), {modified} modification(s)). Vérifiez le Preview avant Appliquer.",
     savedDraftBlocked: "Brouillon conservé, mais non applicable : la configuration, les entités ou les protections ont changé. Aucune écriture autorisée. Examinez la situation puis cliquez sur Annuler pour repartir de l'état actuel.",
     savedDraftStorageUnavailable: "Le navigateur n'a pas pu enregistrer cette proposition. Elle pourrait disparaître si vous quittez HVLS. Appliquez-la ou annulez-la maintenant.",
     pendingDraftProtect: "Une proposition non appliquée est en attente. Examinez-la dans le Preview puis appliquez-la ou annulez-la avant de recharger ou de lancer une autre opération.",
@@ -962,6 +963,7 @@ const HVLS_TRANSLATIONS = {
     manualLabelPrepared: "{count} label change(s) prepared in Preview. No labels or YAML modified.",
     manualLabelHelp: "Proposal saved locally in this browser for your Home Assistant account. It will be rechecked on return; no label or YAML is changed before Apply.",
     savedDraftRestored: "{count} pending change(s) found and revalidated. Review the Preview before Apply.",
+    savedDraftRestoredDetail: "Saved proposal found and revalidated: {count} change(s) ({added} added, {removed} removed, {modified} modified). Review the Preview before Apply.",
     savedDraftBlocked: "Saved draft retained but cannot be applied: the configuration, entities or safety guards have changed. No writes are allowed. Review the situation, then choose Cancel to start again from the current state.",
     savedDraftStorageUnavailable: "The browser could not save this proposal. It may disappear when leaving HVLS. Apply or cancel it now.",
     pendingDraftProtect: "An unapplied proposal is still pending. Review it in Preview and apply or cancel it before refreshing or starting another operation.",
@@ -1751,7 +1753,18 @@ class HVLSPreviewPanel extends HTMLElement {
       this._applyBlockReasonCode = null;
       this._renderAnalysis(stage);
       this._setContent(stage.content);
-      this._setStatusKey("savedDraftRestored", {count: requested.length});
+      // Announce the same figures as the Preview tab and its change list.
+      const diff = stage.comparison;
+      if (diff?.status === "ok") {
+        this._setStatusKey("savedDraftRestoredDetail", {
+          count: this._pendingChangeCount(),
+          added: diff.added?.length || 0,
+          removed: diff.removed?.length || 0,
+          modified: diff.modified?.length || 0,
+        });
+      } else {
+        this._setStatusKey("savedDraftRestored", {count: requested.length});
+      }
       this._activateTab("preview");
     } catch (_error) {
       if (loadId === this._loadId) this._blockSavedLabelDraft(draft);
