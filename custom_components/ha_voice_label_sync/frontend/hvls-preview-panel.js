@@ -496,7 +496,7 @@ const HVLS_TRANSLATIONS = {
     restoreFieldName: "nom",
     restoreFieldRoom: "pièce",
     restoreFieldExpose: "exposition",
-    restoreValueAbsent: "absent",
+    restoreValueAbsent: "(aucune)",
     restoreIgnoredTitle: "Restauration partielle : {count} entité(s) ignorée(s)",
     restoreIgnoredHeading: "Entités ignorées ({count}) — elles ne seront pas restaurées",
     restoreIgnoredUndoOne: "Rétablir",
@@ -1056,7 +1056,7 @@ const HVLS_TRANSLATIONS = {
     restoreFieldName: "name",
     restoreFieldRoom: "room",
     restoreFieldExpose: "exposure",
-    restoreValueAbsent: "absent",
+    restoreValueAbsent: "(none)",
     restoreIgnoredTitle: "Partial restoration: {count} ignored entity(ies)",
     restoreIgnoredHeading: "Ignored entities ({count}) — they will not be restored",
     restoreIgnoredUndoOne: "Restore",
@@ -1820,6 +1820,7 @@ class HVLSPreviewPanel extends HTMLElement {
 
   _updateApplyButton() {
     this._updateTabLabels();
+    this._syncRestoreControls();
     const button = this.querySelector("#apply");
     if (button) {
       const staged = this._stagedRestore;
@@ -2053,7 +2054,6 @@ class HVLSPreviewPanel extends HTMLElement {
     const requestId = (this._loadId || 0) + 1;
     this._loadId = requestId;
     this._restoring = true;
-    this._setRestoreControlsDisabled(true);
     this._stagedRestore = null;  // Existing approval is now invalid.
     this._review = null;
     this._updateApplyButton();
@@ -2096,20 +2096,27 @@ class HVLSPreviewPanel extends HTMLElement {
       }
     } finally {
       this._restoring = false;
-      this._setRestoreControlsDisabled(false);
       this._updateApplyButton();
     }
   }
 
-  // Ignore/restore controls of the rendered restore Preview.
-  _setRestoreControlsDisabled(disabled) {
+  // Ignore/restore controls of the rendered restore Preview follow the
+  // panel's busy state; _updateApplyButton re-syncs them after every
+  // operation, including the initial restore preparation.
+  _restoreControlsBusy() {
+    return Boolean(this._restoring || this._applying || this._refreshing ||
+      this._generating || this._entityWritePending);
+  }
+
+  _syncRestoreControls() {
+    const busy = this._restoreControlsBusy();
     for (const control of this._restoreIgnoreControls || []) {
-      control.disabled = disabled;
+      control.disabled = busy;
     }
   }
 
   _restoreIgnoreControl(control) {
-    control.disabled = Boolean(this._restoring);
+    control.disabled = this._restoreControlsBusy();
     if (!this._restoreIgnoreControls) this._restoreIgnoreControls = [];
     this._restoreIgnoreControls.push(control);
     return control;

@@ -6262,7 +6262,7 @@ test("Restore blockers explain each difference and which can be ignored", () => 
   assert.equal(byId["sensor.temp"].ignorable, true);
   assert.match(byId["sensor.temp"].reasons[0],
     /nom : sauvegarde « Temperature » → Home Assistant aujourd'hui « Piscine mesure ZB Temperature »/);
-  assert.match(byId["sensor.smoke"].reasons[0], /pièce : .*« absent »/);
+  assert.match(byId["sensor.smoke"].reasons[0], /pièce : .*« \(aucune\) »/);
   assert.match(byId["switch.gone"].reasons[0], /ne peut pas être régénérée/);
   assert.match(byId["light.extra"].reasons[0], /absente de la sauvegarde/);
   assert.equal(byId["light.extra"].ignorable, false);
@@ -6408,4 +6408,24 @@ test("Final restore confirmation names the ignored entities", async () => {
 
   assert.equal(panel._restoreConfirmMessage(blockingRestore()),
     panel._t("backupPreviewConfirm"));
+});
+
+test("Ignore buttons rendered during restore preparation become usable", () => {
+  const {panel} = makePanel(async () => ({}));
+  // The initial restore Preview is rendered while _restoring is still true.
+  panel._restoring = true;
+  const notice = renderRestoreNotice(panel, blockingRestore());
+  const buttons = findNodes(notice, node => node.tag === "button");
+  assert.ok(buttons.length >= 3);
+  assert.ok(buttons.every(button => button.disabled === true));
+
+  // _restoreBackup's finally block: busy state ends.
+  panel._restoring = false;
+  panel._updateApplyButton();
+  assert.ok(buttons.every(button => button.disabled === false));
+
+  // Any other operation in progress disables them again.
+  panel._applying = true;
+  panel._updateApplyButton();
+  assert.ok(buttons.every(button => button.disabled === true));
 });
