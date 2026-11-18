@@ -6,6 +6,7 @@
 [![Latest release](https://img.shields.io/github/v/release/flimo44/ha-voice-label-sync?include_prereleases&label=release)](https://github.com/flimo44/ha-voice-label-sync/releases)
 [![PyPI Downloads](https://static.pepy.tech/badge/ha-voice-label-sync)](https://pepy.tech/projects/ha-voice-label-sync)
 [![Downloads/month](https://api.pepy.tech/badge/ha-voice-label-sync/month)](https://pepy.tech/projects/ha-voice-label-sync)
+[![Support HVLS on Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support%20HVLS-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/plebonhommx)
 
 > **Already using Google Assistant with Home Assistant without Home Assistant Cloud? Easily manage exposed entities using labels.**
 
@@ -369,6 +370,10 @@ Beta.4 added backup browsing and protected restore, more detailed Preview views 
 ## 📚 Documentation and roadmap
 
 See [ROADMAP.md](ROADMAP.md) for future milestones and the [`docs/`](docs/) directory for additional documentation.
+
+## ☕ Support the project
+
+HVLS is free and open source. If you find it useful and would like to support its continued development and maintenance, you can [buy me a coffee](https://buymeacoffee.com/plebonhommx). Contributions are entirely optional and are always appreciated!
 
 ## 🤝 Contributing
 
