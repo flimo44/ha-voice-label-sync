@@ -15,6 +15,7 @@ The format is inspired by Keep a Changelog.
 - Restore Preview: an entity whose only differences are its name or room (renamed in Home Assistant since the backup) can be restored with **Restore with current name and room**, per entity or in bulk. The server only accepts name/room differences for entities it offers, binds the choice to the approval, shows the exact YAML that will be written, and the final confirmation lists these entities.
 
 ### Fixes
+- Panel: the Preview tab badge and the pending-changes alert count every affected entity for a label proposal, including YAML changes coming from Home Assistant itself, instead of only the checkboxes changed ("Preview (1)" next to three listed changes).
 - Panel: the bucket for entities without an area is shown in the panel language ("No area" in English) in Statistics breakdowns and entity lists, instead of the French "Sans pièce".
 - Prefix the device name for entities that only have a generic entity name (`has_entity_name` entities such as "Température" or "Humidité"), which previously gave several devices the same Google name. User-defined names, entities without a name and legacy entities keep exactly their previous name, so existing voice names do not change. Affected entities appear in the next Preview; nothing is written before an explicit Apply.
 - Python core: a label made only of non-Latin characters or emoji no longer matches every other such label through an empty slug.

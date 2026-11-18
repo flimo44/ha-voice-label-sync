@@ -6740,3 +6740,20 @@ test("Removed Preview entities explain why they leave the YAML", () => {
   panel._stagedRestore = null;
   assert.equal(panel._removalReason("switch.unknown"), null);
 });
+
+test("Manual proposal count includes YAML changes coming from Home Assistant", () => {
+  const {panel} = makePanel(async () => ({}));
+  panel._stagedRestore = {
+    mode: "label_preview",
+    changes: [{entity_id: "binary_sensor.a", enabled: false}],
+    label_plan: {add: [], remove: ["binary_sensor.a"], review: []},
+    comparison: {status: "ok",
+      added: [], removed: ["binary_sensor.a", "binary_sensor.b"],
+      modified: [{entity_id: "binary_sensor.mailbox", fields: {}}]},
+  };
+  assert.equal(panel._pendingChangeCount(), 3);
+
+  // Without a trustworthy comparison, the checkbox changes still count.
+  panel._stagedRestore.comparison = {status: "error"};
+  assert.equal(panel._pendingChangeCount(), 1);
+});

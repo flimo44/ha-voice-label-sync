@@ -1401,17 +1401,19 @@ class HVLSPreviewPanel extends HTMLElement {
     if (staged?.mode === "saved_draft_blocked") {
       return this._manualLabelChanges?.size || staged.changes?.length || 0;
     }
-    // In ordinary manual selection, each net checkbox change is one action.
-    // Comparing the YAML alone can miss a necessary HA-label change.
-    if (staged?.mode === "label_preview" && staged.recovery !== true) {
-      return staged.changes?.length || 0;
-    }
+    // In ordinary manual selection, count every affected entity: each net
+    // checkbox change, plus YAML changes that come from Home Assistant
+    // itself (label removed elsewhere, area changed, ...). Counting only the
+    // checkboxes showed "Preview (1)" next to three listed changes.
+    const manual = staged?.mode === "label_preview" && staged.recovery !== true;
+    const manualChanges = manual && Array.isArray(staged.changes)
+      ? staged.changes.length : 0;
 
     // Normal Preview is actionable only after its server-side review.
     const active = staged || (this._review ? this._lastAnalysis : null);
     if (!active) return 0;
     const comparison = active.comparison;
-    if (!["ok", "missing"].includes(comparison?.status)) return 0;
+    if (!["ok", "missing"].includes(comparison?.status)) return manualChanges;
 
     // Recovery/backup proposals may change both the YAML and HA labels.
     // Count each affected entity once, even when both need updating.
@@ -1429,6 +1431,7 @@ class HVLSPreviewPanel extends HTMLElement {
     if (staged) {
       addEntities(staged.label_plan?.add);
       addEntities(staged.label_plan?.remove);
+      if (manual) addEntities(staged.changes);
     }
     const diffCount = comparison.status === "ok"
       ? ["added", "removed", "modified"].reduce(
