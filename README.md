@@ -33,7 +33,7 @@ Historical beta milestones and migration notes are documented in [CHANGELOG.md](
 
 - **At-a-glance production status:** green ✓ for entities already present unchanged in production YAML, amber dot for pending additions or modifications and neutral ? when the comparison cannot be trusted. These indicators do **not** confirm Google Home synchronization.
 - **Guided Preview / Production workflow:** visible pending-changes warning and explicit, checksum-protected Apply.
-- **Safe recovery:** browse historical backups, review differences, and restore after creating a mandatory safety copy.
+- **Safe recovery:** browse historical backups, review a clear restore plan (what is restored, what changed in Home Assistant since the backup and what Google will finally receive), and restore after creating a mandatory safety copy.
 - **Live entity selection:** manage the HVLS label, inspect eligibility and open HA entity details without leaving the integration.
 
 ## 🧪 V1 beta release history
@@ -68,6 +68,7 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 
 - 🏷️ Select entities through Home Assistant labels
 - 🏠 Resolve names, areas and devices from **live Home Assistant registries** in the native integration
+- 🏷️ Avoid duplicate Google names: an entity that only has a generic name (such as *Temperature* or *Humidity*) is prefixed with its device name; names you set yourself are kept as typed
 - 👀 Generate a dedicated Preview and inspect statistics by domain and room, including labeled entities in non-enabled domains
 - 🔍 See excluded entities and the reasons they were filtered out
 - ⚙️ Open the integration configuration from the Preview panel
@@ -177,9 +178,25 @@ This is an example: retain your actual project settings, credentials and other G
 
 ### Backup history and safe restore
 
-The **Backups** tab lists snapshots stored in a `.hvls_backups` directory beside the configured production YAML. Selecting a backup proposes changes; when production exists, it is compared against that file. If production is **missing**, the backup remains reviewable, and its entities are checked against the current Home Assistant registry before the reviewed Preview can be applied.
+The **Backups** tab lists snapshots stored in a `.hvls_backups` directory beside the configured production YAML. Selecting a backup and choosing to restore it opens a **restore plan** in the Preview tab. Nothing is written until you apply it: neither the YAML nor Home Assistant labels change while you review.
 
-Restore is administrator-only. HVLS validates YAML, checks SHA-256 fingerprints and current ownership, and requires a Preview and explicit approval. A current production file is always backed up before replacement; if the file is missing, there is no current file to back up, and existing backups are preserved. Depending on the reviewed restore plan, restoring an old configuration **can add or remove HVLS labels**; unresolved or ineligible entities must be examined before applying. HVLS verifies the resulting labels against the YAML and protects incomplete restore operations. After restoration, reload Google Assistant or restart Home Assistant and sync devices if necessary.
+The plan opens on the **recommended restoration**, computed by HVLS:
+
+- the result follows the backup;
+- entities that can no longer be regenerated are left out;
+- entities renamed or moved in Home Assistant since the backup are restored with their current name and room.
+
+A summary shows how many backup entities are restored (for example **25 / 40**), how many entities will be exposed after restoration, how many are added, already exposed, or will no longer be exposed. Each entity then appears in exactly one of three columns; the ⓘ button beside each title explains it:
+
+| Column | Content | Possible actions |
+| --- | --- | --- |
+| **Not restored** | Backup entities that will not be brought back. Entities marked **impossible** no longer exist, are no longer eligible, are not exposed in the backup or have options HVLS does not generate (such as aliases). Others were left out by you. | **Restore →** when the entity can be restored |
+| **Name or room changed** | Entities renamed or moved in Home Assistant since the backup, shown as *backup value → current value*. They are restored with today's name and room. | **← Withdraw** |
+| **Result for Google** | Exactly what will be written: **added**, **already exposed**, **current name/room**, and in red the entities **exposed today but absent from the backup**, which will be removed. | **Don't restore**, **Keep** / **Withdraw**, and **Keep all** / **Remove all** for entities absent from the backup |
+
+By default the result is the backup's result. If the backup is incomplete, keep the entities exposed today that it does not contain, one by one or with **Keep all**. **↺ Back to the recommendation** resets your choices. The underlying HA label operations remain available under **Technical details**, and the YAML diff stays below the plan.
+
+Restore is administrator-only. Every choice is recalculated by Home Assistant; the browser only proposes it. At **Apply**, HVLS re-checks the backup and production SHA-256 fingerprints, current ownership and your exact choices. The final confirmation summarises the result and lists the entities removed, restored with current values and not restored. A current production file is always backed up before replacement; if the file is missing, there is no current file to back up, and existing backups are preserved. HVLS then updates the HVLS labels, verifies that they reproduce the restored YAML and protects incomplete restore operations. After restoration, reload Google Assistant or restart Home Assistant and sync devices if necessary.
 
 The panel offers the following actions plus a **Settings** shortcut:
 
@@ -189,13 +206,13 @@ The panel offers the following actions plus a **Settings** shortcut:
 | **Refresh** | Reloads the live HA entity catalog, regenerates Preview YAML and refreshes statistics and differences. Does **not** apply to production. |
 | **Copy YAML** | Copies the generated Preview content. |
 | **Apply Preview** | Requests confirmation, checks the reviewed Preview and production SHA-256 fingerprints, then writes to the configured production path, with a backup when enabled. |
-| **Backups** | Lists backups, previews restoration differences and safely restores a selected production YAML with explicit confirmation. |
+| **Backups** | Lists backups and opens a reviewed restore plan (recommended by default, adjustable entity by entity), then safely restores with explicit confirmation. |
 | **Settings** | Opens the Home Assistant integration details/configuration page. |
 
 The panel displays entity counts, expandable breakdowns by domain and area, excluded-domain diagnostics and a Preview/Production comparison. Entity names open HA's native More Info dialog; in Statistics, the **HVLS** checkbox allows quick removal with confirmation. A warning highlights unapplied changes and links to Preview. **Apply Preview** remains an explicit, separate production action.
 
 > [!WARNING]
-> **Apply Preview and Restore can change the configured production YAML; reviewed restoration can also update HVLS entity labels.** Review the diff and label plan before confirming. HACS rollback restores integration code, **not** generated YAML or HA labels. Ordinary automatic backups are optional; a restore of an existing production file creates a safety backup. When the file is missing, existing backups are preserved and a new safety copy cannot be made. With the default output directory, backups are under `/config/.hvls_backups/`.
+> **Apply Preview and Restore can change the configured production YAML; reviewed restoration can also update HVLS entity labels.** Review the Preview or restore plan before confirming. HACS rollback restores integration code, **not** generated YAML or HA labels. Ordinary automatic backups are optional; a restore of an existing production file creates a safety backup. When the file is missing, existing backups are preserved and a new safety copy cannot be made. With the default output directory, backups are under `/config/.hvls_backups/`.
 
 ### Native Home Assistant actions
 
