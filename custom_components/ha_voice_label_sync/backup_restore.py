@@ -721,9 +721,21 @@ def _prepare_backup_preview_core(
     if registries is not None:
         if not isinstance(label, str) or domains is None:
             raise BackupRestoreError("Missing current HVLS generation settings")
-        projection = _project_restored_yaml(
+        projection, generated = _project_with_generated(
             content, output_path, registries, label, domains, ignored,
         )
+        # A composed restore (entities ignored or restored with current
+        # values) is otherwise serialized by yaml.safe_dump: no room
+        # comments, no quoting, a different order. When HA labels reproduce
+        # it exactly, write the HVLS generator's own text instead, so the
+        # restored file looks like any HVLS file and the next Preview shows
+        # no formatting-only difference. An untouched backup is kept as is.
+        if (
+            (ignored or refreshed) and projection["ready"] is True
+            and isinstance(generated, str)
+            and _entities(generated) == _entities(content)
+        ):
+            content = generated
 
     label_plan = {
         "add": additions,

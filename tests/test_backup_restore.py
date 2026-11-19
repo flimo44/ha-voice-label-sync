@@ -1957,3 +1957,38 @@ def test_plan_counts_production_entities_without_label_as_removed(
     assert result["restore_summary"]["removed"] == 2
     assert len(result["comparison"]["removed"]) == 2
     assert result["label_plan"]["remove"] == ["climate.thermostat_sejour"]
+
+
+def test_composed_restore_is_written_in_hvls_generator_format(
+    backup_module, tmp_path,
+):
+    output, backup_id, registries, catalog, _ = _plan_fixture(tmp_path)
+    result = _prepare_plan(
+        backup_module, output, backup_id, registries, catalog, recommended=True,
+    )
+    content = result["content"]
+    # Same text the normal generator produces: header, quoted scalars.
+    assert content.startswith("# ")
+    assert '  name: "Congelateur Température Oregon Ch2"' in content
+    assert '  name: "Portail"' in content
+    assert "name: Portail\n" not in content
+    # Approval still binds this exact text.
+    explicit = _prepare_plan(
+        backup_module, output, backup_id, registries, catalog,
+        ignored_entities=result["ignored_entities"],
+        refreshed_entities=result["refreshed_entities"],
+    )
+    assert explicit["content"] == content
+    assert explicit["label_plan_sha256"] == result["label_plan_sha256"]
+
+
+def test_untouched_backup_keeps_its_own_text(backup_module, tmp_path):
+    backup_text = "switch.same:\n  expose: true\n  name: Same\n"
+    output, backup_id, registries, catalog = _refresh_fixture(
+        tmp_path, backup_text,
+        [{"entity_id": "switch.same", "labels": ["hvls"], "name": "Same"}],
+        production="switch.same:\n  expose: true\n  name: Same\n",
+    )
+    result = _prepare(backup_module, output, backup_id, registries, catalog)
+    assert result["projection"]["ready"] is True
+    assert result["content"] == backup_text
