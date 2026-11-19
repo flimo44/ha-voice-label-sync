@@ -6,6 +6,9 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+### Improvements
+- Translations: the panel, setup diagnostic and configuration screens now support any number of languages (Home Assistant language with fallback to the base language, then English) instead of French or English only. Remaining hard-coded French/English texts (YAML file issue explanations, setup hints) moved to the translation tables, and tests check that every language is complete. See CONTRIBUTING.md, "Adding a language".
+
 ## [1.2.0] - 2026-11-19
 
 Requires the Python core `ha-voice-label-sync==0.3.8`.

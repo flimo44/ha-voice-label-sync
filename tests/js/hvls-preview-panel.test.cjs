@@ -6637,3 +6637,43 @@ test("Plan buttons rendered during restore preparation become usable", () => {
   panel._updateApplyButton();
   assert.ok(buttons.every(button => button.disabled === false));
 });
+
+test("Every panel language has the same texts and placeholders as English", () => {
+  const context = {};
+  vm.runInNewContext(
+    source.slice(0, source.indexOf("\n};\n") + 3) +
+      "\nthis.dictionaries = HVLS_TRANSLATIONS;", context);
+  const {dictionaries} = context;
+  const english = dictionaries.en;
+  const placeholders = text =>
+    (String(text).match(/\{(\w+)\}/g) || []).sort().join(",");
+  for (const [code, texts] of Object.entries(dictionaries)) {
+    assert.deepEqual(Object.keys(texts).sort(), Object.keys(english).sort(),
+      `${code} keys`);
+    for (const key of Object.keys(english)) {
+      assert.equal(placeholders(texts[key]), placeholders(english[key]),
+        `${code}.${key} placeholders`);
+    }
+  }
+});
+
+test("Panel language follows Home Assistant and falls back to English", () => {
+  const end = source.indexOf("\n}\n", source.indexOf("function hvlsResolveLanguage"));
+  const context = {};
+  vm.runInNewContext(source.slice(0, end + 3) +
+    "\nthis.resolve = hvlsResolveLanguage;", context);
+  for (const [language, expected] of [
+    ["fr", "fr"], ["fr-CA", "fr"], ["FR", "fr"], ["en-GB", "en"],
+    ["de", "en"], ["pt_BR", "en"], [undefined, "en"],
+  ]) {
+    assert.equal(context.resolve(language), expected, String(language));
+  }
+  const {panel} = makePanel(async () => ({}));
+  panel._language = "en";
+  assert.equal(panel._assistantFileExplanation("yaml_syntax_error"),
+    "invalid YAML");
+  assert.equal(panel._assistantFileExplanation("made_up_code"), "unknown issue");
+  panel._language = "fr";
+  assert.equal(panel._assistantFileExplanation("yaml_syntax_error"),
+    "syntaxe YAML incorrecte");
+});
