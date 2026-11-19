@@ -6664,7 +6664,8 @@ test("Panel language follows Home Assistant and falls back to English", () => {
     "\nthis.resolve = hvlsResolveLanguage;", context);
   for (const [language, expected] of [
     ["fr", "fr"], ["fr-CA", "fr"], ["FR", "fr"], ["en-GB", "en"],
-    ["de", "en"], ["pt_BR", "en"], [undefined, "en"],
+    ["de", "de"], ["de-CH", "de"], ["ja", "en"], ["pt_BR", "en"],
+    [undefined, "en"],
   ]) {
     assert.equal(context.resolve(language), expected, String(language));
   }
@@ -6676,4 +6677,25 @@ test("Panel language follows Home Assistant and falls back to English", () => {
   panel._language = "fr";
   assert.equal(panel._assistantFileExplanation("yaml_syntax_error"),
     "syntaxe YAML incorrecte");
+});
+
+test("German panel texts are used for a German Home Assistant", () => {
+  const {panel} = makePanel(async () => ({}));
+  panel._language = "de";
+  assert.equal(panel._t("tabBackups"), "Sicherungen");
+  assert.equal(panel._tf("planCol_result", {count: 3}),
+    "Ergebnis für Google (3)");
+  assert.equal(panel._roomLabel("Sans pièce"), "Kein Bereich");
+  assert.equal(panel._assistantFileExplanation("yaml_syntax_error"),
+    "ungültige YAML");
+});
+
+test("English panel texts contain no leftover French", () => {
+  const context = {};
+  vm.runInNewContext(source.slice(0, source.indexOf("\n};\n") + 3) +
+    "\nthis.dictionaries = HVLS_TRANSLATIONS;", context);
+  const leftovers = Object.entries(context.dictionaries.en)
+    .filter(([, text]) => /[éèàùçêôîû’]/.test(text))
+    .map(([key]) => key);
+  assert.deepEqual([...leftovers], []);
 });
