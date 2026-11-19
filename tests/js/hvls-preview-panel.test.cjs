@@ -6708,3 +6708,12 @@ test("Spanish panel texts are used for a Spanish Home Assistant", () => {
     "Resultado para Google (3)");
   assert.equal(panel._roomLabel("Sans pièce"), "Sin área");
 });
+
+test("Italian panel texts are used for an Italian Home Assistant", () => {
+  const {panel} = makePanel(async () => ({}));
+  panel._language = "it";
+  assert.equal(panel._t("tabBackups"), "Backup");
+  assert.equal(panel._tf("planCol_result", {count: 3}),
+    "Risultato per Google (3)");
+  assert.equal(panel._roomLabel("Sans pièce"), "Nessuna area");
+});
