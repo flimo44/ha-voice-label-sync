@@ -10,6 +10,7 @@ The format is inspired by Keep a Changelog.
 - English panel: the message shown when a takeover backup succeeds but ownership is not transferred was in French.
 
 ### Improvements
+- Spanish translation of the panel, configuration screens and setup diagnostic (including regional variants such as es-419).
 - German translation of the panel, configuration screens and setup diagnostic. Home Assistant users with German (including regional variants such as de-CH) get the German interface automatically.
 - Translations: the panel, setup diagnostic and configuration screens now support any number of languages (Home Assistant language with fallback to the base language, then English) instead of French or English only. Remaining hard-coded French/English texts (YAML file issue explanations, setup hints) moved to the translation tables, and tests check that every language is complete. See CONTRIBUTING.md, "Adding a language".
 

@@ -450,7 +450,7 @@ def initial_setup_output_error(report: dict[str, Any]) -> str | None:
 
 # Languages with complete integration texts. Adding a language means adding
 # a block below, a translations/<code>.json file and a panel dictionary.
-SUPPORTED_LANGUAGES = ("de", "en", "fr")
+SUPPORTED_LANGUAGES = ("de", "en", "es", "fr")
 
 SETUP_TEXTS: dict[str, dict[str, str]] = {
     "en": {
@@ -511,6 +511,37 @@ SETUP_TEXTS: dict[str, dict[str, str]] = {
             "Eine vorhandene YAML-Datei wurde gefunden; sie bleibt unverändert."
         ),
         "menu_absent": "Keine übliche HVLS-YAML-Datei gefunden.",
+    },
+    "es": {
+        "discovery_found": "Archivo detectado",
+        "discovery_not_found": (
+            "No se ha identificado ningún origen de Google Assistant"
+        ),
+        "discovery_file_missing": "Falta el archivo declarado",
+        "discovery_ambiguous": "Configuración ambigua",
+        "discovery_unsafe_path": "Ruta de origen no segura",
+        "output_absent": "El archivo no existe",
+        "output_existing": "Archivo existente detectado",
+        "output_unsafe": "Ruta no segura",
+        "title": "Diagnóstico inicial de HVLS",
+        "source": "Origen de Google Assistant",
+        "source_file": "Archivo de origen",
+        "not_identified": "No identificado",
+        "hvls_file": "Archivo YAML de HVLS",
+        "source_matches_output": (
+            "La salida coincide con el archivo de Google Assistant declarado."
+        ),
+        "review_required": "Revisión necesaria. Sin adopción automática.",
+        "existing_hint": (
+            "Puedes instalar HVLS: el archivo existente no cambiará. Abre "
+            "después el Asistente de HVLS para revisarlo y confirmar por "
+            "separado que HVLS lo gestione antes de aplicar cambios."
+        ),
+        "no_write": "La detección no autoriza ninguna modificación de archivos.",
+        "menu_existing": (
+            "Se ha encontrado un archivo YAML existente; no cambiará."
+        ),
+        "menu_absent": "No se ha detectado el archivo YAML habitual de HVLS.",
     },
     "fr": {
         "discovery_found": "Fichier détecté",
