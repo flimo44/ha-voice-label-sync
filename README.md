@@ -88,28 +88,39 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 
 The screenshots illustrate the **V1 interface** developed and tested through beta.5, including Statistics, Entity Management, Preview and Backups. Some screenshots predate the final production-status indicators.
 
-### Home Assistant configuration
+### HA Voice Label Sync settings
 
-<img width="834" height="510" alt="HA Voice Label Sync integration configuration in Home Assistant" src="https://github.com/user-attachments/assets/30e733cc-24ac-45b5-a393-065e54cbce54" />
+<img width="690" height="490" alt="HA Voice Label Sync integration configuration in Home Assistant" src="https://github.com/user-attachments/assets/d3d63114-94c9-4006-99b0-8ba87a2a668b" />
 
-<img width="467" height="546" alt="HA Voice Label Sync options in Home Assistant" src="https://github.com/user-attachments/assets/98ef67fd-787a-4e84-bc69-2de03160937b" />
+<img width="391" height="454" alt="HA Voice Label Sync settings in Home Assistan" src="https://github.com/user-attachments/assets/2c793b8b-ec2e-4051-b131-e3d1be5b063b" />
 
-<img width="463" height="449" alt="HA Voice Label Sync settings in Home Assistant" src="https://github.com/user-attachments/assets/54282313-2b09-4f0b-b556-913fcaef69db" />
+<img width="463" height="449" alt="HA Voice Label Sync Check Google Assistan OK" src="https://github.com/user-attachments/assets/54282313-2b09-4f0b-b556-913fcaef69db" />
+<img width="391" height="368" alt="HA Voice Label Sync Check Google Assistant KO" src="https://github.com/user-attachments/assets/5755cfe5-9dcc-47fe-a890-6baf8bcb4c7e" />
 
-### HVLS panel — V1
+### HVLS panel 
 
-<img width="834" height="859" alt="image" src="https://github.com/user-attachments/assets/462a6515-bb11-495c-a791-b4973bbda94b" />
+<img width="820" height="805" alt="Panel" src="https://github.com/user-attachments/assets/266dfba3-eef0-4b9f-aa2c-6150d545bd42" />
+
+### HVLS "Entitiy Management" 
+
+<img width="813" height="585" alt="Entitiy Management" src="https://github.com/user-attachments/assets/8a7eaa9e-7a6f-43e0-a6f6-10e6655987f9" />
+
+### HVLS "Preview" 
+<img width="822" height="671" alt="HA Voice Label Sync Peview" src="https://github.com/user-attachments/assets/e9e675d0-c054-4d2f-a795-11ce2b6d62a8" />
+
+### HVLS "Backups list" 
+<img width="828" height="526" alt="Backups" src="https://github.com/user-attachments/assets/6bd0e771-640b-4bbe-bad8-6ae0ea5abedd" />
+
+### HVLS "Restoration Preview before apply"
+<img width="814" height="594" alt="Restore" src="https://github.com/user-attachments/assets/6cc639f1-4a92-4078-9e76-b54e4078af7c" />
 
 
-<img width="629" height="1027" alt="HA Voice Label Sync beta.5 panel screenshot 2 of 4" src="https://github.com/user-attachments/assets/70e171f4-8b3d-4c3e-b2ef-6dca06a21689" />
 
-<img width="635" height="1001" alt="HA Voice Label Sync beta.5 panel screenshot 3 of 4" src="https://github.com/user-attachments/assets/7523bb42-8ec3-4d1b-9daa-939d4c3c1b43" />
-
-<img width="633" height="670" alt="HA Voice Label Sync beta.5 panel screenshot 4 of 4" src="https://github.com/user-attachments/assets/d8e07d72-36f8-42e9-8402-6cf891ecce91" />
 
 ### Generated YAML
 
-![Generated Google Assistant YAML](assets/screenshots/image3.png)
+<img width="846" height="387" alt="Generated YAML" src="https://github.com/user-attachments/assets/2cae9d3d-5f97-486e-b5f0-fa1c079e7c06" />
+
 
 
 ## 🚀 Installation
