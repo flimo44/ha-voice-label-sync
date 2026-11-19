@@ -1,0 +1,103 @@
+{
+  "title": "HA Voice Label Sync",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurar HA Voice Label Sync",
+        "description": "¿Cómo quieres empezar?\n\n{detected_file}\n\nNo es necesario que Google Assistant esté conectado.",
+        "menu_options": {
+          "new": "Crear una nueva configuración",
+          "existing": "Reutilizar una configuración existente"
+        }
+      },
+      "new": {
+        "title": "Crear una nueva configuración",
+        "description": "HVLS solo crea un archivo nuevo tras la aprobación en la Preview. Tras la configuración, abre **HA Voice Label Sync** desde la barra lateral o elige **Visitar** en la página del dispositivo de la integración; la selección de entidades se abrirá directamente.\n\n{diagnostic}",
+        "data": {
+          "backend": "Asistente de voz",
+          "label": "Etiqueta de Home Assistant",
+          "output": "Archivo de salida",
+          "backup_retention": "Copias de seguridad que conservar",
+          "create_backup": "Crear una copia de seguridad antes de sobrescribir"
+        },
+        "data_description": {
+          "backend": "Selecciona la configuración del asistente de voz que se generará.",
+          "label": "Se incluirán las entidades que tengan esta etiqueta de Home Assistant.",
+          "output": "Ruta del archivo YAML generado dentro de Home Assistant.",
+          "backup_retention": "Número máximo de archivos generados anteriores que se conservan. Usa 0 para desactivar la conservación.",
+          "create_backup": "Se hace una copia de seguridad antes de cualquier sustitución posterior aprobada en la Preview. La instalación nunca sobrescribe el archivo existente."
+        }
+      },
+      "existing": {
+        "title": "Reutilizar una configuración existente",
+        "description": "Tu YAML existente no cambiará. Después de guardar, termina las pantallas estándar de configuración de Home Assistant (nombre y área) y abre **HA Voice Label Sync** desde la barra lateral o elige **Visitar** en la página del dispositivo de la integración. El panel te llevará directamente al Asistente.\n\n{diagnostic}",
+        "data": {
+          "backend": "Asistente de voz",
+          "label": "Etiqueta de Home Assistant",
+          "output": "Archivo de salida",
+          "backup_retention": "Copias de seguridad que conservar",
+          "create_backup": "Crear una copia de seguridad antes de sobrescribir"
+        },
+        "data_description": {
+          "backend": "Selecciona la configuración del asistente de voz que se generará.",
+          "label": "Se incluirán las entidades que tengan esta etiqueta de Home Assistant.",
+          "output": "Ruta del archivo YAML generado dentro de Home Assistant.",
+          "backup_retention": "Número máximo de archivos generados anteriores que se conservan. Usa 0 para desactivar la conservación.",
+          "create_backup": "Se hace una copia de seguridad antes de cualquier sustitución posterior aprobada en la Preview. La instalación nunca sobrescribe el archivo existente."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "HA Voice Label Sync ya está configurado."
+    },
+    "error": {
+      "label_setup_failed": "No se ha podido crear o resolver la etiqueta de Home Assistant. Revisa los nombres de las etiquetas y los permisos.",
+      "source_output_conflict": "La salida coincide con el origen de Google Assistant. Elige un archivo distinto.",
+      "existing_output_not_owned": "Esta salida ya existe. Elige otro destino.",
+      "unsafe_output_path": "Ruta de salida no segura o fuera de Home Assistant.",
+      "new_output_exists": "Este archivo ya existe. Elige un nuevo archivo de salida, o vuelve atrás y elige «Reutilizar una configuración existente».",
+      "existing_source_missing": "No hay ningún archivo YAML normal en esta ruta. Selecciona el archivo existente o elige «Crear una nueva configuración»."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configuración de HA Voice Label Sync",
+        "menu_options": {
+          "settings": "Ajustes de HVLS",
+          "google_config": "Comprobar Google Assistant"
+        },
+        "menu_option_descriptions": {
+          "settings": "Gestionar etiquetas, salida y copias de seguridad.",
+          "google_config": "Ver la configuración YAML actual de Google Assistant."
+        }
+      },
+      "settings": {
+        "title": "Ajustes de HVLS",
+        "description": "Ajusta la selección de entidades, la salida y las copias de seguridad.",
+        "data": {
+          "backend": "Asistente de voz",
+          "label": "Etiqueta de Home Assistant",
+          "output": "Archivo de salida",
+          "backup_retention": "Copias de seguridad que conservar",
+          "create_backup": "Crear una copia de seguridad antes de sobrescribir"
+        },
+        "data_description": {
+          "backend": "Selecciona la configuración del asistente de voz que se generará.",
+          "label": "Se incluirán las entidades que tengan esta etiqueta de Home Assistant.",
+          "output": "Ruta del archivo YAML generado dentro de Home Assistant.",
+          "backup_retention": "Número máximo de archivos generados anteriores que se conservan. Usa 0 para desactivar la conservación.",
+          "create_backup": "Crear una copia de seguridad del archivo de salida actual antes de sustituirlo."
+        }
+      },
+      "google_config": {
+        "title": "Comprobar Google Assistant",
+        "description": "{configuration}"
+      }
+    },
+    "error": {
+      "label_setup_failed": "No se ha podido crear o resolver la etiqueta de Home Assistant. Revisa los nombres de las etiquetas y los permisos.",
+      "unsafe_output_path": "Ruta de salida no segura o fuera de Home Assistant."
+    }
+  }
+}

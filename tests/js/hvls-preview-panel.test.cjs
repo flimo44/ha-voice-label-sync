@@ -6699,3 +6699,12 @@ test("English panel texts contain no leftover French", () => {
     .map(([key]) => key);
   assert.deepEqual([...leftovers], []);
 });
+
+test("Spanish panel texts are used for a Spanish Home Assistant", () => {
+  const {panel} = makePanel(async () => ({}));
+  panel._language = "es";
+  assert.equal(panel._t("tabBackups"), "Copias de seguridad");
+  assert.equal(panel._tf("planCol_result", {count: 3}),
+    "Resultado para Google (3)");
+  assert.equal(panel._roomLabel("Sans pièce"), "Sin área");
+});
