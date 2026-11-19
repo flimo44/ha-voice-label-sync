@@ -1,0 +1,103 @@
+{
+  "title": "HA Voice Label Sync",
+  "config": {
+    "step": {
+      "user": {
+        "title": "HA Voice Label Sync einrichten",
+        "description": "Wie möchten Sie beginnen?\n\n{detected_file}\n\nGoogle Assistant muss nicht verbunden sein.",
+        "menu_options": {
+          "new": "Eine neue Konfiguration erstellen",
+          "existing": "Eine vorhandene Konfiguration wiederverwenden"
+        }
+      },
+      "new": {
+        "title": "Eine neue Konfiguration erstellen",
+        "description": "HVLS erstellt eine neue Datei erst nach Freigabe in der Preview. Öffnen Sie nach der Einrichtung **HA Voice Label Sync** in der Seitenleiste oder wählen Sie **Besuchen** auf der Geräteseite der Integration; die Entitätsauswahl öffnet sich direkt.\n\n{diagnostic}",
+        "data": {
+          "backend": "Sprachassistent",
+          "label": "Home-Assistant-Label",
+          "output": "Ausgabedatei",
+          "backup_retention": "Aufzubewahrende Sicherungen",
+          "create_backup": "Vor dem Überschreiben eine Sicherung erstellen"
+        },
+        "data_description": {
+          "backend": "Wählen Sie die zu erzeugende Sprachassistenten-Konfiguration.",
+          "label": "Entitäten mit diesem Home-Assistant-Label werden einbezogen.",
+          "output": "Pfad der erzeugten YAML-Datei innerhalb von Home Assistant.",
+          "backup_retention": "Maximale Anzahl früher erzeugter Dateien, die aufbewahrt werden. 0 deaktiviert die Aufbewahrung.",
+          "create_backup": "Vor jeder späteren, in der Preview freigegebenen Ersetzung wird eine Sicherung erstellt. Die Installation überschreibt nie die vorhandene Datei."
+        }
+      },
+      "existing": {
+        "title": "Eine vorhandene Konfiguration wiederverwenden",
+        "description": "Ihre vorhandene YAML bleibt unverändert. Schließen Sie nach dem Speichern die Standard-Einrichtungsschritte von Home Assistant ab (Name und Bereich) und öffnen Sie dann **HA Voice Label Sync** in der Seitenleiste oder wählen Sie **Besuchen** auf der Geräteseite der Integration. Das Panel führt Sie direkt zum Assistenten.\n\n{diagnostic}",
+        "data": {
+          "backend": "Sprachassistent",
+          "label": "Home-Assistant-Label",
+          "output": "Ausgabedatei",
+          "backup_retention": "Aufzubewahrende Sicherungen",
+          "create_backup": "Vor dem Überschreiben eine Sicherung erstellen"
+        },
+        "data_description": {
+          "backend": "Wählen Sie die zu erzeugende Sprachassistenten-Konfiguration.",
+          "label": "Entitäten mit diesem Home-Assistant-Label werden einbezogen.",
+          "output": "Pfad der erzeugten YAML-Datei innerhalb von Home Assistant.",
+          "backup_retention": "Maximale Anzahl früher erzeugter Dateien, die aufbewahrt werden. 0 deaktiviert die Aufbewahrung.",
+          "create_backup": "Vor jeder späteren, in der Preview freigegebenen Ersetzung wird eine Sicherung erstellt. Die Installation überschreibt nie die vorhandene Datei."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "HA Voice Label Sync ist bereits eingerichtet."
+    },
+    "error": {
+      "label_setup_failed": "Das Home-Assistant-Label konnte nicht erstellt oder aufgelöst werden. Prüfen Sie Label-Namen und Berechtigungen.",
+      "source_output_conflict": "Die Ausgabe entspricht der Google-Assistant-Quelle. Wählen Sie eine separate Datei.",
+      "existing_output_not_owned": "Diese Ausgabe existiert bereits. Wählen Sie ein anderes Ziel.",
+      "unsafe_output_path": "Unsicherer Ausgabepfad oder Pfad außerhalb von Home Assistant.",
+      "new_output_exists": "Diese Datei existiert bereits. Wählen Sie eine neue Ausgabedatei oder gehen Sie zurück und wählen Sie „Eine vorhandene Konfiguration wiederverwenden“.",
+      "existing_source_missing": "Unter diesem Pfad gibt es keine normale YAML-Datei. Wählen Sie die vorhandene Datei oder „Eine neue Konfiguration erstellen“."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Konfiguration von HA Voice Label Sync",
+        "menu_options": {
+          "settings": "HVLS-Einstellungen",
+          "google_config": "Google Assistant prüfen"
+        },
+        "menu_option_descriptions": {
+          "settings": "Labels, Ausgabe und Sicherungen verwalten.",
+          "google_config": "Die aktuelle Google-Assistant-YAML-Konfiguration anzeigen."
+        }
+      },
+      "settings": {
+        "title": "HVLS-Einstellungen",
+        "description": "Entitätsauswahl, Ausgabe und Sicherungen anpassen.",
+        "data": {
+          "backend": "Sprachassistent",
+          "label": "Home-Assistant-Label",
+          "output": "Ausgabedatei",
+          "backup_retention": "Aufzubewahrende Sicherungen",
+          "create_backup": "Vor dem Überschreiben eine Sicherung erstellen"
+        },
+        "data_description": {
+          "backend": "Wählen Sie die zu erzeugende Sprachassistenten-Konfiguration.",
+          "label": "Entitäten mit diesem Home-Assistant-Label werden einbezogen.",
+          "output": "Pfad der erzeugten YAML-Datei innerhalb von Home Assistant.",
+          "backup_retention": "Maximale Anzahl früher erzeugter Dateien, die aufbewahrt werden. 0 deaktiviert die Aufbewahrung.",
+          "create_backup": "Vor dem Ersetzen eine Sicherung der aktuellen Ausgabedatei erstellen."
+        }
+      },
+      "google_config": {
+        "title": "Google Assistant prüfen",
+        "description": "{configuration}"
+      }
+    },
+    "error": {
+      "label_setup_failed": "Das Home-Assistant-Label konnte nicht erstellt oder aufgelöst werden. Prüfen Sie Label-Namen und Berechtigungen.",
+      "unsafe_output_path": "Unsicherer Ausgabepfad oder Pfad außerhalb von Home Assistant."
+    }
+  }
+}

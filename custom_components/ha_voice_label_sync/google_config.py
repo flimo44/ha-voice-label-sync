@@ -450,7 +450,7 @@ def initial_setup_output_error(report: dict[str, Any]) -> str | None:
 
 # Languages with complete integration texts. Adding a language means adding
 # a block below, a translations/<code>.json file and a panel dictionary.
-SUPPORTED_LANGUAGES = ("en", "fr")
+SUPPORTED_LANGUAGES = ("de", "en", "fr")
 
 SETUP_TEXTS: dict[str, dict[str, str]] = {
     "en": {
@@ -481,6 +481,36 @@ SETUP_TEXTS: dict[str, dict[str, str]] = {
             "An existing YAML file was found; it will remain unchanged."
         ),
         "menu_absent": "No standard HVLS YAML file was detected.",
+    },
+    "de": {
+        "discovery_found": "Datei gefunden",
+        "discovery_not_found": "Keine Google-Assistant-Quelle gefunden",
+        "discovery_file_missing": "Deklarierte Datei fehlt",
+        "discovery_ambiguous": "Mehrdeutige Konfiguration",
+        "discovery_unsafe_path": "Unsicherer Quellpfad",
+        "output_absent": "Datei existiert nicht",
+        "output_existing": "Vorhandene Datei gefunden",
+        "output_unsafe": "Unsicherer Pfad",
+        "title": "HVLS-Erstdiagnose",
+        "source": "Google-Assistant-Quelle",
+        "source_file": "Quelldatei",
+        "not_identified": "Nicht ermittelt",
+        "hvls_file": "HVLS-YAML-Datei",
+        "source_matches_output": (
+            "Die Ausgabe entspricht der deklarierten Google-Assistant-Datei."
+        ),
+        "review_required": "Prüfung erforderlich. Keine automatische Übernahme.",
+        "existing_hint": (
+            "Sie können HVLS installieren: Die vorhandene Datei bleibt "
+            "unverändert. Öffnen Sie anschließend den HVLS-Assistenten, um sie "
+            "zu prüfen und ihre Übernahme getrennt zu bestätigen, bevor "
+            "Änderungen angewendet werden."
+        ),
+        "no_write": "Die Erkennung erlaubt keine Änderung von Dateien.",
+        "menu_existing": (
+            "Eine vorhandene YAML-Datei wurde gefunden; sie bleibt unverändert."
+        ),
+        "menu_absent": "Keine übliche HVLS-YAML-Datei gefunden.",
     },
     "fr": {
         "discovery_found": "Fichier détecté",
