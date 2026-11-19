@@ -1803,3 +1803,192 @@ def test_other_field_differences_are_never_refreshable(backup_module, tmp_path):
     result = _prepare(backup_module, output, backup_id, registries, catalog)
     assert result["projection"]["ready"] is False
     assert result["refresh_candidates"] == []
+
+
+def _plan_fixture(tmp_path):
+    backup_text = (
+        "switch.same:\n  expose: true\n  name: Same\n"
+        "switch.portail:\n  expose: true\n  name: Portail\n"
+        "sensor.oregon:\n  expose: true\n  name: Température Oregon Ch2\n"
+        "climate.thermostat_bureau_ha:\n  expose: true\n"
+        "switch.custom:\n  expose: true\n  name: Custom\n"
+        "  aliases:\n    - Prise\n"
+    )
+    production = (
+        "switch.same:\n  expose: true\n  name: Same\n"
+        "climate.thermostat_sejour:\n  expose: true\n  name: Thermostat\n"
+    )
+    entities = [
+        {"entity_id": "switch.same", "labels": ["hvls"], "name": "Same"},
+        {"entity_id": "switch.portail", "labels": [], "name": "Portail"},
+        {"entity_id": "sensor.oregon", "labels": [], "device_class": "temperature",
+         "name": "Congelateur Température Oregon Ch2"},
+        {"entity_id": "switch.custom", "labels": [], "name": "Custom"},
+        {"entity_id": "climate.thermostat_sejour", "labels": ["hvls"],
+         "name": "Thermostat"},
+    ]
+    output, backup_id, registries, catalog = _refresh_fixture(
+        tmp_path, backup_text, entities, production=production,
+    )
+    return output, backup_id, registries, catalog, production
+
+
+def _prepare_plan(backup_module, output, backup_id, registries, catalog, **kw):
+    tokens = backup_module.review_backup(output, backup_id)
+    return backup_module.prepare_backup_preview(
+        output, backup_id, tokens["backup_sha256"],
+        tokens["production_sha256"], catalog,
+        registries=registries, label="HVLS",
+        domains=frozenset({"switch", "sensor", "climate"}), **kw,
+    )
+
+
+def test_recommended_restore_starts_from_the_backup_result(
+    backup_module, tmp_path,
+):
+    output, backup_id, registries, catalog, production = _plan_fixture(tmp_path)
+    result = _prepare_plan(
+        backup_module, output, backup_id, registries, catalog, recommended=True,
+    )
+    # Impossible and non-reproducible entities are left out, renamed ones
+    # use current values, and the result is directly applicable.
+    assert result["ignored_entities"] == [
+        "climate.thermostat_bureau_ha", "switch.custom",
+    ]
+    assert result["refreshed_entities"] == ["sensor.oregon"]
+    assert result["projection"]["ready"] is True
+    assert result["label_plan"]["review"] == []
+    assert result["label_plan"]["add"] == ["sensor.oregon", "switch.portail"]
+    # Default = backup result: an entity exposed today but absent from the
+    # backup is removed unless the administrator keeps it.
+    assert result["label_plan"]["remove"] == ["climate.thermostat_sejour"]
+
+    rows = {row["entity_id"]: row for row in result["restore_rows"]}
+    assert rows["climate.thermostat_bureau_ha"]["case"] == "impossible"
+    assert rows["climate.thermostat_bureau_ha"]["reason"] == "missing_ha_entity"
+    assert rows["climate.thermostat_bureau_ha"]["choices"] == []
+    assert rows["switch.custom"]["case"] == "conflict"
+    assert rows["switch.custom"]["choice"] == "out"
+    assert rows["sensor.oregon"]["case"] == "renamed"
+    assert rows["sensor.oregon"]["choice"] == "current"
+    assert rows["sensor.oregon"]["fields"]["name"] == {
+        "before": "Température Oregon Ch2",
+        "after": "Congelateur Température Oregon Ch2",
+    }
+    assert rows["switch.portail"]["case"] == "added"
+    assert rows["switch.portail"]["choices"] == ["in", "out"]
+    assert rows["switch.same"]["case"] == "unchanged"
+    assert rows["climate.thermostat_sejour"]["case"] == "removed"
+    assert rows["climate.thermostat_sejour"]["choice"] == "remove"
+    assert rows["climate.thermostat_sejour"]["choices"] == ["remove", "keep"]
+    assert result["restore_summary"] == {
+        "backup_total": 5, "restored_from_backup": 3,
+        "exposed_after": 3, "added": 2, "already_exposed": 1, "removed": 1,
+        "current_values": 1, "not_restored": 2, "pending": 0,
+    }
+    assert output.read_text() == production
+
+
+def test_recommended_choices_are_approved_like_explicit_ones(
+    backup_module, tmp_path,
+):
+    output, backup_id, registries, catalog, _ = _plan_fixture(tmp_path)
+    recommended = _prepare_plan(
+        backup_module, output, backup_id, registries, catalog, recommended=True,
+    )
+    # Apply re-runs the preparation with the explicit lists: same approval.
+    explicit = _prepare_plan(
+        backup_module, output, backup_id, registries, catalog,
+        ignored_entities=recommended["ignored_entities"],
+        refreshed_entities=recommended["refreshed_entities"],
+    )
+    assert explicit["label_plan_sha256"] == recommended["label_plan_sha256"]
+    assert explicit["content"] == recommended["content"]
+
+
+def test_keeping_an_entity_absent_from_backup_keeps_its_exposure(
+    backup_module, tmp_path,
+):
+    output, backup_id, registries, catalog, _ = _plan_fixture(tmp_path)
+    recommended = _prepare_plan(
+        backup_module, output, backup_id, registries, catalog, recommended=True,
+    )
+    kept = _prepare_plan(
+        backup_module, output, backup_id, registries, catalog,
+        ignored_entities=recommended["ignored_entities"]
+        + ["climate.thermostat_sejour"],
+        refreshed_entities=recommended["refreshed_entities"],
+    )
+    assert kept["label_plan"]["remove"] == []
+    assert "climate.thermostat_sejour" in kept["content"]
+    rows = {row["entity_id"]: row for row in kept["restore_rows"]}
+    assert rows["climate.thermostat_sejour"]["choice"] == "keep"
+    assert kept["restore_summary"]["removed"] == 0
+    assert kept["projection"]["ready"] is True
+
+
+def test_recommended_refuses_explicit_choices(backup_module, tmp_path):
+    output, backup_id, registries, catalog, _ = _plan_fixture(tmp_path)
+    with pytest.raises(backup_module.BackupRestoreError, match="recommended"):
+        _prepare_plan(
+            backup_module, output, backup_id, registries, catalog,
+            recommended=True, ignored_entities=["switch.custom"],
+        )
+
+
+def test_plan_counts_production_entities_without_label_as_removed(
+    backup_module, tmp_path,
+):
+    output, backup_id, registries, catalog, _ = _plan_fixture(tmp_path)
+    # Exposed today in the production YAML, but its HVLS label was removed
+    # in Home Assistant: it leaves the YAML whatever the backup says.
+    output.write_text(output.read_text() + "switch.unlabeled:\n  expose: true\n")
+    catalog["entities"].append(
+        {"entity_id": "switch.unlabeled", "eligible": True, "has_label": False}
+    )
+    result = _prepare_plan(
+        backup_module, output, backup_id, registries, catalog, recommended=True,
+    )
+    rows = {row["entity_id"]: row for row in result["restore_rows"]}
+    assert rows["switch.unlabeled"]["case"] == "removed"
+    assert rows["switch.unlabeled"]["reason"] == "no_label"
+    assert rows["switch.unlabeled"]["choices"] == ["remove"]
+    # Same basis as the YAML comparison: 2 removals, 1 of them a label.
+    assert result["restore_summary"]["removed"] == 2
+    assert len(result["comparison"]["removed"]) == 2
+    assert result["label_plan"]["remove"] == ["climate.thermostat_sejour"]
+
+
+def test_composed_restore_is_written_in_hvls_generator_format(
+    backup_module, tmp_path,
+):
+    output, backup_id, registries, catalog, _ = _plan_fixture(tmp_path)
+    result = _prepare_plan(
+        backup_module, output, backup_id, registries, catalog, recommended=True,
+    )
+    content = result["content"]
+    # Same text the normal generator produces: header, quoted scalars.
+    assert content.startswith("# ")
+    assert '  name: "Congelateur Température Oregon Ch2"' in content
+    assert '  name: "Portail"' in content
+    assert "name: Portail\n" not in content
+    # Approval still binds this exact text.
+    explicit = _prepare_plan(
+        backup_module, output, backup_id, registries, catalog,
+        ignored_entities=result["ignored_entities"],
+        refreshed_entities=result["refreshed_entities"],
+    )
+    assert explicit["content"] == content
+    assert explicit["label_plan_sha256"] == result["label_plan_sha256"]
+
+
+def test_untouched_backup_keeps_its_own_text(backup_module, tmp_path):
+    backup_text = "switch.same:\n  expose: true\n  name: Same\n"
+    output, backup_id, registries, catalog = _refresh_fixture(
+        tmp_path, backup_text,
+        [{"entity_id": "switch.same", "labels": ["hvls"], "name": "Same"}],
+        production="switch.same:\n  expose: true\n  name: Same\n",
+    )
+    result = _prepare(backup_module, output, backup_id, registries, catalog)
+    assert result["projection"]["ready"] is True
+    assert result["content"] == backup_text

@@ -161,6 +161,9 @@ test("Unapplied checkbox selection survives leaving and reopening the HA panel",
   assert.equal(reopened.panel.openedTab, "preview");
   assert.equal(reopened.controls.apply.disabled, false);
   assert.match(reopened.panel.status, /retrouvée/);
+  // The banner uses the same figures as the Preview tab.
+  assert.match(reopened.panel.status,
+    /1 changement\(s\) \(1 ajout\(s\), 0 suppression\(s\), 0 modification\(s\)\)/);
   assert.equal(calls.filter(c =>
     c === "ha_voice_label_sync/prepare_manual_label_preview").length, 2);
   assert.ok(!calls.some(c => /apply|set_entity_label/.test(c)));
@@ -2096,7 +2099,7 @@ test("Missing-production backup stages a read-only Preview with unresolved label
   assert.equal(panel._stagedRestore.mode, "restore_preview");
   assert.deepEqual(tabs, ["preview"]);
   assert.equal(controls.apply.disabled, true);
-  assert.match(panel.status, /Restauration préparée/);
+  assert.match(panel.status, /Restauration prête\. Si vous l.appliquez/);
 });
 
 test("Reviewed missing-YAML backup restores only with aligned labels", async () => {
@@ -6535,4 +6538,310 @@ test("Apply sends the refreshed entities with the approval", async () => {
   const apply = calls.find(call =>
     call.type === "ha_voice_label_sync/apply_backup_preview");
   assert.deepEqual([...apply.refreshed_entities], ["sensor.temp"]);
+});
+
+function planRestore(overrides = {}) {
+  return {
+    mode: "restore_preview", backup_id: "backup.bak",
+    backup_sha256: "b".repeat(64), production_sha256: "a".repeat(64),
+    label_plan_sha256: "c".repeat(64),
+    ignored_entities: ["climate.bureau_ha", "switch.custom"],
+    refreshed_entities: ["sensor.oregon"],
+    ignore_candidates: ["climate.bureau_ha", "switch.custom", "switch.portail",
+      "sensor.oregon", "climate.sejour"],
+    refresh_candidates: ["sensor.oregon"],
+    comparison: {status: "ok", added: [], removed: [], modified: [],
+      identical_entities: false},
+    label_plan: {add: ["sensor.oregon", "switch.portail"],
+      remove: ["climate.sejour"], review: []},
+    projection: {ready: true},
+    restore_summary: {backup_total: 5, restored_from_backup: 2,
+      exposed_after: 3, added: 2, already_exposed: 1,
+      removed: 1, current_values: 1, not_restored: 2, pending: 0},
+    restore_rows: [
+      {entity_id: "climate.bureau_ha", case: "impossible", choice: "out",
+        choices: [], reason: "missing_ha_entity", fields: null},
+      {entity_id: "switch.custom", case: "conflict", choice: "out",
+        choices: ["out"], reason: null, fields: ["aliases"]},
+      {entity_id: "sensor.oregon", case: "renamed", choice: "current",
+        choices: ["current", "out"], reason: null,
+        fields: {name: {before: "Température Oregon Ch2",
+          after: "Congelateur Température Oregon Ch2"}}},
+      {entity_id: "switch.portail", case: "added", choice: "in",
+        choices: ["in", "out"], reason: null, fields: null},
+      {entity_id: "switch.same", case: "unchanged", choice: "in",
+        choices: [], reason: null, fields: null},
+      {entity_id: "climate.sejour", case: "removed", choice: "remove",
+        choices: ["remove", "keep"], reason: null, fields: null},
+    ],
+    ...overrides,
+  };
+}
+
+function planColumns(notice) {
+  return findNodes(notice, node => node.tag === "section").map(section => ({
+    title: section.children[0].children[0].textContent,
+    ids: findNodes(section, node => node.className === "restore-row-id")
+      .map(node => node.textContent),
+    section,
+  }));
+}
+
+test("Restore plan shows one column per outcome with the server summary", () => {
+  const {panel} = makePanel(async () => ({}));
+  const notice = renderRestoreNotice(panel, planRestore());
+  const [out, current, result] = planColumns(notice);
+  assert.equal(out.title, "Non restaurées (2)");
+  assert.deepEqual([...out.ids], ["climate.bureau_ha", "switch.custom"]);
+  assert.equal(current.title, "Nom ou pièce changés (1)");
+  assert.deepEqual([...current.ids], ["sensor.oregon"]);
+  assert.equal(result.title, "Résultat pour Google (3)");  // removal excluded
+  assert.deepEqual([...result.ids],
+    ["sensor.oregon", "switch.portail", "switch.same", "climate.sejour"]);
+
+  // Locked rows offer no action; the renamed reason shows before/after.
+  assert.equal(findNodes(out.section, node => node.tag === "button" &&
+    node.textContent === "Restaurer →").length, 0);
+  assert.ok(findNodes(current.section, node =>
+    /Température Oregon Ch2.*Congelateur Température Oregon Ch2/
+      .test(node.textContent)).length);
+  assert.ok(findNodes(result.section, node =>
+    /1 entité\(s\) exposées aujourd'hui sont absentes de la sauvegarde/
+      .test(node.textContent)).length);
+  const metrics = findNodes(notice, node => node.className === "metric")
+    .map(node => node.children[0].textContent);
+  assert.deepEqual([...metrics], ["2 / 5", "3", "2", "1", "1"]);
+});
+
+test("Column help stays open across re-renders", () => {
+  const {panel} = makePanel(async () => ({}));
+  let notice = renderRestoreNotice(panel, planRestore());
+  const info = findNodes(notice, node => node.className === "restore-info")[0];
+  info.on_click();
+  notice = renderRestoreNotice(panel, planRestore());
+  const help = findNodes(notice, node => node.className === "restore-help");
+  assert.equal(help[0].hidden, false);
+  assert.equal(help[1].hidden, true);
+});
+
+for (const [entityId, choice, ignored, refreshed] of [
+  ["sensor.oregon", "out",
+    ["climate.bureau_ha", "sensor.oregon", "switch.custom"], []],
+  ["switch.portail", "out",
+    ["climate.bureau_ha", "switch.custom", "switch.portail"], ["sensor.oregon"]],
+  ["climate.sejour", "keep",
+    ["climate.bureau_ha", "climate.sejour", "switch.custom"], ["sensor.oregon"]],
+]) {
+  test(`Plan choice ${choice} for ${entityId} maps to explicit lists`, async () => {
+    const calls = [];
+    const staged = planRestore();
+    const {panel} = makePanel(async request => {
+      calls.push(request);
+      return {...staged, ignored_entities: request.ignored_entities,
+        refreshed_entities: request.refreshed_entities};
+    });
+    panel._stagedRestore = staged;
+    await panel._setRestoreRowChoice(entityId, choice);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].recommended, undefined);
+    assert.deepEqual([...calls[0].ignored_entities], ignored);
+    assert.deepEqual([...calls[0].refreshed_entities], refreshed);
+  });
+}
+
+test("Plan refuses choices the server did not allow", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => { calls.push(request); });
+  panel._stagedRestore = planRestore();
+  await panel._setRestoreRowChoice("climate.bureau_ha", "in");   // impossible
+  await panel._setRestoreRowChoice("switch.custom", "in");       // conflict
+  await panel._setRestoreRowChoice("switch.same", "out");        // unchanged
+  await panel._setRestoreRowChoice("sensor.oregon", "current");  // no-op
+  assert.equal(calls.length, 0);
+});
+
+test("Keep all and back to recommendation send one request each", async () => {
+  const calls = [];
+  const staged = planRestore();
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return {...staged};
+  });
+  panel._stagedRestore = staged;
+  await panel._setRestoreKeepAll(true);
+  assert.deepEqual([...calls[0].ignored_entities],
+    ["climate.bureau_ha", "climate.sejour", "switch.custom"]);
+
+  await panel._restoreRecommended();
+  assert.equal(calls[1].recommended, true);
+  assert.equal(calls[1].ignored_entities, undefined);
+  assert.equal(calls[1].refreshed_entities, undefined);
+});
+
+test("Opening a backup restore starts from the recommendation", async () => {
+  const calls = [];
+  const {panel} = makePanel(async request => {
+    calls.push(request);
+    return planRestore({available: true, can_apply: false,
+      content: "switch.portail:\n  expose: true\n"});
+  });
+  panel._backupReview = {backup_id: "backup.bak",
+    backup_sha256: "b".repeat(64), production_sha256: "a".repeat(64),
+    comparison: {status: "ok", identical_text: false}};
+  panel._activateTab = () => {};
+  await panel._restoreBackup();
+  assert.equal(calls[0].type, "ha_voice_label_sync/prepare_backup_preview");
+  assert.equal(calls[0].recommended, true);
+  assert.equal(calls[0].ignored_entities, undefined);
+});
+
+test("Plan confirmation summarises the final result and every change", () => {
+  const {panel} = makePanel(async () => ({}));
+  const message = panel._restoreConfirmMessage(planRestore());
+  assert.match(message, /Après restauration : 3 entité\(s\) exposées à Google \(2 ajoutée\(s\), 1 déjà exposée\(s\)\)/);
+  assert.match(message, /Ne seront plus exposées \(1\) : climate\.sejour/);
+  assert.match(message, /Avec le nom et la pièce actuels \(1\) : sensor\.oregon/);
+  assert.match(message, /Non restaurées \(2\) : climate\.bureau_ha, switch\.custom/);
+  assert.match(message, /Appliquer la sauvegarde après contrôle/);
+});
+
+test("The no-area bucket is displayed in the panel language", () => {
+  const {panel} = makePanel(async () => ({}));
+  assert.equal(panel._roomLabel("Sans pièce"), panel._t("noArea"));
+  assert.equal(panel._roomLabel(""), panel._t("noArea"));
+  assert.equal(panel._roomLabel(null), panel._t("noArea"));
+  assert.equal(panel._roomLabel("Séjour"), "Séjour");
+  panel._language = "en";
+  assert.equal(panel._roomLabel("Sans pièce"), "No area");
+  assert.equal(panel._roomLabel("Garage"), "Garage");
+});
+
+test("Removed Preview entities explain why they leave the YAML", () => {
+  const {panel} = makePanel(async () => ({}));
+  panel._entityCatalog = {entities: [
+    {entity_id: "binary_sensor.proposal", eligible: true, has_label: true},
+    {entity_id: "binary_sensor.unlabeled", eligible: true, has_label: false},
+    {entity_id: "light.disabled", eligible: false, has_label: true,
+      exclusion_reason: "disabled"},
+  ]};
+  panel._stagedRestore = {mode: "label_preview",
+    label_plan: {add: [], remove: ["binary_sensor.proposal"], review: []}};
+  assert.equal(panel._removalReason("binary_sensor.proposal"),
+    "Raison : étiquette HVLS retirée dans cette proposition.");
+  assert.equal(panel._removalReason("binary_sensor.unlabeled"),
+    "Raison : n'a plus l'étiquette HVLS dans Home Assistant.");
+  assert.equal(panel._removalReason("light.disabled"),
+    "Raison : elle est désactivée dans Home Assistant.");
+  assert.equal(panel._removalReason("switch.gone"),
+    "Raison : n'existe plus dans Home Assistant.");
+
+  panel._stagedRestore = planRestore();
+  assert.equal(panel._removalReason("climate.sejour"),
+    "Raison : exposée aujourd'hui, mais absente de la sauvegarde.");
+
+  panel._entityCatalog = null;
+  panel._stagedRestore = null;
+  assert.equal(panel._removalReason("switch.unknown"), null);
+});
+
+test("Manual proposal count includes YAML changes coming from Home Assistant", () => {
+  const {panel} = makePanel(async () => ({}));
+  panel._stagedRestore = {
+    mode: "label_preview",
+    changes: [{entity_id: "binary_sensor.a", enabled: false}],
+    label_plan: {add: [], remove: ["binary_sensor.a"], review: []},
+    comparison: {status: "ok",
+      added: [], removed: ["binary_sensor.a", "binary_sensor.b"],
+      modified: [{entity_id: "binary_sensor.mailbox", fields: {}}]},
+  };
+  assert.equal(panel._pendingChangeCount(), 3);
+
+  // Without a trustworthy comparison, the checkbox changes still count.
+  panel._stagedRestore.comparison = {status: "error"};
+  assert.equal(panel._pendingChangeCount(), 1);
+});
+
+test("Production-only removals explain the missing label and cannot be kept", () => {
+  const {panel} = makePanel(async () => ({}));
+  const staged = planRestore();
+  staged.restore_rows = [...staged.restore_rows, {
+    entity_id: "binary_sensor.unlabeled", case: "removed", choice: "remove",
+    choices: ["remove"], reason: "no_label", fields: null,
+  }];
+  const notice = renderRestoreNotice(panel, staged);
+  const result = planColumns(notice)[2];
+  const row = findNodes(result.section, node => node.className === "restore-row")
+    .find(node => findNodes(node, child =>
+      child.textContent === "binary_sensor.unlabeled").length);
+  assert.ok(row);
+  assert.ok(findNodes(row, node => /n'a plus l'étiquette HVLS/
+    .test(node.textContent)).length);
+  assert.equal(findNodes(row, node => node.tag === "button").length, 0);
+  assert.equal(panel._removalReason("binary_sensor.unlabeled"),
+    "Raison : n'a plus l'étiquette HVLS dans Home Assistant.");
+  // The keep-all question only counts entities that can be kept.
+  assert.ok(findNodes(result.section, node =>
+    /^1 entité\(s\) exposées aujourd'hui/.test(node.textContent)).length);
+});
+
+function backupReviewFor(id) {
+  return {backup_id: id, backup_sha256: "b".repeat(64),
+    production_sha256: "a".repeat(64),
+    comparison: {status: "ok", identical_text: false}};
+}
+
+test("Preparing another backup asks before replacing a pending restore", async () => {
+  for (const answer of [false, true]) {
+    const calls = [];
+    const confirmations = [];
+    const {panel} = makePanel(async request => {
+      calls.push(request);
+      return planRestore({backup_id: request.backup_id, available: true,
+        can_apply: false, content: "switch.portail:\n  expose: true\n"});
+    }, message => { confirmations.push(message); return answer; });
+    const pending = planRestore({backup_id: "old.bak"});
+    panel._stagedRestore = pending;
+    panel._backupReview = backupReviewFor("new.bak");
+    panel._activateTab = tab => { panel.openedTab = tab; };
+    await panel._restoreBackup();
+
+    assert.equal(confirmations.length, 1);
+    assert.match(confirmations[0], /Une restauration est déjà en attente/);
+    if (!answer) {
+      assert.equal(calls.length, 0);
+      assert.equal(panel._stagedRestore, pending);
+      assert.match(panel.status, /Aucune action/);
+    } else {
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].backup_id, "new.bak");
+      assert.equal(calls[0].recommended, true);
+      assert.equal(panel._stagedRestore.backup_id, "new.bak");
+    }
+  }
+});
+
+test("Preparing the backup already staged just opens Preview", async () => {
+  const calls = [];
+  const confirmations = [];
+  const {panel} = makePanel(async request => { calls.push(request); },
+    message => { confirmations.push(message); return true; });
+  panel._stagedRestore = planRestore({backup_id: "same.bak"});
+  panel._backupReview = backupReviewFor("same.bak");
+  panel._activateTab = tab => { panel.openedTab = tab; };
+  await panel._restoreBackup();
+  assert.equal(confirmations.length, 0);
+  assert.equal(calls.length, 0);
+  assert.equal(panel.openedTab, "preview");
+  assert.match(panel.status, /déjà préparée/);
+});
+
+test("A pending label proposal is named in the replacement question", async () => {
+  const confirmations = [];
+  const {panel} = makePanel(async () => { throw new Error("no request"); },
+    message => { confirmations.push(message); return false; });
+  panel._stagedRestore = {mode: "label_preview", changes: [],
+    label_plan: {add: [], remove: [], review: []}};
+  panel._backupReview = backupReviewFor("new.bak");
+  await panel._restoreBackup();
+  assert.match(confirmations[0], /proposition d'étiquettes non appliquée/);
 });

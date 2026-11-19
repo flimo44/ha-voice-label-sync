@@ -334,7 +334,7 @@ const HVLS_TRANSLATIONS = {
     backupReviewFailed: "Comparaison impossible : {error}",
     backupLoadFailed: "Chargement impossible : {error}",
     backupRestore: "Préparer cette sauvegarde dans le Preview",
-    backupPreviewPrepared: "Restauration préparée : {added} ajout(s), {removed} suppression(s), {modified} modification(s). Aucun fichier ni label modifié.",
+    backupPreviewPrepared: "Restauration prête. Si vous l'appliquez : {added} ajout(s), {removed} suppression(s), {modified} modification(s). Rien n'est écrit dans le YAML ni dans les étiquettes avant « Appliquer cette restauration ».",
     backupPreviewNotExecutable: "Preview de restauration : contrôlez les changements et les étiquettes avant validation.",
     backupPreviewApply: "Appliquer cette restauration",
     backupPreviewConfirm: "Appliquer la sauvegarde après contrôle ? Le YAML de production et les étiquettes HA seront mis à jour. Une sauvegarde de sécurité sera créée.",
@@ -347,8 +347,13 @@ const HVLS_TRANSLATIONS = {
     manualLabelPrepared: "{count} changement(s) d'étiquette prêt(s) dans le Preview. Aucun label ni YAML modifié.",
     manualLabelHelp: "Proposition enregistrée dans ce navigateur pour votre compte Home Assistant. Au retour, le Preview sera revérifié. Aucun label ni YAML modifié avant Apply.",
     savedDraftRestored: "{count} modification(s) provisoire(s) retrouvée(s) et revérifiée(s). Vérifiez le Preview avant Appliquer.",
+    savedDraftRestoredDetail: "Proposition retrouvée et revérifiée : {count} changement(s) ({added} ajout(s), {removed} suppression(s), {modified} modification(s)). Vérifiez le Preview avant Appliquer.",
     savedDraftBlocked: "Brouillon conservé, mais non applicable : la configuration, les entités ou les protections ont changé. Aucune écriture autorisée. Examinez la situation puis cliquez sur Annuler pour repartir de l'état actuel.",
     savedDraftStorageUnavailable: "Le navigateur n'a pas pu enregistrer cette proposition. Elle pourrait disparaître si vous quittez HVLS. Appliquez-la ou annulez-la maintenant.",
+    backupAlreadyStaged: "Cette sauvegarde est déjà préparée dans le Preview.",
+    backupReplaceRestoreConfirm: "Une restauration est déjà en attente dans le Preview. Voulez-vous l'annuler et préparer cette sauvegarde à la place ? Si vous répondez non, rien ne change.",
+    backupReplaceProposalConfirm: "Une proposition d'étiquettes non appliquée est en attente dans le Preview. Voulez-vous l'annuler et préparer cette sauvegarde à la place ? Si vous répondez non, rien ne change.",
+    backupReplaceKept: "Aucune action : la proposition en attente est conservée dans le Preview.",
     pendingDraftProtect: "Une proposition non appliquée est en attente. Examinez-la dans le Preview puis appliquez-la ou annulez-la avant de recharger ou de lancer une autre opération.",
     manualLabelApply: "Appliquer les changements d'étiquettes",
     manualLabelConfirm: "Appliquer les changements d'étiquettes et le YAML proposés dans le Preview ? Une sauvegarde de sécurité sera créée si un fichier de production existe.",
@@ -468,6 +473,11 @@ const HVLS_TRANSLATIONS = {
     identicalEntities: "✓ Même configuration par entité (différences de présentation YAML uniquement).",
     entitiesAdded: "Entités ajoutées",
     entitiesRemoved: "Entités supprimées",
+    removalReasonProposal: "Raison : étiquette HVLS retirée dans cette proposition.",
+    removalReasonBackup: "Raison : exposée aujourd'hui, mais absente de la sauvegarde.",
+    removalReasonNoLabel: "Raison : n'a plus l'étiquette HVLS dans Home Assistant.",
+    removalReasonMissing: "Raison : n'existe plus dans Home Assistant.",
+    removalReasonIneligible: "Raison : {detail}",
     entitiesModified: "Entités modifiées",
     previewLoading: "Chargement du Preview…",
     previewMissing: "Aucun Preview disponible. Lancez d’abord une génération.",
@@ -509,6 +519,50 @@ const HVLS_TRANSLATIONS = {
     restoreRefreshUndoOne: "Annuler",
     restoreRefreshUndoAll: "Tout annuler",
     restoreRefreshedConfirm: "{count} entité(s) seront restaurées avec leur nom et leur pièce actuels dans Home Assistant, et non ceux de la sauvegarde : {entities}.",
+    planCol_out: "Non restaurées ({count})",
+    planCol_current: "Nom ou pièce changés ({count})",
+    planCol_result: "Résultat pour Google ({count})",
+    planSub_out: "Rien ne change pour elles.",
+    planSub_current: "Restaurées avec les valeurs actuelles de Home Assistant.",
+    planSub_result: "Ce qui sera réellement écrit.",
+    planHelpLabel: "Aide",
+    planHelp_out: "Entités de la sauvegarde qui ne seront pas remises. « Impossible » : elles n'existent plus, ne sont plus éligibles ou ont des options que HVLS ne génère pas. Les autres, vous avez choisi de ne pas les restaurer : leur état actuel ne change pas.",
+    planHelp_current: "Ces entités ont été renommées ou déplacées dans Home Assistant depuis la sauvegarde. Elles seront restaurées avec leur nom et leur pièce d'aujourd'hui, pas ceux de la sauvegarde. « Retirer » les passe dans « Non restaurées ».",
+    planHelp_result: "La liste exacte des entités exposées à Google après la restauration. « Ajoutée » : pas exposée aujourd'hui. « Déjà exposée » : aucun changement. En rouge : exposée aujourd'hui mais absente de la sauvegarde ; elle sera retirée, sauf si vous la gardez.",
+    planSumRestored: "Restaurées depuis la sauvegarde",
+    planSumExposed: "Exposées après restauration",
+    planSumAdded: "Ajoutées par la sauvegarde",
+    planSumAlready: "Déjà exposées aujourd'hui",
+    planSumRemoved: "Ne seront plus exposées",
+    planNotReady: "Certaines entités doivent encore être résolues avant de pouvoir appliquer cette restauration.",
+    planActionRestore: "Restaurer →",
+    planActionWithdraw: "← Retirer",
+    planActionKeep: "Garder",
+    planActionSkip: "Ne pas restaurer",
+    planTagPending: "à résoudre",
+    planTagLocked: "impossible",
+    planTagRemoved: "retirée",
+    planTagKept: "gardée",
+    planTagCurrent: "nom/pièce actuels",
+    planTagAdded: "ajoutée",
+    planTagAlready: "déjà exposée",
+    planKeepQuestion: "{count} entité(s) exposées aujourd'hui sont absentes de la sauvegarde. Voulez-vous les garder ?",
+    planKeepAll: "Tout garder",
+    planRemoveAll: "Tout retirer",
+    planRecommended: "↺ Revenir à la recommandation",
+    planEmpty: "Aucune",
+    planReasonMissing: "absente de Home Assistant",
+    planReasonNotExposed: "non exposée dans la sauvegarde",
+    planReasonIneligible: "non éligible ({reason})",
+    planReasonOptions: "options non reproductibles : {fields}",
+    planReasonConflict: "différence non reproductible",
+    planReasonRemoved: "exposée aujourd'hui, absente de la sauvegarde",
+    planReasonNoLabel: "exposée aujourd'hui, mais n'a plus l'étiquette HVLS dans Home Assistant",
+    planTechDetails: "Détails techniques : étiquettes Home Assistant",
+    planConfirmSummary: "Après restauration : {exposed} entité(s) exposées à Google ({added} ajoutée(s), {already} déjà exposée(s)).",
+    planConfirmRemoved: "Ne seront plus exposées ({count}) : {entities}.",
+    planConfirmCurrent: "Avec le nom et la pièce actuels ({count}) : {entities}.",
+    planConfirmOut: "Non restaurées ({count}) : {entities}.",
     applyNoChanges: "Aucune modification à appliquer : le Preview est déjà identique à la production.",
     applyReasonMissingIdentity: "L'identité de l'installation HVLS est indisponible.",
     applyReasonUnsafePath: "Le chemin du fichier ou du registre n'est pas sûr. Vérifiez notamment les liens symboliques.",
@@ -901,7 +955,7 @@ const HVLS_TRANSLATIONS = {
     backupReviewFailed: "Cannot compare: {error}",
     backupLoadFailed: "Cannot load backups: {error}",
     backupRestore: "Prepare this backup in Preview",
-    backupPreviewPrepared: "Restore staged: {added} added, {removed} removed, {modified} modified. No YAML or labels changed.",
+    backupPreviewPrepared: "Restoration ready. When applied: {added} added, {removed} removed, {modified} modified. Nothing is written to the YAML or labels until you select \"Apply this restoration\".",
     backupPreviewNotExecutable: "Restore Preview: review the changes and HA labels before validation.",
     backupPreviewApply: "Apply this restoration",
     backupPreviewConfirm: "Apply the reviewed backup? Production YAML and HA labels will be updated. A safety backup will be created.",
@@ -914,8 +968,13 @@ const HVLS_TRANSLATIONS = {
     manualLabelPrepared: "{count} label change(s) prepared in Preview. No labels or YAML modified.",
     manualLabelHelp: "Proposal saved locally in this browser for your Home Assistant account. It will be rechecked on return; no label or YAML is changed before Apply.",
     savedDraftRestored: "{count} pending change(s) found and revalidated. Review the Preview before Apply.",
+    savedDraftRestoredDetail: "Saved proposal found and revalidated: {count} change(s) ({added} added, {removed} removed, {modified} modified). Review the Preview before Apply.",
     savedDraftBlocked: "Saved draft retained but cannot be applied: the configuration, entities or safety guards have changed. No writes are allowed. Review the situation, then choose Cancel to start again from the current state.",
     savedDraftStorageUnavailable: "The browser could not save this proposal. It may disappear when leaving HVLS. Apply or cancel it now.",
+    backupAlreadyStaged: "This backup is already prepared in Preview.",
+    backupReplaceRestoreConfirm: "A restoration is already pending in Preview. Cancel it and prepare this backup instead? If you answer no, nothing changes.",
+    backupReplaceProposalConfirm: "An unapplied label proposal is pending in Preview. Cancel it and prepare this backup instead? If you answer no, nothing changes.",
+    backupReplaceKept: "Nothing changed: the pending proposal is kept in Preview.",
     pendingDraftProtect: "An unapplied proposal is still pending. Review it in Preview and apply or cancel it before refreshing or starting another operation.",
     manualLabelApply: "Apply label changes",
     manualLabelConfirm: "Apply the reviewed label changes and YAML? A safety backup will be made when production exists.",
@@ -1035,6 +1094,11 @@ const HVLS_TRANSLATIONS = {
     identicalEntities: "✓ Same configuration per entity (YAML formatting differences only).",
     entitiesAdded: "Added entities",
     entitiesRemoved: "Removed entities",
+    removalReasonProposal: "Reason: HVLS label removed in this proposal.",
+    removalReasonBackup: "Reason: exposed today, but absent from the backup.",
+    removalReasonNoLabel: "Reason: no longer has the HVLS label in Home Assistant.",
+    removalReasonMissing: "Reason: no longer exists in Home Assistant.",
+    removalReasonIneligible: "Reason: {detail}",
     entitiesModified: "Modified entities",
     previewLoading: "Loading Preview…",
     previewMissing: "No Preview available. Generate one first.",
@@ -1076,6 +1140,50 @@ const HVLS_TRANSLATIONS = {
     restoreRefreshUndoOne: "Undo",
     restoreRefreshUndoAll: "Undo all",
     restoreRefreshedConfirm: "{count} entity(ies) will be restored with their current Home Assistant name and room, not the backup ones: {entities}.",
+    planCol_out: "Not restored ({count})",
+    planCol_current: "Name or room changed ({count})",
+    planCol_result: "Result for Google ({count})",
+    planSub_out: "Nothing changes for them.",
+    planSub_current: "Restored with current Home Assistant values.",
+    planSub_result: "What will actually be written.",
+    planHelpLabel: "Help",
+    planHelp_out: "Backup entities that will not be brought back. \"Impossible\": they no longer exist, are no longer eligible or have options HVLS does not generate. For the others, you chose not to restore them: their current state does not change.",
+    planHelp_current: "These entities were renamed or moved in Home Assistant since the backup. They will be restored with today's name and room, not the backup ones. \"Withdraw\" moves them to \"Not restored\".",
+    planHelp_result: "The exact list of entities exposed to Google after the restoration. \"Added\": not exposed today. \"Already exposed\": no change. In red: exposed today but absent from the backup; it will be removed unless you keep it.",
+    planSumRestored: "Restored from the backup",
+    planSumExposed: "Exposed after restoration",
+    planSumAdded: "Added by the backup",
+    planSumAlready: "Already exposed today",
+    planSumRemoved: "No longer exposed",
+    planNotReady: "Some entities still need to be resolved before this restoration can be applied.",
+    planActionRestore: "Restore →",
+    planActionWithdraw: "← Withdraw",
+    planActionKeep: "Keep",
+    planActionSkip: "Don't restore",
+    planTagPending: "to resolve",
+    planTagLocked: "impossible",
+    planTagRemoved: "removed",
+    planTagKept: "kept",
+    planTagCurrent: "current name/room",
+    planTagAdded: "added",
+    planTagAlready: "already exposed",
+    planKeepQuestion: "{count} entity(ies) exposed today are absent from the backup. Keep them?",
+    planKeepAll: "Keep all",
+    planRemoveAll: "Remove all",
+    planRecommended: "↺ Back to the recommendation",
+    planEmpty: "None",
+    planReasonMissing: "missing from Home Assistant",
+    planReasonNotExposed: "not exposed in the backup",
+    planReasonIneligible: "not eligible ({reason})",
+    planReasonOptions: "options that cannot be reproduced: {fields}",
+    planReasonConflict: "difference that cannot be reproduced",
+    planReasonRemoved: "exposed today, absent from the backup",
+    planReasonNoLabel: "exposed today, but no longer has the HVLS label in Home Assistant",
+    planTechDetails: "Technical details: Home Assistant labels",
+    planConfirmSummary: "After restoration: {exposed} entity(ies) exposed to Google ({added} added, {already} already exposed).",
+    planConfirmRemoved: "No longer exposed ({count}): {entities}.",
+    planConfirmCurrent: "With current name and room ({count}): {entities}.",
+    planConfirmOut: "Not restored ({count}): {entities}.",
     applyNoChanges: "No changes to apply: the Preview already matches production.",
     applyReasonMissingIdentity: "The HVLS installation identity is unavailable.",
     applyReasonUnsafePath: "The output or registry path is unsafe. Check for symbolic links.",
@@ -1305,17 +1413,19 @@ class HVLSPreviewPanel extends HTMLElement {
     if (staged?.mode === "saved_draft_blocked") {
       return this._manualLabelChanges?.size || staged.changes?.length || 0;
     }
-    // In ordinary manual selection, each net checkbox change is one action.
-    // Comparing the YAML alone can miss a necessary HA-label change.
-    if (staged?.mode === "label_preview" && staged.recovery !== true) {
-      return staged.changes?.length || 0;
-    }
+    // In ordinary manual selection, count every affected entity: each net
+    // checkbox change, plus YAML changes that come from Home Assistant
+    // itself (label removed elsewhere, area changed, ...). Counting only the
+    // checkboxes showed "Preview (1)" next to three listed changes.
+    const manual = staged?.mode === "label_preview" && staged.recovery !== true;
+    const manualChanges = manual && Array.isArray(staged.changes)
+      ? staged.changes.length : 0;
 
     // Normal Preview is actionable only after its server-side review.
     const active = staged || (this._review ? this._lastAnalysis : null);
     if (!active) return 0;
     const comparison = active.comparison;
-    if (!["ok", "missing"].includes(comparison?.status)) return 0;
+    if (!["ok", "missing"].includes(comparison?.status)) return manualChanges;
 
     // Recovery/backup proposals may change both the YAML and HA labels.
     // Count each affected entity once, even when both need updating.
@@ -1333,6 +1443,7 @@ class HVLSPreviewPanel extends HTMLElement {
     if (staged) {
       addEntities(staged.label_plan?.add);
       addEntities(staged.label_plan?.remove);
+      if (manual) addEntities(staged.changes);
     }
     const diffCount = comparison.status === "ok"
       ? ["added", "removed", "modified"].reduce(
@@ -1652,7 +1763,18 @@ class HVLSPreviewPanel extends HTMLElement {
       this._applyBlockReasonCode = null;
       this._renderAnalysis(stage);
       this._setContent(stage.content);
-      this._setStatusKey("savedDraftRestored", {count: requested.length});
+      // Announce the same figures as the Preview tab and its change list.
+      const diff = stage.comparison;
+      if (diff?.status === "ok") {
+        this._setStatusKey("savedDraftRestoredDetail", {
+          count: this._pendingChangeCount(),
+          added: diff.added?.length || 0,
+          removed: diff.removed?.length || 0,
+          modified: diff.modified?.length || 0,
+        });
+      } else {
+        this._setStatusKey("savedDraftRestored", {count: requested.length});
+      }
       this._activateTab("preview");
     } catch (_error) {
       if (loadId === this._loadId) this._blockSavedLabelDraft(draft);
@@ -1661,6 +1783,35 @@ class HVLSPreviewPanel extends HTMLElement {
       this._updateApplyButton();
       if (this._entityCatalog) this._renderEntities();
     }
+  }
+
+  // Preparing another backup while a proposal is pending: ask explicitly.
+  // "No" keeps the pending proposal and does nothing else. "Yes" discards
+  // it locally (like Cancel): nothing is written to YAML or labels.
+  _replacePendingProposal(data) {
+    const staged = this._stagedRestore;
+    if (staged.mode === "restore_preview" &&
+        staged.backup_id === data.backup_id) {
+      this._activateTab("preview");
+      this._setStatusKey("backupAlreadyStaged");
+      return false;
+    }
+    const key = staged.mode === "restore_preview"
+      ? "backupReplaceRestoreConfirm" : "backupReplaceProposalConfirm";
+    if (!window.confirm(this._t(key))) {
+      this._setStatusKey("backupReplaceKept");
+      return false;
+    }
+    this._loadId = (this._loadId || 0) + 1;
+    this._stagedRestore = null;
+    this._manualLabelChanges = null;
+    this._clearSavedLabelDraft();
+    this._review = null;
+    this._applyBlockReason = null;
+    this._applyBlockReasonCode = null;
+    this._updateApplyButton();
+    if (this._entityCatalog) this._renderEntities();
+    return true;
   }
 
   _protectPendingDraft() {
@@ -2056,6 +2207,282 @@ class HVLSPreviewPanel extends HTMLElement {
       .sort((a, b) => a.entity_id.localeCompare(b.entity_id));
   }
 
+  // ---- Restore plan table (server-classified rows) ----
+
+  _restoreRowReason(row) {
+    if (row.case === "impossible") {
+      if (row.reason === "missing_ha_entity") return this._t("planReasonMissing");
+      if (row.reason === "not_explicitly_exposed") {
+        return this._t("planReasonNotExposed");
+      }
+      return this._tf("planReasonIneligible", {reason: row.reason || "?"});
+    }
+    if (row.case === "conflict") {
+      return Array.isArray(row.fields) && row.fields.length
+        ? this._tf("planReasonOptions", {fields: row.fields.join(", ")})
+        : this._t("planReasonConflict");
+    }
+    if (row.case === "renamed" && row.fields) {
+      const labels = {name: "restoreFieldName", room: "restoreFieldRoom"};
+      const shown = value => {
+        const text = value === null || value === undefined
+          ? this._t("restoreValueAbsent") : String(value);
+        return text.length > 80 ? text.slice(0, 79) + "…" : text;
+      };
+      return Object.entries(row.fields).map(([field, change]) =>
+        this._tf("restoreBlockerField", {
+          field: labels[field] ? this._t(labels[field]) : field,
+          before: shown(change?.before), after: shown(change?.after),
+        })).join(" ; ");
+    }
+    if (row.case === "removed") {
+      return this._t(row.reason === "no_label"
+        ? "planReasonNoLabel" : "planReasonRemoved");
+    }
+    return null;
+  }
+
+  // Translate one row choice into the explicit server-side selection.
+  _setRestoreRowChoice(entityId, choice) {
+    const staged = this._stagedRestore;
+    const row = (staged?.restore_rows || []).find(r => r.entity_id === entityId);
+    if (!row || row.choice === choice || !row.choices?.includes(choice)) return;
+    const ignored = new Set(staged.ignored_entities || []);
+    const refreshed = new Set(staged.refreshed_entities || []);
+    if (choice === "out" || choice === "keep") {
+      ignored.add(entityId);
+      refreshed.delete(entityId);
+    } else if (choice === "current") {
+      ignored.delete(entityId);
+      refreshed.add(entityId);
+    } else {  // "in" or "remove"
+      ignored.delete(entityId);
+    }
+    return this._setRestoreSelection(staged, ignored, refreshed);
+  }
+
+  _setRestoreKeepAll(keep) {
+    const staged = this._stagedRestore;
+    const target = keep ? "keep" : "remove";
+    const rows = (staged?.restore_rows || []).filter(row =>
+      row.case === "removed" && row.choice !== target &&
+      row.choices?.includes(target));
+    if (!rows.length) return;
+    const ignored = new Set(staged.ignored_entities || []);
+    for (const row of rows) {
+      if (keep) ignored.add(row.entity_id);
+      else ignored.delete(row.entity_id);
+    }
+    return this._setRestoreSelection(
+      staged, ignored, new Set(staged.refreshed_entities || []));
+  }
+
+  _restoreRecommended() {
+    const staged = this._stagedRestore;
+    if (!staged) return;
+    return this._setRestoreSelection(staged, new Set(), new Set(),
+      {recommended: true});
+  }
+
+  _planButton(label, onClick, ariaEntity) {
+    const button = this._restoreIgnoreControl(document.createElement("button"));
+    button.type = "button";
+    button.className = "secondary";
+    button.textContent = label;
+    if (ariaEntity) button.setAttribute("aria-label", label + ": " + ariaEntity);
+    button.addEventListener("click", onClick);
+    return button;
+  }
+
+  _planTag(label, kind) {
+    const tag = document.createElement("span");
+    tag.className = "restore-tag restore-tag-" + kind;
+    tag.textContent = label;
+    return tag;
+  }
+
+  _planRow(row, actions) {
+    const entry = document.createElement("div");
+    entry.className = "restore-row";
+    const text = document.createElement("div");
+    text.className = "restore-row-text";
+    const id = document.createElement("span");
+    id.className = "restore-row-id";
+    id.textContent = row.entity_id;
+    text.appendChild(id);
+    const reason = this._restoreRowReason(row);
+    if (reason) {
+      const why = document.createElement("span");
+      why.className = "restore-row-why";
+      why.textContent = reason;
+      text.appendChild(why);
+    }
+    const side = document.createElement("div");
+    side.className = "restore-row-actions";
+    side.append(...actions);
+    entry.append(text, side);
+    return entry;
+  }
+
+  _planColumn(key, rows) {
+    const column = document.createElement("section");
+    column.className = "restore-col";
+    const head = document.createElement("div");
+    head.className = "restore-col-head";
+    const title = document.createElement("h3");
+    title.textContent = this._tf("planCol_" + key, {count: rows.length});
+    const info = document.createElement("button");
+    info.type = "button";
+    info.className = "restore-info";
+    info.textContent = "ⓘ";
+    info.setAttribute("aria-label", this._t("planHelpLabel") + " : " +
+      this._tf("planCol_" + key, {count: rows.length}));
+    if (!this._restoreHelpOpen) this._restoreHelpOpen = new Set();
+    const help = document.createElement("p");
+    help.className = "restore-help";
+    help.textContent = this._t("planHelp_" + key);
+    help.hidden = !this._restoreHelpOpen.has(key);
+    info.setAttribute("aria-expanded", String(!help.hidden));
+    info.addEventListener("click", () => {
+      help.hidden = !help.hidden;
+      info.setAttribute("aria-expanded", String(!help.hidden));
+      if (help.hidden) this._restoreHelpOpen.delete(key);
+      else this._restoreHelpOpen.add(key);
+    });
+    head.append(title, info);
+    const subtitle = document.createElement("p");
+    subtitle.className = "restore-col-sub";
+    subtitle.textContent = this._t("planSub_" + key);
+    column.append(head, help, subtitle);
+    return column;
+  }
+
+  _renderRestorePlan(container) {
+    const staged = this._stagedRestore;
+    const rows = staged.restore_rows || [];
+    const summary = staged.restore_summary || {};
+
+    const metrics = document.createElement("div");
+    metrics.className = "metrics";
+    this._addMetric(metrics, this._t("planSumRestored"),
+      `${summary.restored_from_backup ?? 0} / ${summary.backup_total ?? 0}`);
+    this._addMetric(metrics, this._t("planSumExposed"), summary.exposed_after ?? 0);
+    this._addMetric(metrics, this._t("planSumAdded"), summary.added ?? 0);
+    this._addMetric(metrics, this._t("planSumAlready"),
+      summary.already_exposed ?? 0);
+    this._addMetric(metrics, this._t("planSumRemoved"), summary.removed ?? 0);
+    container.appendChild(metrics);
+
+    if (staged.projection?.ready !== true || summary.pending) {
+      const warning = document.createElement("p");
+      warning.className = "diagnostic-note restore-warning";
+      warning.textContent = this._t("planNotReady");
+      container.appendChild(warning);
+    }
+
+    const grid = document.createElement("div");
+    grid.className = "restore-plan-grid";
+    const notRestored = rows.filter(row => row.case !== "removed" &&
+      (row.choice === "out" || row.choice === "pending"));
+    const current = rows.filter(row => row.case === "renamed" &&
+      row.choice === "current");
+    const result = rows.filter(row =>
+      (row.case === "removed") ||
+      (row.choice === "in" || row.choice === "current"));
+
+    const col1 = this._planColumn("out", notRestored);
+    for (const row of notRestored) {
+      const actions = [];
+      const back = row.case === "renamed" ? "current" : "in";
+      if (row.choices?.includes(back)) {
+        actions.push(this._planButton(this._t("planActionRestore"),
+          () => this._setRestoreRowChoice(row.entity_id, back), row.entity_id));
+      } else {
+        actions.push(this._planTag(
+          row.choice === "pending" ? this._t("planTagPending")
+            : this._t("planTagLocked"),
+          row.choice === "pending" ? "warn" : "muted"));
+      }
+      col1.appendChild(this._planRow(row, actions));
+    }
+    if (!notRestored.length) col1.appendChild(this._planEmpty());
+
+    const col2 = this._planColumn("current", current);
+    for (const row of current) {
+      const actions = row.choices?.includes("out")
+        ? [this._planButton(this._t("planActionWithdraw"),
+          () => this._setRestoreRowChoice(row.entity_id, "out"), row.entity_id)]
+        : [];
+      col2.appendChild(this._planRow(row, actions));
+    }
+    if (!current.length) col2.appendChild(this._planEmpty());
+
+    // The title counts what will be exposed, not the entities removed.
+    const col3 = this._planColumn("result", result.filter(row =>
+      !(row.case === "removed" && row.choice === "remove")));
+    const removable = rows.filter(row => row.case === "removed" &&
+      row.choices?.includes("keep"));
+    if (removable.length) {
+      const question = document.createElement("div");
+      question.className = "restore-question";
+      const text = document.createElement("p");
+      text.textContent = this._tf("planKeepQuestion", {count: removable.length});
+      question.appendChild(text);
+      const allKept = removable.every(row => row.choice === "keep");
+      question.appendChild(allKept
+        ? this._planButton(this._t("planRemoveAll"),
+          () => this._setRestoreKeepAll(false))
+        : this._planButton(this._t("planKeepAll"),
+          () => this._setRestoreKeepAll(true)));
+      col3.appendChild(question);
+    }
+    for (const row of result) {
+      let actions;
+      if (row.case === "removed") {
+        actions = row.choice === "remove"
+          ? [this._planTag(this._t("planTagRemoved"), "danger"),
+            ...(row.choices.includes("keep") ? [this._planButton(
+              this._t("planActionKeep"),
+              () => this._setRestoreRowChoice(row.entity_id, "keep"),
+              row.entity_id)] : [])]
+          : [this._planTag(this._t("planTagKept"), "success"),
+            this._planButton(this._t("planActionWithdraw"),
+              () => this._setRestoreRowChoice(row.entity_id, "remove"),
+              row.entity_id)];
+      } else if (row.case === "renamed") {
+        actions = [this._planTag(this._t("planTagCurrent"), "accent")];
+      } else if (row.case === "added") {
+        actions = [this._planTag(this._t("planTagAdded"), "accent"),
+          ...(row.choices?.includes("out") ? [this._planButton(
+            this._t("planActionSkip"),
+            () => this._setRestoreRowChoice(row.entity_id, "out"),
+            row.entity_id)] : [])];
+      } else {
+        actions = [this._planTag(this._t("planTagAlready"), "muted")];
+      }
+      // Rows in the result column only repeat the reason for removals.
+      const shown = row.case === "removed" ? row : {...row, case: "result"};
+      col3.appendChild(this._planRow(shown, actions));
+    }
+    if (!result.length) col3.appendChild(this._planEmpty());
+
+    grid.append(col1, col2, col3);
+    container.appendChild(grid);
+
+    const footer = document.createElement("div");
+    footer.className = "restore-footer";
+    footer.appendChild(this._planButton(this._t("planRecommended"),
+      () => this._restoreRecommended()));
+    container.appendChild(footer);
+  }
+
+  _planEmpty() {
+    const empty = document.createElement("p");
+    empty.className = "restore-col-sub";
+    empty.textContent = this._t("planEmpty");
+    return empty;
+  }
+
   async _setRestoreIgnored(entityIds, ignore) {
     const staged = this._stagedRestore;
     const ids = Array.isArray(entityIds) ? entityIds : [entityIds];
@@ -2097,14 +2524,16 @@ class HVLSPreviewPanel extends HTMLElement {
     return this._setRestoreSelection(staged, ignored, refreshed);
   }
 
-  async _setRestoreSelection(staged, ignoredSet, refreshedSet) {
+  async _setRestoreSelection(staged, ignoredSet, refreshedSet, options = {}) {
     if (this._restoring || this._applying || this._refreshing ||
         this._generating || this._entityWritePending) return;
+    const recommended = options.recommended === true;
     const proposed = [...ignoredSet].sort();
     const proposedRefreshed = [...refreshedSet].sort();
     const same = (left, right) =>
       left.length === right.length && left.every((item, i) => item === right[i]);
-    if (same(proposed, [...(staged.ignored_entities || [])].sort()) &&
+    if (!recommended &&
+        same(proposed, [...(staged.ignored_entities || [])].sort()) &&
         same(proposedRefreshed,
           [...(staged.refreshed_entities || [])].sort())) return;
 
@@ -2121,8 +2550,10 @@ class HVLSPreviewPanel extends HTMLElement {
         backup_id: staged.backup_id,
         backup_sha256: staged.backup_sha256,
         production_sha256: staged.production_sha256,
-        ignored_entities: proposed,
-        refreshed_entities: proposedRefreshed,
+        ...(recommended ? {recommended: true} : {
+          ignored_entities: proposed,
+          refreshed_entities: proposedRefreshed,
+        }),
       });
       if (this._loadId !== requestId) return;
       if (result?.mode !== "restore_preview" ||
@@ -2146,7 +2577,8 @@ class HVLSPreviewPanel extends HTMLElement {
       this._renderAnalysis(result);
       this._setContent(result.content);
       this._setStatusKey("backupIgnoreSelected", {
-        count: proposed.length, refreshed: proposedRefreshed.length,
+        count: (result.ignored_entities || []).length,
+        refreshed: (result.refreshed_entities || []).length,
       });
     } catch (error) {
       if (this._loadId === requestId) {
@@ -2275,6 +2707,28 @@ class HVLSPreviewPanel extends HTMLElement {
   _restoreConfirmMessage(staged) {
     const list = items => items.slice(0, 10).join(", ") +
       (items.length > 10 ? ", …" : "");
+    if (staged?.restore_summary && Array.isArray(staged.restore_rows)) {
+      const rows = staged.restore_rows;
+      const summary = staged.restore_summary;
+      const pick = test => rows.filter(test).map(row => row.entity_id).sort();
+      const parts = [this._tf("planConfirmSummary", {
+        exposed: summary.exposed_after ?? 0, added: summary.added ?? 0,
+        already: summary.already_exposed ?? 0,
+      })];
+      for (const [key, ids] of [
+        ["planConfirmRemoved", pick(row =>
+          row.case === "removed" && row.choice === "remove")],
+        ["planConfirmCurrent", pick(row => row.choice === "current")],
+        ["planConfirmOut", pick(row =>
+          row.case !== "removed" && row.choice === "out")],
+      ]) {
+        if (ids.length) {
+          parts.push(this._tf(key, {count: ids.length, entities: list(ids)}));
+        }
+      }
+      parts.push(this._t("backupPreviewConfirm"));
+      return parts.join("\n\n");
+    }
     const parts = [];
     const refreshed = [...(staged?.refreshed_entities || [])].sort();
     if (refreshed.length) {
@@ -2393,6 +2847,12 @@ class HVLSPreviewPanel extends HTMLElement {
     }
   }
 
+  // The server uses the French "Sans pièce" bucket for entities without an
+  // area; always display it in the panel language.
+  _roomLabel(room) {
+    return !room || room === "Sans pièce" ? this._t("noArea") : room;
+  }
+
   _addMetric(parent, label, value) {
     const card = document.createElement("div");
     card.className = "metric";
@@ -2427,6 +2887,40 @@ class HVLSPreviewPanel extends HTMLElement {
     }
     section.appendChild(list);
     parent.appendChild(section);
+  }
+
+  // Why an entity leaves the generated YAML. Display only, from data the
+  // panel already has; returns null when the cause cannot be determined.
+  _removalReason(entityId) {
+    const staged = this._stagedRestore;
+    if (staged?.mode === "restore_preview") {
+      const row = (staged.restore_rows || []).find(r => r.entity_id === entityId);
+      if (row?.case === "removed") {
+        return this._t(row.reason === "no_label"
+          ? "removalReasonNoLabel" : "removalReasonBackup");
+      }
+    }
+    if (staged?.label_plan?.remove?.includes(entityId)) {
+      return this._t("removalReasonProposal");
+    }
+    if (!this._entityCatalog) return null;
+    const entity = (this._entityCatalog.entities || [])
+      .find(item => item.entity_id === entityId);
+    if (!entity) return this._t("removalReasonMissing");
+    if (entity.eligible !== true) {
+      const keys = {
+        domain_not_enabled: "reasonDomain",
+        unsupported_device_class: "reasonClass",
+        disabled: "reasonDisabled",
+        hidden: "reasonHidden",
+        entity_category: "reasonCategory",
+      };
+      return this._tf("removalReasonIneligible", {
+        detail: this._t(keys[entity.exclusion_reason] || "notEligible"),
+      });
+    }
+    if (entity.has_label !== true) return this._t("removalReasonNoLabel");
+    return null;
   }
 
   _eligibilityExplanation(reason) {
@@ -2675,6 +3169,16 @@ class HVLSPreviewPanel extends HTMLElement {
         });
         row.appendChild(entityButton);
 
+        if (key === "entitiesRemoved") {
+          const reason = this._removalReason(entityId);
+          if (reason) {
+            const why = document.createElement("small");
+            why.className = "preview-removal-reason";
+            why.textContent = reason;
+            row.appendChild(why);
+          }
+        }
+
         if (typeof item !== "string") {
           for (const [field, values] of Object.entries(item.fields || {})) {
             const change = document.createElement("div");
@@ -2730,6 +3234,23 @@ class HVLSPreviewPanel extends HTMLElement {
         warning.className = "diagnostic-note";
         warning.textContent = this._t("savedDraftBlocked");
         previewNotice.appendChild(warning);
+        return;
+      }
+      if (this._stagedRestore?.mode === "restore_preview" &&
+          Array.isArray(this._stagedRestore.restore_rows)) {
+        this._restoreIgnoreControls = [];
+        this._renderRestorePlan(previewNotice);
+        const technical = document.createElement("details");
+        technical.open = this._restoreTechnicalOpen === true;
+        technical.addEventListener("toggle", () => {
+          this._restoreTechnicalOpen = technical.open;
+        });
+        const heading = document.createElement("summary");
+        heading.textContent = this._t("planTechDetails");
+        technical.appendChild(heading);
+        this._appendLabelPlanDetails(
+          technical, this._stagedRestore.label_plan || {});
+        previewNotice.appendChild(technical);
         return;
       }
       if (this._stagedRestore) {
@@ -2978,30 +3499,34 @@ class HVLSPreviewPanel extends HTMLElement {
         }
         // The actual proposed HA-label operations must be visible individually,
         // including exceptional entities. The Preview is never an implicit write.
-        for (const [action, label, items] of [
-          ["add", "backupLabelAdd", plan.add || []],
-          ["remove", "backupLabelRemove", plan.remove || []],
-          ["review", "backupLabelReview", plan.review || []],
-        ]) {
-          if (!items.length) continue;
-          const details = document.createElement("details");
-          details.className = "domain-details";
-          const heading = document.createElement("summary");
-          heading.textContent = `${this._t(label)} (${items.length})`;
-          details.appendChild(heading);
-          const list = document.createElement("ul");
-          for (const item of items) {
-            const row = document.createElement("li");
-            const entityId = typeof item === "string" ? item : item.entity_id;
-            row.textContent = action === "review"
-              ? `${entityId} — ${item.reason || this._t("unknownHVLS")}`
-              : entityId;
-            list.appendChild(row);
-          }
-          details.appendChild(list);
-          previewNotice.appendChild(details);
-        }
+        this._appendLabelPlanDetails(previewNotice, plan);
       }
+    }
+  }
+
+  _appendLabelPlanDetails(parent, plan) {
+    for (const [action, label, items] of [
+      ["add", "backupLabelAdd", plan.add || []],
+      ["remove", "backupLabelRemove", plan.remove || []],
+      ["review", "backupLabelReview", plan.review || []],
+    ]) {
+      if (!items.length) continue;
+      const details = document.createElement("details");
+      details.className = "domain-details";
+      const heading = document.createElement("summary");
+      heading.textContent = `${this._t(label)} (${items.length})`;
+      details.appendChild(heading);
+      const list = document.createElement("ul");
+      for (const item of items) {
+        const row = document.createElement("li");
+        const entityId = typeof item === "string" ? item : item.entity_id;
+        row.textContent = action === "review"
+          ? `${entityId} — ${item.reason || this._t("unknownHVLS")}`
+          : entityId;
+        list.appendChild(row);
+      }
+      details.appendChild(list);
+      parent.appendChild(details);
     }
   }
 
@@ -3063,7 +3588,7 @@ class HVLSPreviewPanel extends HTMLElement {
         const row = document.createElement("div");
         row.className = "breakdown-row";
         const label = document.createElement("span");
-        label.textContent = name;
+        label.textContent = type === "area" ? this._roomLabel(name) : name;
         const total = document.createElement("strong");
         total.textContent = String(count);
         row.append(label, total);
@@ -3106,7 +3631,7 @@ class HVLSPreviewPanel extends HTMLElement {
 
             const info = document.createElement("small");
             info.textContent = type === "domain"
-              ? `${entity.entity_id} · ${entity.room || this._t("noArea")}`
+              ? `${entity.entity_id} · ${this._roomLabel(entity.room)}`
               : `${entity.entity_id} · ${entity.domain}`;
 
             entityButton.append(friendlyName, info);
@@ -3444,6 +3969,28 @@ class HVLSPreviewPanel extends HTMLElement {
         .metric { min-width:110px; flex:1; display:flex; flex-direction:column; gap:6px; background:var(--card-background-color); border:1px solid var(--divider-color); border-radius:12px; padding:16px; }
         .metric strong { font-size:26px; }
         .metric span { color:var(--secondary-text-color); font-size:13px; }
+        .restore-plan-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; margin:12px 0; align-items:start; }
+        .restore-col { background:var(--card-background-color); border:1px solid var(--divider-color); border-radius:12px; padding:12px; min-width:0; }
+        .restore-col-head { display:flex; align-items:center; gap:6px; }
+        .restore-col-head h3 { margin:0; font-size:15px; font-weight:500; }
+        .restore-info { border:none; background:none; color:var(--secondary-text-color); cursor:pointer; font-size:16px; padding:0 4px; }
+        .restore-help { margin:6px 0 0; padding:8px; border-radius:8px; background:var(--secondary-background-color); font-size:13px; line-height:1.45; }
+        .restore-col-sub { margin:4px 0 8px; color:var(--secondary-text-color); font-size:12px; }
+        .restore-row { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:6px 8px; border-top:1px solid var(--divider-color); padding:6px 0; }
+        .restore-row-text { min-width:0; flex:1 1 160px; }
+        .restore-row-id { display:block; font-family:var(--code-font-family, monospace); font-size:12px; overflow-wrap:anywhere; }
+        .restore-row-why { display:block; color:var(--secondary-text-color); font-size:12px; }
+        .restore-row-actions { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+        .restore-tag { font-size:11px; padding:2px 8px; border-radius:8px; white-space:nowrap; border:1px solid var(--divider-color); }
+        .restore-tag-accent { color:var(--primary-color); border-color:var(--primary-color); }
+        .restore-tag-danger { color:var(--error-color); border-color:var(--error-color); }
+        .restore-tag-success { color:var(--success-color); border-color:var(--success-color); }
+        .restore-tag-warn { color:var(--warning-color); border-color:var(--warning-color); }
+        .restore-tag-muted { color:var(--secondary-text-color); }
+        .restore-question { margin:4px 0 8px; padding:8px; border-radius:8px; border:1px solid var(--error-color); font-size:13px; }
+        .restore-question p { margin:0 0 6px; }
+        .restore-warning { color:var(--warning-color); }
+        .restore-footer { display:flex; justify-content:flex-end; margin:4px 0 12px; }
         .breakdowns { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; }
         .breakdowns section { padding:12px 16px; background:var(--card-background-color); border-radius:12px; }
         .breakdown-row { display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px solid var(--divider-color); }
@@ -3840,6 +4387,7 @@ class HVLSPreviewPanel extends HTMLElement {
         }
         .preview-change-group > summary { font-weight:600; padding:14px 0; }
         .preview-change-list { padding-bottom:12px; }
+        .preview-removal-reason { display:block; color:var(--secondary-text-color); font-size:12px; margin:2px 0 0; }
         .preview-change-item {
           display:flex; flex-direction:column; gap:4px; min-width:0;
           padding:10px 0; border-top:1px solid var(--divider-color);
@@ -4633,6 +5181,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
         entity.name,
         entity.entity_id,
         entity.room,
+        this._roomLabel(entity.room),
         entity.domain
       ].join(" ").toLocaleLowerCase();
 
@@ -4733,7 +5282,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
 
           const description = document.createElement("small");
           description.textContent =
-            `${entity.entity_id} · ${entity.room || this._t("noArea")}`;
+            `${entity.entity_id} · ${this._roomLabel(entity.room)}`;
 
           entityButton.append(name, description);
           entityButton.addEventListener("click", () => {
@@ -5473,11 +6022,16 @@ entity_config: !include google_assistant_entities.yaml</pre>
   async _restoreBackup() {
     // A backup is only a proposed configuration at this point. Do not write
     // google_assistant_entities.yaml or modify native HA labels here.
-    if (this._protectPendingDraft()) return;
     const data = this._backupReview;
-    if (!data || this._restoring || this._applying ||
-        this._refreshing || this._generating || this._entityWritePending ||
-        !["ok", "missing"].includes(data.comparison?.status)) return;
+    const preparable = data &&
+      ["ok", "missing"].includes(data.comparison?.status);
+    if (this._stagedRestore && !preparable) {
+      this._protectPendingDraft();
+      return;
+    }
+    if (!preparable || this._restoring || this._applying ||
+        this._refreshing || this._generating || this._entityWritePending) return;
+    if (this._stagedRestore && !this._replacePendingProposal(data)) return;
 
     this._restoring = true;
     const requestId = (this._loadId || 0) + 1;
@@ -5493,7 +6047,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
         backup_id: data.backup_id,
         backup_sha256: data.backup_sha256,
         production_sha256: data.production_sha256,
-        ignored_entities: [],
+        recommended: true,
       });
       if (this._loadId !== requestId) return;
       if (result?.mode !== "restore_preview" ||
