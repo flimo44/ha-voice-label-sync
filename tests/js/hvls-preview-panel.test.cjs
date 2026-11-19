@@ -2258,9 +2258,11 @@ test("Ignoring missing backup entity recalculates server-side without applying",
     label_plan: {add: [], remove: [],
       review: [{entity_id: "switch.absent", reason: "missing_ha_entity"}]},
     projection: {ready: false},
+    restore_rows: [{entity_id: "switch.absent", case: "added", choice: "in",
+      choices: ["in", "out"], reason: null, fields: null}],
   };
   panel._stagedRestore = staged;
-  await panel._setRestoreIgnored("switch.absent", true);
+  await panel._setRestoreRowChoice("switch.absent", "out");
 
   assert.deepEqual([...calls[0].ignored_entities], ["switch.absent"]);
   assert.equal(calls[0].backup_sha256, "b".repeat(64));
@@ -2321,8 +2323,10 @@ test("Cancel while a new ignore Preview is being prepared cannot revive it", asy
     label_plan: {add: [], remove: [], review: []},
     comparison: {status: "ok", identical_entities: false},
     projection: {ready: false},
+    restore_rows: [{entity_id: "switch.absent", case: "added", choice: "in",
+      choices: ["in", "out"], reason: null, fields: null}],
   };
-  const updating = panel._setRestoreIgnored("switch.absent", true);
+  const updating = panel._setRestoreRowChoice("switch.absent", "out");
   assert.equal(panel._restoring, true);
   await panel._cancelPreview(); // Busy state must prevent accidental cancel.
   assert.equal(calls.length, 1);
@@ -6255,64 +6259,6 @@ function blockingRestore(overrides = {}) {
   };
 }
 
-test("Restore blockers explain each difference and which can be ignored", () => {
-  const {panel} = makePanel(async () => ({}));
-  const blockers = panel._restoreBlockers(blockingRestore());
-
-  assert.deepEqual([...blockers.map(item => item.entity_id)],
-    ["light.extra", "sensor.smoke", "sensor.temp", "switch.gone"]);
-  const byId = Object.fromEntries(blockers.map(item => [item.entity_id, item]));
-  assert.equal(byId["sensor.temp"].ignorable, true);
-  assert.match(byId["sensor.temp"].reasons[0],
-    /nom : sauvegarde « Temperature » → Home Assistant aujourd'hui « Piscine mesure ZB Temperature »/);
-  assert.match(byId["sensor.smoke"].reasons[0], /pièce : .*« \(aucune\) »/);
-  assert.match(byId["switch.gone"].reasons[0], /ne peut pas être régénérée/);
-  assert.match(byId["light.extra"].reasons[0], /absente de la sauvegarde/);
-  assert.equal(byId["light.extra"].ignorable, false);
-});
-
-test("Restore blockers hide ignored entities and disappear once exact", () => {
-  const {panel} = makePanel(async () => ({}));
-  const partly = panel._restoreBlockers(
-    blockingRestore({ignored_entities: ["sensor.temp"]})
-  );
-  assert.equal(partly.some(item => item.entity_id === "sensor.temp"), false);
-  assert.equal(
-    panel._restoreBlockers(blockingRestore({projection: {ready: true}})).length,
-    0,
-  );
-});
-
-test("Ignoring all blocking entities sends one server-side recalculation", async () => {
-  const calls = [];
-  const staged = blockingRestore();
-  const {panel} = makePanel(async request => {
-    calls.push(request);
-    return {
-      ...staged, ignored_entities: request.ignored_entities,
-      projection: {ready: true},
-    };
-  });
-  panel._stagedRestore = staged;
-  await panel._setRestoreIgnored(["sensor.temp", "sensor.smoke"], true);
-
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].type, "ha_voice_label_sync/prepare_backup_preview");
-  assert.deepEqual([...calls[0].ignored_entities],
-    ["sensor.smoke", "sensor.temp"]);
-  assert.deepEqual([...panel._stagedRestore.ignored_entities],
-    ["sensor.smoke", "sensor.temp"]);
-});
-
-test("Bulk ignore refuses any entity the server did not offer", async () => {
-  const calls = [];
-  const {panel} = makePanel(async request => { calls.push(request); });
-  panel._stagedRestore = blockingRestore();
-  await panel._setRestoreIgnored(["sensor.temp", "light.extra"], true);
-  assert.equal(calls.length, 0);
-  assert.equal(panel._stagedRestore.ignored_entities.length, 0);
-});
-
 function renderRestoreNotice(panel, staged) {
   const notice = {hidden: true, children: [],
     replaceChildren(...items) {this.children = items;},
@@ -6332,189 +6278,6 @@ function findNodes(node, predicate, found = []) {
   for (const child of node.children || []) findNodes(child, predicate, found);
   return found;
 }
-
-test("Restore box lists ignored entities with undo and dedupes other list", () => {
-  const {panel} = makePanel(async () => ({}));
-  const notice = renderRestoreNotice(panel, blockingRestore({
-    ignored_entities: ["sensor.smoke"],
-    ignore_candidates: ["sensor.temp", "sensor.smoke", "switch.gone",
-      "switch.other"],
-  }));
-  const summaries = findNodes(notice, node => node.tag === "summary")
-    .map(node => node.textContent);
-  assert.ok(summaries.some(text =>
-    /3 entité\(s\) empêchent la restauration exacte/.test(text)));
-  assert.ok(findNodes(notice, node =>
-    /Entités ignorées \(1\) — elles ne seront pas restaurées/
-      .test(node.textContent)).length);
-  const undo = findNodes(notice, node =>
-    node.tag === "button" && node.textContent === "Rétablir");
-  assert.equal(undo.length, 1);
-  assert.match(undo[0]["aria-label"], /sensor\.smoke/);
-
-  // The other list only contains entities not already shown, collapsed.
-  const other = findNodes(notice, node => node.tag === "details" &&
-    node.children[0]?.textContent === "Autres entités pouvant être ignorées");
-  assert.equal(other.length, 1);
-  assert.equal(other[0].open, false);
-  const otherIds = findNodes(other[0], node => node.tag === "span")
-    .map(node => node.textContent);
-  assert.equal(otherIds.length, 1);
-  assert.match(otherIds[0], /^switch\.other/);
-});
-
-test("Partial restoration box stays visible once nothing blocks", () => {
-  const {panel} = makePanel(async () => ({}));
-  const notice = renderRestoreNotice(panel, blockingRestore({
-    ignored_entities: ["sensor.temp", "sensor.smoke"],
-    projection: {ready: true},
-  }));
-  const summaries = findNodes(notice, node => node.tag === "summary")
-    .map(node => node.textContent);
-  assert.ok(summaries.includes(
-    "Restauration partielle : 2 entité(s) ignorée(s)"));
-  assert.equal(findNodes(notice, node =>
-    node.tag === "button" && node.textContent === "Tout rétablir").length, 1);
-});
-
-test("Ignore controls are disabled while the Preview is recalculated", async () => {
-  const pending = deferred();
-  const {panel} = makePanel(async () => pending.promise);
-  const staged = blockingRestore();
-  const notice = renderRestoreNotice(panel, staged);
-  const buttons = findNodes(notice, node => node.tag === "button");
-  assert.ok(buttons.length >= 3);
-  assert.ok(buttons.every(button => button.disabled === false));
-
-  const updating = panel._setRestoreIgnored("sensor.temp", true);
-  assert.ok(buttons.every(button => button.disabled === true));
-  pending.resolve({...staged, ignored_entities: ["sensor.temp"]});
-  await updating;
-  assert.ok(buttons.every(button => button.disabled === false));
-});
-
-test("Final restore confirmation names the ignored entities", async () => {
-  const confirmations = [];
-  const {panel} = makePanel(async () => {
-    throw new Error("No request expected after a refused confirmation");
-  }, message => { confirmations.push(message); return false; });
-  panel._stagedRestore = blockingRestore({
-    ignored_entities: ["sensor.temp", "sensor.smoke"],
-    projection: {ready: true},
-    label_plan: {add: ["switch.gone"], remove: [], review: []},
-  });
-  await panel._applyStagedRestore();
-  assert.equal(confirmations.length, 1);
-  assert.match(confirmations[0],
-    /2 entité\(s\) ignorée\(s\) ne seront pas restaurées.*sensor\.smoke, sensor\.temp/);
-  assert.match(confirmations[0], /Appliquer la sauvegarde après contrôle/);
-
-  assert.equal(panel._restoreConfirmMessage(blockingRestore()),
-    panel._t("backupPreviewConfirm"));
-});
-
-test("Ignore buttons rendered during restore preparation become usable", () => {
-  const {panel} = makePanel(async () => ({}));
-  // The initial restore Preview is rendered while _restoring is still true.
-  panel._restoring = true;
-  const notice = renderRestoreNotice(panel, blockingRestore());
-  const buttons = findNodes(notice, node => node.tag === "button");
-  assert.ok(buttons.length >= 3);
-  assert.ok(buttons.every(button => button.disabled === true));
-
-  // _restoreBackup's finally block: busy state ends.
-  panel._restoring = false;
-  panel._updateApplyButton();
-  assert.ok(buttons.every(button => button.disabled === false));
-
-  // Any other operation in progress disables them again.
-  panel._applying = true;
-  panel._updateApplyButton();
-  assert.ok(buttons.every(button => button.disabled === true));
-});
-
-test("Name/room-only blockers offer restore with current values", () => {
-  const {panel} = makePanel(async () => ({}));
-  const staged = blockingRestore({
-    refresh_candidates: ["sensor.temp", "sensor.smoke"],
-  });
-  const byId = Object.fromEntries(
-    panel._restoreBlockers(staged).map(item => [item.entity_id, item]));
-  assert.equal(byId["sensor.temp"].refreshable, true);
-  assert.equal(byId["switch.gone"].refreshable, false);
-
-  const notice = renderRestoreNotice(panel, staged);
-  const labels = findNodes(notice, node => node.tag === "button")
-    .map(node => node.textContent);
-  assert.ok(labels.includes(
-    "Restaurer ces 2 entités avec leur nom et pièce actuels"));
-  assert.equal(labels.filter(text =>
-    text === "Restaurer avec le nom et la pièce actuels").length, 2);
-});
-
-test("Restore with current values sends both lists and keeps choices exclusive", async () => {
-  const calls = [];
-  const staged = blockingRestore({
-    ignored_entities: ["sensor.temp"],
-    refresh_candidates: ["sensor.temp", "sensor.smoke"],
-    refreshed_entities: [],
-  });
-  const {panel} = makePanel(async request => {
-    calls.push(request);
-    return {...staged, ignored_entities: request.ignored_entities,
-      refreshed_entities: request.refreshed_entities,
-      projection: {ready: true}};
-  });
-  panel._stagedRestore = staged;
-  await panel._setRestoreRefreshed(["sensor.temp", "sensor.smoke"], true);
-
-  assert.equal(calls.length, 1);
-  assert.deepEqual([...calls[0].refreshed_entities],
-    ["sensor.smoke", "sensor.temp"]);
-  assert.deepEqual([...calls[0].ignored_entities], []);  // no longer ignored
-  assert.match(panel.status,
-    /0 entité\(s\) ignorée\(s\), 2 restaurée\(s\) avec le nom et la pièce actuels/);
-
-  // Undo one entity: only allowed for entities currently refreshed.
-  await panel._setRestoreRefreshed("sensor.smoke", false);
-  assert.equal(calls.length, 2);
-  assert.deepEqual([...calls[1].refreshed_entities], ["sensor.temp"]);
-});
-
-test("Restore with current values refuses entities the server did not offer", async () => {
-  const calls = [];
-  const {panel} = makePanel(async request => { calls.push(request); });
-  panel._stagedRestore = blockingRestore({refresh_candidates: ["sensor.temp"]});
-  await panel._setRestoreRefreshed(["sensor.temp", "switch.gone"], true);
-  await panel._setRestoreRefreshed("sensor.temp", false);  // not refreshed yet
-  assert.equal(calls.length, 0);
-});
-
-test("Refreshed entities are listed with undo and named in the confirmation", async () => {
-  const confirmations = [];
-  const {panel} = makePanel(async () => {
-    throw new Error("No request expected after a refused confirmation");
-  }, message => { confirmations.push(message); return false; });
-  const staged = blockingRestore({
-    projection: {ready: true},
-    refresh_candidates: ["sensor.temp"],
-    refreshed_entities: ["sensor.temp"],
-    ignored_entities: ["switch.gone"],
-    label_plan: {add: ["sensor.temp"], remove: [], review: []},
-  });
-  const notice = renderRestoreNotice(panel, staged);
-  assert.ok(findNodes(notice, node =>
-    /Restaurées avec le nom et la pièce actuels de Home Assistant \(1\)/
-      .test(node.textContent)).length);
-  assert.equal(findNodes(notice, node =>
-    node.tag === "button" && node.textContent === "Annuler").length, 1);
-
-  await panel._applyStagedRestore();
-  assert.equal(confirmations.length, 1);
-  assert.match(confirmations[0],
-    /1 entité\(s\) seront restaurées avec leur nom et leur pièce actuels.*sensor\.temp/);
-  assert.match(confirmations[0], /1 entité\(s\) ignorée\(s\).*switch\.gone/);
-});
 
 test("Apply sends the refreshed entities with the approval", async () => {
   const calls = [];
@@ -6844,4 +6607,33 @@ test("A pending label proposal is named in the replacement question", async () =
   panel._backupReview = backupReviewFor("new.bak");
   await panel._restoreBackup();
   assert.match(confirmations[0], /proposition d'étiquettes non appliquée/);
+});
+
+test("Plan buttons are disabled while the Preview is recalculated", async () => {
+  const pending = deferred();
+  const {panel} = makePanel(async () => pending.promise);
+  const staged = planRestore();
+  const notice = renderRestoreNotice(panel, staged);
+  const buttons = findNodes(notice, node => node.tag === "button" &&
+    node.className === "secondary");
+  assert.ok(buttons.length >= 3);
+  assert.ok(buttons.every(button => button.disabled === false));
+
+  const updating = panel._setRestoreRowChoice("switch.portail", "out");
+  assert.ok(buttons.every(button => button.disabled === true));
+  pending.resolve({...staged});
+  await updating;
+  assert.ok(buttons.every(button => button.disabled === false));
+});
+
+test("Plan buttons rendered during restore preparation become usable", () => {
+  const {panel} = makePanel(async () => ({}));
+  panel._restoring = true;  // The initial plan is rendered while busy.
+  const notice = renderRestoreNotice(panel, planRestore());
+  const buttons = findNodes(notice, node => node.tag === "button" &&
+    node.className === "secondary");
+  assert.ok(buttons.every(button => button.disabled === true));
+  panel._restoring = false;
+  panel._updateApplyButton();
+  assert.ok(buttons.every(button => button.disabled === false));
 });

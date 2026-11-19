@@ -363,8 +363,6 @@ const HVLS_TRANSLATIONS = {
     backupLabelAdd: "Étiquettes à ajouter",
     backupLabelRemove: "Étiquettes à retirer",
     backupLabelReview: "Entités à examiner",
-    backupProjectionAligned: "Simulation des étiquettes : le YAML généré correspond à la sauvegarde.",
-    backupProjectionMismatch: "Attention : les étiquettes seules ne reproduiront pas exactement cette sauvegarde. Vérifiez les différences ci-dessous.",
     backupConfirm: "Restaurer ce YAML en production ? Une copie de sécurité de la production actuelle sera créée obligatoirement. Les étiquettes HA ne seront pas modifiées.",
     backupRestoreFailed: "Restauration refusée : {error}",
     backupRestored: "Restauration terminée. Copie de sécurité : {backup}",
@@ -489,36 +487,13 @@ const HVLS_TRANSLATIONS = {
     applyInfoLabel: "Pourquoi Apply est-il désactivé ?",
     cancelPreview: "Annuler",
     previewCancelled: "Preview annulé : aucune modification effectuée.",
-    backupIgnoreTitle: "Autres entités pouvant être ignorées",
-    backupIgnoreHelp: "Une entité ignorée conserve sa configuration et ses étiquettes actuelles. Le Preview est recalculé après chaque choix.",
-    backupIgnoreEntity: "Ignorer cette entité",
     backupIgnoreUpdating: "Recalcul du Preview après exclusion…",
     backupIgnoreFailed: "Impossible de recalculer le Preview : {error}. Aucun fichier ni label modifié.",
     backupIgnoreSelected: "Choix enregistrés : {count} entité(s) ignorée(s), {refreshed} restaurée(s) avec le nom et la pièce actuels. Aucun fichier ni label modifié.",
-    restoreBlockersTitle: "{count} entité(s) empêchent la restauration exacte de cette sauvegarde",
-    restoreBlockersHelp: "« Restaurer avec le nom et la pièce actuels » remet l'entité en gardant ses valeurs actuelles dans Home Assistant (seulement si le nom ou la pièce diffèrent). « Ignorer » la retire de cette restauration : elle n'est pas restaurée et garde sa configuration et ses étiquettes actuelles. Le Preview est recalculé et revérifié après chaque choix.",
     restoreBlockerField: "{field} : sauvegarde « {before} » → Home Assistant aujourd'hui « {after} »",
-    restoreBlockerExtra: "générée par les étiquettes actuelles, mais absente de la sauvegarde",
-    restoreBlockerMissing: "présente dans la sauvegarde, mais ne peut pas être régénérée (absente ou non éligible dans Home Assistant)",
-    restoreBlockerNotIgnorable: "ne peut pas être ignorée ici : corrigez-la dans Home Assistant",
-    restoreBlockerIgnoreOne: "Ignorer",
-    restoreBlockerIgnoreAll: "Ignorer ces {count} entités",
     restoreFieldName: "nom",
     restoreFieldRoom: "pièce",
-    restoreFieldExpose: "exposition",
     restoreValueAbsent: "(aucune)",
-    restoreIgnoredTitle: "Restauration partielle : {count} entité(s) ignorée(s)",
-    restoreIgnoredHeading: "Entités ignorées ({count}) — elles ne seront pas restaurées",
-    restoreIgnoredUndoOne: "Rétablir",
-    restoreIgnoredUndoAll: "Tout rétablir",
-    restoreIgnoredConfirm: "Attention : {count} entité(s) ignorée(s) ne seront pas restaurées et garderont leur état actuel : {entities}.",
-    restoreRefreshOne: "Restaurer avec le nom et la pièce actuels",
-    restoreRefreshAll: "Restaurer ces {count} entités avec leur nom et pièce actuels",
-    restoreRefreshedTitle: "Restauration avec valeurs actuelles : {count} entité(s)",
-    restoreRefreshedHeading: "Restaurées avec le nom et la pièce actuels de Home Assistant ({count})",
-    restoreRefreshUndoOne: "Annuler",
-    restoreRefreshUndoAll: "Tout annuler",
-    restoreRefreshedConfirm: "{count} entité(s) seront restaurées avec leur nom et leur pièce actuels dans Home Assistant, et non ceux de la sauvegarde : {entities}.",
     planCol_out: "Non restaurées ({count})",
     planCol_current: "Nom ou pièce changés ({count})",
     planCol_result: "Résultat pour Google ({count})",
@@ -984,8 +959,6 @@ const HVLS_TRANSLATIONS = {
     backupLabelAdd: "Labels to add",
     backupLabelRemove: "Labels to remove",
     backupLabelReview: "Entities requiring review",
-    backupProjectionAligned: "Simulated HA labels regenerate the selected backup configuration.",
-    backupProjectionMismatch: "Warning: HA labels alone cannot reproduce this backup exactly. Review the differences below.",
     backupConfirm: "Restore this YAML to production? A safety copy of the current production file will always be created. HA labels will not be changed.",
     backupRestoreFailed: "Restore refused: {error}",
     backupRestored: "Restore completed. Safety backup: {backup}",
@@ -1110,36 +1083,13 @@ const HVLS_TRANSLATIONS = {
     applyInfoLabel: "Why is Apply disabled?",
     cancelPreview: "Cancel",
     previewCancelled: "Preview canceled: nothing changed.",
-    backupIgnoreTitle: "Other entities that can be ignored",
-    backupIgnoreHelp: "Ignored entities retain their current configuration and HA labels. Preview is recalculated after each choice.",
-    backupIgnoreEntity: "Ignore this entity",
     backupIgnoreUpdating: "Recalculating Preview with exclusions…",
     backupIgnoreFailed: "Unable to recalculate Preview: {error}. No YAML or labels changed.",
     backupIgnoreSelected: "Choices saved: {count} ignored entity(ies), {refreshed} restored with current name and room. No file or label changed.",
-    restoreBlockersTitle: "{count} entity(ies) prevent an exact restoration of this backup",
-    restoreBlockersHelp: "\"Restore with current name and room\" brings the entity back with its current Home Assistant values (only when the name or room differ). \"Ignore\" removes it from this restoration: it is not restored and keeps its current configuration and labels. Preview is recalculated and verified after each choice.",
     restoreBlockerField: "{field}: backup \"{before}\" → Home Assistant today \"{after}\"",
-    restoreBlockerExtra: "generated by current labels, but absent from the backup",
-    restoreBlockerMissing: "present in the backup, but cannot be regenerated (missing or ineligible in Home Assistant)",
-    restoreBlockerNotIgnorable: "cannot be ignored here: fix it in Home Assistant",
-    restoreBlockerIgnoreOne: "Ignore",
-    restoreBlockerIgnoreAll: "Ignore these {count} entities",
     restoreFieldName: "name",
     restoreFieldRoom: "room",
-    restoreFieldExpose: "exposure",
     restoreValueAbsent: "(none)",
-    restoreIgnoredTitle: "Partial restoration: {count} ignored entity(ies)",
-    restoreIgnoredHeading: "Ignored entities ({count}) — they will not be restored",
-    restoreIgnoredUndoOne: "Restore",
-    restoreIgnoredUndoAll: "Restore all",
-    restoreIgnoredConfirm: "Warning: {count} ignored entity(ies) will not be restored and keep their current state: {entities}.",
-    restoreRefreshOne: "Restore with current name and room",
-    restoreRefreshAll: "Restore these {count} entities with current name and room",
-    restoreRefreshedTitle: "Restoration with current values: {count} entity(ies)",
-    restoreRefreshedHeading: "Restored with the current Home Assistant name and room ({count})",
-    restoreRefreshUndoOne: "Undo",
-    restoreRefreshUndoAll: "Undo all",
-    restoreRefreshedConfirm: "{count} entity(ies) will be restored with their current Home Assistant name and room, not the backup ones: {entities}.",
     planCol_out: "Not restored ({count})",
     planCol_current: "Name or room changed ({count})",
     planCol_result: "Result for Google ({count})",
@@ -2156,57 +2106,6 @@ class HVLSPreviewPanel extends HTMLElement {
     this._setStatusKey("previewCancelled");
   }
 
-  // Entities that keep HA labels from reproducing the backup exactly.
-  // Display-only: the server recalculates every ignore choice and approval.
-  _restoreBlockers(staged) {
-    const projection = staged?.projection;
-    const diff = projection?.comparison;
-    if (!projection || projection.ready === true || diff?.status !== "ok") {
-      return [];
-    }
-    const candidates = new Set(staged.ignore_candidates || []);
-    const refreshable = new Set(staged.refresh_candidates || []);
-    const ignored = new Set([
-      ...(staged.ignored_entities || []), ...(staged.refreshed_entities || []),
-    ]);
-    const fieldLabels = {
-      name: "restoreFieldName", room: "restoreFieldRoom",
-      expose: "restoreFieldExpose",
-    };
-    const shown = value => {
-      const text = value === null || value === undefined
-        ? this._t("restoreValueAbsent") : String(value);
-      return text.length > 80 ? text.slice(0, 79) + "…" : text;
-    };
-    const blockers = [];
-    // analyze_preview(generated, backup): "before" is the backup value.
-    for (const item of diff.modified || []) {
-      blockers.push({
-        entity_id: item.entity_id,
-        reasons: Object.entries(item.fields || {}).map(([field, change]) =>
-          this._tf("restoreBlockerField", {
-            field: fieldLabels[field] ? this._t(fieldLabels[field]) : field,
-            before: shown(change?.before), after: shown(change?.after),
-          })),
-      });
-    }
-    for (const entity_id of diff.added || []) {
-      blockers.push({entity_id, reasons: [this._t("restoreBlockerExtra")]});
-    }
-    for (const entity_id of diff.removed || []) {
-      blockers.push({entity_id, reasons: [this._t("restoreBlockerMissing")]});
-    }
-    return blockers
-      .filter(item => typeof item.entity_id === "string" &&
-        !ignored.has(item.entity_id))
-      .map(item => ({
-        ...item,
-        ignorable: candidates.has(item.entity_id),
-        refreshable: refreshable.has(item.entity_id),
-      }))
-      .sort((a, b) => a.entity_id.localeCompare(b.entity_id));
-  }
-
   // ---- Restore plan table (server-classified rows) ----
 
   _restoreRowReason(row) {
@@ -2483,47 +2382,6 @@ class HVLSPreviewPanel extends HTMLElement {
     return empty;
   }
 
-  async _setRestoreIgnored(entityIds, ignore) {
-    const staged = this._stagedRestore;
-    const ids = Array.isArray(entityIds) ? entityIds : [entityIds];
-    if (!staged || !ids.length ||
-        !ids.every(id => staged.ignore_candidates?.includes(id))) return;
-    const ignored = new Set(staged.ignored_entities || []);
-    const refreshed = new Set(staged.refreshed_entities || []);
-    for (const id of ids) {
-      if (ignore) {
-        ignored.add(id);
-        refreshed.delete(id);  // A choice is exclusive.
-      } else {
-        ignored.delete(id);
-      }
-    }
-    return this._setRestoreSelection(staged, ignored, refreshed);
-  }
-
-  // Restore entities whose only differences are name/room with the values
-  // Home Assistant generates today. The server decides which are eligible.
-  async _setRestoreRefreshed(entityIds, refresh) {
-    const staged = this._stagedRestore;
-    const ids = Array.isArray(entityIds) ? entityIds : [entityIds];
-    const allowed = refresh
-      ? staged?.refresh_candidates : staged?.refreshed_entities;
-    if (!staged || !ids.length || !ids.every(id => allowed?.includes(id))) {
-      return;
-    }
-    const ignored = new Set(staged.ignored_entities || []);
-    const refreshed = new Set(staged.refreshed_entities || []);
-    for (const id of ids) {
-      if (refresh) {
-        refreshed.add(id);
-        ignored.delete(id);
-      } else {
-        refreshed.delete(id);
-      }
-    }
-    return this._setRestoreSelection(staged, ignored, refreshed);
-  }
-
   async _setRestoreSelection(staged, ignoredSet, refreshedSet, options = {}) {
     if (this._restoring || this._applying || this._refreshing ||
         this._generating || this._entityWritePending) return;
@@ -2705,42 +2563,28 @@ class HVLSPreviewPanel extends HTMLElement {
 
   // A partial restoration must be visible in the final confirmation itself.
   _restoreConfirmMessage(staged) {
+    if (!staged?.restore_summary || !Array.isArray(staged.restore_rows)) {
+      return this._t("backupPreviewConfirm");
+    }
     const list = items => items.slice(0, 10).join(", ") +
       (items.length > 10 ? ", …" : "");
-    if (staged?.restore_summary && Array.isArray(staged.restore_rows)) {
-      const rows = staged.restore_rows;
-      const summary = staged.restore_summary;
-      const pick = test => rows.filter(test).map(row => row.entity_id).sort();
-      const parts = [this._tf("planConfirmSummary", {
-        exposed: summary.exposed_after ?? 0, added: summary.added ?? 0,
-        already: summary.already_exposed ?? 0,
-      })];
-      for (const [key, ids] of [
-        ["planConfirmRemoved", pick(row =>
-          row.case === "removed" && row.choice === "remove")],
-        ["planConfirmCurrent", pick(row => row.choice === "current")],
-        ["planConfirmOut", pick(row =>
-          row.case !== "removed" && row.choice === "out")],
-      ]) {
-        if (ids.length) {
-          parts.push(this._tf(key, {count: ids.length, entities: list(ids)}));
-        }
+    const rows = staged.restore_rows;
+    const summary = staged.restore_summary;
+    const pick = test => rows.filter(test).map(row => row.entity_id).sort();
+    const parts = [this._tf("planConfirmSummary", {
+      exposed: summary.exposed_after ?? 0, added: summary.added ?? 0,
+      already: summary.already_exposed ?? 0,
+    })];
+    for (const [key, ids] of [
+      ["planConfirmRemoved", pick(row =>
+        row.case === "removed" && row.choice === "remove")],
+      ["planConfirmCurrent", pick(row => row.choice === "current")],
+      ["planConfirmOut", pick(row =>
+        row.case !== "removed" && row.choice === "out")],
+    ]) {
+      if (ids.length) {
+        parts.push(this._tf(key, {count: ids.length, entities: list(ids)}));
       }
-      parts.push(this._t("backupPreviewConfirm"));
-      return parts.join("\n\n");
-    }
-    const parts = [];
-    const refreshed = [...(staged?.refreshed_entities || [])].sort();
-    if (refreshed.length) {
-      parts.push(this._tf("restoreRefreshedConfirm", {
-        count: refreshed.length, entities: list(refreshed),
-      }));
-    }
-    const ignored = [...(staged?.ignored_entities || [])].sort();
-    if (ignored.length) {
-      parts.push(this._tf("restoreIgnoredConfirm", {
-        count: ignored.length, entities: list(ignored),
-      }));
     }
     parts.push(this._t("backupPreviewConfirm"));
     return parts.join("\n\n");
@@ -3265,238 +3109,6 @@ class HVLSPreviewPanel extends HTMLElement {
             review: plan.review?.length || 0,
           });
         previewNotice.appendChild(description);
-        const projection = this._stagedRestore.projection;
-        // Entities already explained in the blockers box are not repeated.
-        const shownInBox = new Set();
-        this._restoreIgnoreControls = [];
-        if (projection && !isManual) {
-          const warning = document.createElement("p");
-          warning.className = "diagnostic-note";
-          warning.textContent = isManual
-            ? this._t("manualLabelHelp")
-            : projection.ready === true
-              ? this._t("backupProjectionAligned")
-              : this._t("backupProjectionMismatch");
-          previewNotice.appendChild(warning);
-          const blockers = this._restoreBlockers(this._stagedRestore);
-          const ignoredNow = [...(this._stagedRestore.ignored_entities || [])]
-            .sort();
-          const refreshedNow = [
-            ...(this._stagedRestore.refreshed_entities || []),
-          ].sort();
-          for (const item of blockers) shownInBox.add(item.entity_id);
-          for (const entityId of ignoredNow) shownInBox.add(entityId);
-          for (const entityId of refreshedNow) shownInBox.add(entityId);
-          if (blockers.length || ignoredNow.length || refreshedNow.length) {
-            const details = document.createElement("details");
-            details.open = true;
-            const heading = document.createElement("summary");
-            heading.textContent = blockers.length
-              ? this._tf("restoreBlockersTitle", {count: blockers.length})
-              : ignoredNow.length
-                ? this._tf("restoreIgnoredTitle", {count: ignoredNow.length})
-                : this._tf("restoreRefreshedTitle", {
-                  count: refreshedNow.length,
-                });
-            details.appendChild(heading);
-            const help = document.createElement("p");
-            help.className = "diagnostic-note";
-            help.textContent = this._t("restoreBlockersHelp");
-            details.appendChild(help);
-            const refreshable = blockers
-              .filter(item => item.refreshable)
-              .map(item => item.entity_id);
-            if (refreshable.length > 1) {
-              const all = this._restoreIgnoreControl(
-                document.createElement("button"));
-              all.type = "button";
-              all.className = "secondary";
-              all.textContent = this._tf("restoreRefreshAll", {
-                count: refreshable.length,
-              });
-              all.style = "margin:4px 8px 8px 0;";
-              all.addEventListener("click", () =>
-                this._setRestoreRefreshed(refreshable, true)
-              );
-              details.appendChild(all);
-            }
-            const ignorable = blockers
-              .filter(item => item.ignorable)
-              .map(item => item.entity_id);
-            if (ignorable.length > 1) {
-              const all = this._restoreIgnoreControl(
-                document.createElement("button"));
-              all.type = "button";
-              all.className = "secondary";
-              all.textContent = this._tf("restoreBlockerIgnoreAll", {
-                count: ignorable.length,
-              });
-              all.style = "margin:4px 0 8px;";
-              all.addEventListener("click", () =>
-                this._setRestoreIgnored(ignorable, true)
-              );
-              details.appendChild(all);
-            }
-            if (blockers.length) {
-              const list = document.createElement("ul");
-              for (const item of blockers) {
-                const entry = document.createElement("li");
-                entry.style = "display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin:6px 0;";
-                const text = document.createElement("span");
-                const reasons = item.ignorable
-                  ? item.reasons
-                  : [...item.reasons, this._t("restoreBlockerNotIgnorable")];
-                text.textContent = `${item.entity_id} — ${reasons.join(" ; ")}`;
-                entry.appendChild(text);
-                if (item.refreshable) {
-                  const keep = this._restoreIgnoreControl(
-                    document.createElement("button"));
-                  keep.type = "button";
-                  keep.className = "secondary";
-                  keep.textContent = this._t("restoreRefreshOne");
-                  keep.setAttribute("aria-label",
-                    this._t("restoreRefreshOne") + ": " + item.entity_id);
-                  keep.addEventListener("click", () =>
-                    this._setRestoreRefreshed(item.entity_id, true)
-                  );
-                  entry.appendChild(keep);
-                }
-                if (item.ignorable) {
-                  const one = this._restoreIgnoreControl(
-                    document.createElement("button"));
-                  one.type = "button";
-                  one.className = "secondary";
-                  one.textContent = this._t("restoreBlockerIgnoreOne");
-                  one.setAttribute("aria-label",
-                    this._t("backupIgnoreEntity") + ": " + item.entity_id);
-                  one.addEventListener("click", () =>
-                    this._setRestoreIgnored(item.entity_id, true)
-                  );
-                  entry.appendChild(one);
-                }
-                list.appendChild(entry);
-              }
-              details.appendChild(list);
-            }
-            if (refreshedNow.length) {
-              const refreshedHeading = document.createElement("p");
-              refreshedHeading.className = "diagnostic-note";
-              refreshedHeading.textContent = this._tf("restoreRefreshedHeading", {
-                count: refreshedNow.length,
-              });
-              details.appendChild(refreshedHeading);
-              if (refreshedNow.length > 1) {
-                const undoAll = this._restoreIgnoreControl(
-                  document.createElement("button"));
-                undoAll.type = "button";
-                undoAll.className = "secondary";
-                undoAll.textContent = this._t("restoreRefreshUndoAll");
-                undoAll.style = "margin:4px 0 8px;";
-                undoAll.addEventListener("click", () =>
-                  this._setRestoreRefreshed(refreshedNow, false)
-                );
-                details.appendChild(undoAll);
-              }
-              const refreshedList = document.createElement("ul");
-              for (const entityId of refreshedNow) {
-                const entry = document.createElement("li");
-                entry.style = "display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin:6px 0;";
-                const text = document.createElement("span");
-                text.textContent = entityId;
-                const undo = this._restoreIgnoreControl(
-                  document.createElement("button"));
-                undo.type = "button";
-                undo.className = "secondary";
-                undo.textContent = this._t("restoreRefreshUndoOne");
-                undo.setAttribute("aria-label",
-                  this._t("restoreRefreshUndoOne") + ": " + entityId);
-                undo.addEventListener("click", () =>
-                  this._setRestoreRefreshed(entityId, false)
-                );
-                entry.append(text, undo);
-                refreshedList.appendChild(entry);
-              }
-              details.appendChild(refreshedList);
-            }
-            if (ignoredNow.length) {
-              const ignoredHeading = document.createElement("p");
-              ignoredHeading.className = "diagnostic-note";
-              ignoredHeading.textContent = this._tf("restoreIgnoredHeading", {
-                count: ignoredNow.length,
-              });
-              details.appendChild(ignoredHeading);
-              if (ignoredNow.length > 1) {
-                const undoAll = this._restoreIgnoreControl(
-                  document.createElement("button"));
-                undoAll.type = "button";
-                undoAll.className = "secondary";
-                undoAll.textContent = this._t("restoreIgnoredUndoAll");
-                undoAll.style = "margin:4px 0 8px;";
-                undoAll.addEventListener("click", () =>
-                  this._setRestoreIgnored(ignoredNow, false)
-                );
-                details.appendChild(undoAll);
-              }
-              const ignoredList = document.createElement("ul");
-              for (const entityId of ignoredNow) {
-                const entry = document.createElement("li");
-                entry.style = "display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin:6px 0;";
-                const text = document.createElement("span");
-                text.textContent = entityId;
-                const undo = this._restoreIgnoreControl(
-                  document.createElement("button"));
-                undo.type = "button";
-                undo.className = "secondary";
-                undo.textContent = this._t("restoreIgnoredUndoOne");
-                undo.setAttribute("aria-label",
-                  this._t("restoreIgnoredUndoOne") + ": " + entityId);
-                undo.addEventListener("click", () =>
-                  this._setRestoreIgnored(entityId, false)
-                );
-                entry.append(text, undo);
-                ignoredList.appendChild(entry);
-              }
-              details.appendChild(ignoredList);
-            }
-            previewNotice.appendChild(details);
-          }
-        }
-        // An ignored entity retains its production YAML and HA labels.
-        // Recalculation and all approval fingerprints are server-side.
-        const otherCandidates = (this._stagedRestore.ignore_candidates || [])
-          .filter(entityId => !shownInBox.has(entityId));
-        if (otherCandidates.length) {
-          const details = document.createElement("details");
-          details.open = false;
-          const heading = document.createElement("summary");
-          heading.textContent = this._t("backupIgnoreTitle");
-          details.appendChild(heading);
-          const note = document.createElement("p");
-          note.className = "diagnostic-note";
-          note.textContent = this._t("backupIgnoreHelp");
-          details.appendChild(note);
-          for (const entityId of otherCandidates) {
-            const label = document.createElement("label");
-            label.className = "entity-hvls-control";
-            label.style = "display:flex; justify-content:flex-start; " +
-              "justify-self:start; text-align:left; margin:8px 0; " +
-              "white-space:normal;";
-            const checkbox = this._restoreIgnoreControl(
-              document.createElement("input"));
-            checkbox.type = "checkbox";
-            checkbox.className = "entity-hvls-checkbox";
-            checkbox.checked = (this._stagedRestore.ignored_entities || []).includes(entityId);
-            checkbox.setAttribute("aria-label", this._t("backupIgnoreEntity") + ": " + entityId);
-            checkbox.addEventListener("change", () =>
-              this._setRestoreIgnored(entityId, checkbox.checked)
-            );
-            const text = document.createElement("span");
-            text.textContent = entityId + " — " + this._t("backupIgnoreEntity");
-            label.append(checkbox, text);
-            details.appendChild(label);
-          }
-          previewNotice.appendChild(details);
-        }
         // The actual proposed HA-label operations must be visible individually,
         // including exceptional entities. The Preview is never an implicit write.
         this._appendLabelPlanDetails(previewNotice, plan);
