@@ -782,7 +782,9 @@ def _projection_blockers(result: dict) -> set[str]:
     )
 
 
-def _restore_plan(result: dict, backup_content: str, catalog: dict) -> dict:
+def _restore_plan(
+    result: dict, backup_content: str, catalog: dict, production_content: str = "",
+) -> dict:
     """Classify every affected entity for the restore plan table.
 
     Display data derived from an already validated result. It grants no
@@ -795,6 +797,11 @@ def _restore_plan(result: dict, backup_content: str, catalog: dict) -> dict:
         if isinstance(item, dict) and isinstance(item.get("entity_id"), str)
     }
     backup = _entities(backup_content)
+    # What Google receives today is the production YAML, not the labels.
+    production = {
+        entity_id for entity_id, fields in _entities(production_content).items()
+        if fields.get("expose") is True
+    } if production_content else set()
     final = {
         entity_id for entity_id, fields in _entities(result["content"]).items()
         if fields.get("expose") is True
@@ -805,7 +812,7 @@ def _restore_plan(result: dict, backup_content: str, catalog: dict) -> dict:
     refreshable = set(result["refresh_candidates"])
     blockers = _projection_blockers(result) - refreshed
     rows = []
-    for entity_id in sorted(set(backup) | {
+    for entity_id in sorted(set(backup) | production | {
         eid for eid, item in entities.items() if item.get("has_label") is True
     }):
         item = entities.get(entity_id)
@@ -815,9 +822,15 @@ def _restore_plan(result: dict, backup_content: str, catalog: dict) -> dict:
         if fields is None:
             row["case"] = "removed"
             row["choice"] = "keep" if entity_id in ignored else "remove"
-            row["choices"] = (
-                ["remove", "keep"] if entity_id in candidates else [row["choice"]]
-            )
+            if not labeled:
+                # In production YAML only: HA labels cannot keep it anyway.
+                row["reason"] = "no_label"
+                row["choices"] = [row["choice"]]
+            else:
+                row["choices"] = (
+                    ["remove", "keep"] if entity_id in candidates
+                    else [row["choice"]]
+                )
         elif fields.get("expose") is not True or item is None or (
             item.get("eligible") is not True
         ):
@@ -858,10 +871,6 @@ def _restore_plan(result: dict, backup_content: str, catalog: dict) -> dict:
             row["choices"] = []
         rows.append(row)
 
-    plan = result["label_plan"]
-    labeled_now = {
-        eid for eid, item in entities.items() if item.get("has_label") is True
-    }
     summary = {
         "backup_total": len(backup),
         "restored_from_backup": sum(
@@ -869,9 +878,10 @@ def _restore_plan(result: dict, backup_content: str, catalog: dict) -> dict:
             if row["case"] != "removed" and row["choice"] in {"in", "current"}
         ),
         "exposed_after": len(final),
-        "added": len(plan["add"]),
-        "already_exposed": len(final & labeled_now),
-        "removed": len(plan["remove"]),
+        # Same basis as the YAML comparison, tab badge and status line.
+        "added": len(final - production),
+        "already_exposed": len(final & production),
+        "removed": len(production - final),
         "current_values": len(refreshed),
         "not_restored": sum(
             1 for row in rows
@@ -934,7 +944,10 @@ def prepare_backup_preview(
         result = run(ignored_entities, refreshed_entities)
 
     backup_content = _read_yaml(_get_backup(output_path, backup_id))
-    plan = _restore_plan(result, backup_content, catalog)
+    production_content = (
+        _read_yaml(output_path) if output_path.is_file() else ""
+    )
+    plan = _restore_plan(result, backup_content, catalog, production_content)
     return {**result, "restore_rows": plan["rows"],
             "restore_summary": plan["summary"]}
 

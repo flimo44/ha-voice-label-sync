@@ -2099,7 +2099,7 @@ test("Missing-production backup stages a read-only Preview with unresolved label
   assert.equal(panel._stagedRestore.mode, "restore_preview");
   assert.deepEqual(tabs, ["preview"]);
   assert.equal(controls.apply.disabled, true);
-  assert.match(panel.status, /Restauration préparée/);
+  assert.match(panel.status, /Restauration prête\. Si vous l.appliquez/);
 });
 
 test("Reviewed missing-YAML backup restores only with aligned labels", async () => {
@@ -6759,4 +6759,27 @@ test("Manual proposal count includes YAML changes coming from Home Assistant", (
   // Without a trustworthy comparison, the checkbox changes still count.
   panel._stagedRestore.comparison = {status: "error"};
   assert.equal(panel._pendingChangeCount(), 1);
+});
+
+test("Production-only removals explain the missing label and cannot be kept", () => {
+  const {panel} = makePanel(async () => ({}));
+  const staged = planRestore();
+  staged.restore_rows = [...staged.restore_rows, {
+    entity_id: "binary_sensor.unlabeled", case: "removed", choice: "remove",
+    choices: ["remove"], reason: "no_label", fields: null,
+  }];
+  const notice = renderRestoreNotice(panel, staged);
+  const result = planColumns(notice)[2];
+  const row = findNodes(result.section, node => node.className === "restore-row")
+    .find(node => findNodes(node, child =>
+      child.textContent === "binary_sensor.unlabeled").length);
+  assert.ok(row);
+  assert.ok(findNodes(row, node => /n'a plus l'étiquette HVLS/
+    .test(node.textContent)).length);
+  assert.equal(findNodes(row, node => node.tag === "button").length, 0);
+  assert.equal(panel._removalReason("binary_sensor.unlabeled"),
+    "Raison : n'a plus l'étiquette HVLS dans Home Assistant.");
+  // The keep-all question only counts entities that can be kept.
+  assert.ok(findNodes(result.section, node =>
+    /^1 entité\(s\) exposées aujourd'hui/.test(node.textContent)).length);
 });

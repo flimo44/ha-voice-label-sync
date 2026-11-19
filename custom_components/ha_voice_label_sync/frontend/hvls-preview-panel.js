@@ -334,7 +334,7 @@ const HVLS_TRANSLATIONS = {
     backupReviewFailed: "Comparaison impossible : {error}",
     backupLoadFailed: "Chargement impossible : {error}",
     backupRestore: "Préparer cette sauvegarde dans le Preview",
-    backupPreviewPrepared: "Restauration préparée : {added} ajout(s), {removed} suppression(s), {modified} modification(s). Aucun fichier ni label modifié.",
+    backupPreviewPrepared: "Restauration prête. Si vous l'appliquez : {added} ajout(s), {removed} suppression(s), {modified} modification(s). Rien n'est écrit dans le YAML ni dans les étiquettes avant « Appliquer cette restauration ».",
     backupPreviewNotExecutable: "Preview de restauration : contrôlez les changements et les étiquettes avant validation.",
     backupPreviewApply: "Appliquer cette restauration",
     backupPreviewConfirm: "Appliquer la sauvegarde après contrôle ? Le YAML de production et les étiquettes HA seront mis à jour. Une sauvegarde de sécurité sera créée.",
@@ -553,6 +553,7 @@ const HVLS_TRANSLATIONS = {
     planReasonOptions: "options non reproductibles : {fields}",
     planReasonConflict: "différence non reproductible",
     planReasonRemoved: "exposée aujourd'hui, absente de la sauvegarde",
+    planReasonNoLabel: "exposée aujourd'hui, mais n'a plus l'étiquette HVLS dans Home Assistant",
     planTechDetails: "Détails techniques : étiquettes Home Assistant",
     planConfirmSummary: "Après restauration : {exposed} entité(s) exposées à Google ({added} ajoutée(s), {already} déjà exposée(s)).",
     planConfirmRemoved: "Ne seront plus exposées ({count}) : {entities}.",
@@ -950,7 +951,7 @@ const HVLS_TRANSLATIONS = {
     backupReviewFailed: "Cannot compare: {error}",
     backupLoadFailed: "Cannot load backups: {error}",
     backupRestore: "Prepare this backup in Preview",
-    backupPreviewPrepared: "Restore staged: {added} added, {removed} removed, {modified} modified. No YAML or labels changed.",
+    backupPreviewPrepared: "Restoration ready. When applied: {added} added, {removed} removed, {modified} modified. Nothing is written to the YAML or labels until you select \"Apply this restoration\".",
     backupPreviewNotExecutable: "Restore Preview: review the changes and HA labels before validation.",
     backupPreviewApply: "Apply this restoration",
     backupPreviewConfirm: "Apply the reviewed backup? Production YAML and HA labels will be updated. A safety backup will be created.",
@@ -1169,6 +1170,7 @@ const HVLS_TRANSLATIONS = {
     planReasonOptions: "options that cannot be reproduced: {fields}",
     planReasonConflict: "difference that cannot be reproduced",
     planReasonRemoved: "exposed today, absent from the backup",
+    planReasonNoLabel: "exposed today, but no longer has the HVLS label in Home Assistant",
     planTechDetails: "Technical details: Home Assistant labels",
     planConfirmSummary: "After restoration: {exposed} entity(ies) exposed to Google ({added} added, {already} already exposed).",
     planConfirmRemoved: "No longer exposed ({count}): {entities}.",
@@ -2196,7 +2198,10 @@ class HVLSPreviewPanel extends HTMLElement {
           before: shown(change?.before), after: shown(change?.after),
         })).join(" ; ");
     }
-    if (row.case === "removed") return this._t("planReasonRemoved");
+    if (row.case === "removed") {
+      return this._t(row.reason === "no_label"
+        ? "planReasonNoLabel" : "planReasonRemoved");
+    }
     return null;
   }
 
@@ -2853,7 +2858,10 @@ class HVLSPreviewPanel extends HTMLElement {
     const staged = this._stagedRestore;
     if (staged?.mode === "restore_preview") {
       const row = (staged.restore_rows || []).find(r => r.entity_id === entityId);
-      if (row?.case === "removed") return this._t("removalReasonBackup");
+      if (row?.case === "removed") {
+        return this._t(row.reason === "no_label"
+          ? "removalReasonNoLabel" : "removalReasonBackup");
+      }
     }
     if (staged?.label_plan?.remove?.includes(entityId)) {
       return this._t("removalReasonProposal");

@@ -1934,3 +1934,26 @@ def test_recommended_refuses_explicit_choices(backup_module, tmp_path):
             backup_module, output, backup_id, registries, catalog,
             recommended=True, ignored_entities=["switch.custom"],
         )
+
+
+def test_plan_counts_production_entities_without_label_as_removed(
+    backup_module, tmp_path,
+):
+    output, backup_id, registries, catalog, _ = _plan_fixture(tmp_path)
+    # Exposed today in the production YAML, but its HVLS label was removed
+    # in Home Assistant: it leaves the YAML whatever the backup says.
+    output.write_text(output.read_text() + "switch.unlabeled:\n  expose: true\n")
+    catalog["entities"].append(
+        {"entity_id": "switch.unlabeled", "eligible": True, "has_label": False}
+    )
+    result = _prepare_plan(
+        backup_module, output, backup_id, registries, catalog, recommended=True,
+    )
+    rows = {row["entity_id"]: row for row in result["restore_rows"]}
+    assert rows["switch.unlabeled"]["case"] == "removed"
+    assert rows["switch.unlabeled"]["reason"] == "no_label"
+    assert rows["switch.unlabeled"]["choices"] == ["remove"]
+    # Same basis as the YAML comparison: 2 removals, 1 of them a label.
+    assert result["restore_summary"]["removed"] == 2
+    assert len(result["comparison"]["removed"]) == 2
+    assert result["label_plan"]["remove"] == ["climate.thermostat_sejour"]
