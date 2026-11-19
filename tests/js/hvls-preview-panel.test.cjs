@@ -6783,3 +6783,65 @@ test("Production-only removals explain the missing label and cannot be kept", ()
   assert.ok(findNodes(result.section, node =>
     /^1 entité\(s\) exposées aujourd'hui/.test(node.textContent)).length);
 });
+
+function backupReviewFor(id) {
+  return {backup_id: id, backup_sha256: "b".repeat(64),
+    production_sha256: "a".repeat(64),
+    comparison: {status: "ok", identical_text: false}};
+}
+
+test("Preparing another backup asks before replacing a pending restore", async () => {
+  for (const answer of [false, true]) {
+    const calls = [];
+    const confirmations = [];
+    const {panel} = makePanel(async request => {
+      calls.push(request);
+      return planRestore({backup_id: request.backup_id, available: true,
+        can_apply: false, content: "switch.portail:\n  expose: true\n"});
+    }, message => { confirmations.push(message); return answer; });
+    const pending = planRestore({backup_id: "old.bak"});
+    panel._stagedRestore = pending;
+    panel._backupReview = backupReviewFor("new.bak");
+    panel._activateTab = tab => { panel.openedTab = tab; };
+    await panel._restoreBackup();
+
+    assert.equal(confirmations.length, 1);
+    assert.match(confirmations[0], /Une restauration est déjà en attente/);
+    if (!answer) {
+      assert.equal(calls.length, 0);
+      assert.equal(panel._stagedRestore, pending);
+      assert.match(panel.status, /Aucune action/);
+    } else {
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].backup_id, "new.bak");
+      assert.equal(calls[0].recommended, true);
+      assert.equal(panel._stagedRestore.backup_id, "new.bak");
+    }
+  }
+});
+
+test("Preparing the backup already staged just opens Preview", async () => {
+  const calls = [];
+  const confirmations = [];
+  const {panel} = makePanel(async request => { calls.push(request); },
+    message => { confirmations.push(message); return true; });
+  panel._stagedRestore = planRestore({backup_id: "same.bak"});
+  panel._backupReview = backupReviewFor("same.bak");
+  panel._activateTab = tab => { panel.openedTab = tab; };
+  await panel._restoreBackup();
+  assert.equal(confirmations.length, 0);
+  assert.equal(calls.length, 0);
+  assert.equal(panel.openedTab, "preview");
+  assert.match(panel.status, /déjà préparée/);
+});
+
+test("A pending label proposal is named in the replacement question", async () => {
+  const confirmations = [];
+  const {panel} = makePanel(async () => { throw new Error("no request"); },
+    message => { confirmations.push(message); return false; });
+  panel._stagedRestore = {mode: "label_preview", changes: [],
+    label_plan: {add: [], remove: [], review: []}};
+  panel._backupReview = backupReviewFor("new.bak");
+  await panel._restoreBackup();
+  assert.match(confirmations[0], /proposition d'étiquettes non appliquée/);
+});

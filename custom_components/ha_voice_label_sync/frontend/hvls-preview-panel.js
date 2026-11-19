@@ -350,6 +350,10 @@ const HVLS_TRANSLATIONS = {
     savedDraftRestoredDetail: "Proposition retrouvée et revérifiée : {count} changement(s) ({added} ajout(s), {removed} suppression(s), {modified} modification(s)). Vérifiez le Preview avant Appliquer.",
     savedDraftBlocked: "Brouillon conservé, mais non applicable : la configuration, les entités ou les protections ont changé. Aucune écriture autorisée. Examinez la situation puis cliquez sur Annuler pour repartir de l'état actuel.",
     savedDraftStorageUnavailable: "Le navigateur n'a pas pu enregistrer cette proposition. Elle pourrait disparaître si vous quittez HVLS. Appliquez-la ou annulez-la maintenant.",
+    backupAlreadyStaged: "Cette sauvegarde est déjà préparée dans le Preview.",
+    backupReplaceRestoreConfirm: "Une restauration est déjà en attente dans le Preview. Voulez-vous l'annuler et préparer cette sauvegarde à la place ? Si vous répondez non, rien ne change.",
+    backupReplaceProposalConfirm: "Une proposition d'étiquettes non appliquée est en attente dans le Preview. Voulez-vous l'annuler et préparer cette sauvegarde à la place ? Si vous répondez non, rien ne change.",
+    backupReplaceKept: "Aucune action : la proposition en attente est conservée dans le Preview.",
     pendingDraftProtect: "Une proposition non appliquée est en attente. Examinez-la dans le Preview puis appliquez-la ou annulez-la avant de recharger ou de lancer une autre opération.",
     manualLabelApply: "Appliquer les changements d'étiquettes",
     manualLabelConfirm: "Appliquer les changements d'étiquettes et le YAML proposés dans le Preview ? Une sauvegarde de sécurité sera créée si un fichier de production existe.",
@@ -967,6 +971,10 @@ const HVLS_TRANSLATIONS = {
     savedDraftRestoredDetail: "Saved proposal found and revalidated: {count} change(s) ({added} added, {removed} removed, {modified} modified). Review the Preview before Apply.",
     savedDraftBlocked: "Saved draft retained but cannot be applied: the configuration, entities or safety guards have changed. No writes are allowed. Review the situation, then choose Cancel to start again from the current state.",
     savedDraftStorageUnavailable: "The browser could not save this proposal. It may disappear when leaving HVLS. Apply or cancel it now.",
+    backupAlreadyStaged: "This backup is already prepared in Preview.",
+    backupReplaceRestoreConfirm: "A restoration is already pending in Preview. Cancel it and prepare this backup instead? If you answer no, nothing changes.",
+    backupReplaceProposalConfirm: "An unapplied label proposal is pending in Preview. Cancel it and prepare this backup instead? If you answer no, nothing changes.",
+    backupReplaceKept: "Nothing changed: the pending proposal is kept in Preview.",
     pendingDraftProtect: "An unapplied proposal is still pending. Review it in Preview and apply or cancel it before refreshing or starting another operation.",
     manualLabelApply: "Apply label changes",
     manualLabelConfirm: "Apply the reviewed label changes and YAML? A safety backup will be made when production exists.",
@@ -1775,6 +1783,35 @@ class HVLSPreviewPanel extends HTMLElement {
       this._updateApplyButton();
       if (this._entityCatalog) this._renderEntities();
     }
+  }
+
+  // Preparing another backup while a proposal is pending: ask explicitly.
+  // "No" keeps the pending proposal and does nothing else. "Yes" discards
+  // it locally (like Cancel): nothing is written to YAML or labels.
+  _replacePendingProposal(data) {
+    const staged = this._stagedRestore;
+    if (staged.mode === "restore_preview" &&
+        staged.backup_id === data.backup_id) {
+      this._activateTab("preview");
+      this._setStatusKey("backupAlreadyStaged");
+      return false;
+    }
+    const key = staged.mode === "restore_preview"
+      ? "backupReplaceRestoreConfirm" : "backupReplaceProposalConfirm";
+    if (!window.confirm(this._t(key))) {
+      this._setStatusKey("backupReplaceKept");
+      return false;
+    }
+    this._loadId = (this._loadId || 0) + 1;
+    this._stagedRestore = null;
+    this._manualLabelChanges = null;
+    this._clearSavedLabelDraft();
+    this._review = null;
+    this._applyBlockReason = null;
+    this._applyBlockReasonCode = null;
+    this._updateApplyButton();
+    if (this._entityCatalog) this._renderEntities();
+    return true;
   }
 
   _protectPendingDraft() {
@@ -5985,11 +6022,16 @@ entity_config: !include google_assistant_entities.yaml</pre>
   async _restoreBackup() {
     // A backup is only a proposed configuration at this point. Do not write
     // google_assistant_entities.yaml or modify native HA labels here.
-    if (this._protectPendingDraft()) return;
     const data = this._backupReview;
-    if (!data || this._restoring || this._applying ||
-        this._refreshing || this._generating || this._entityWritePending ||
-        !["ok", "missing"].includes(data.comparison?.status)) return;
+    const preparable = data &&
+      ["ok", "missing"].includes(data.comparison?.status);
+    if (this._stagedRestore && !preparable) {
+      this._protectPendingDraft();
+      return;
+    }
+    if (!preparable || this._restoring || this._applying ||
+        this._refreshing || this._generating || this._entityWritePending) return;
+    if (this._stagedRestore && !this._replacePendingProposal(data)) return;
 
     this._restoring = true;
     const requestId = (this._loadId || 0) + 1;

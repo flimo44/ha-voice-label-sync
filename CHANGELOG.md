@@ -7,6 +7,7 @@ The format is inspired by Keep a Changelog.
 ## [Unreleased]
 
 ### Improvements
+- Backups: preparing a backup while a restoration or label proposal is pending in Preview now asks whether to cancel it and prepare the selected backup instead; answering no changes nothing. Preparing the backup that is already staged simply opens Preview.
 - Preview: each removed entity shows why it leaves the YAML: HVLS label removed in this proposal, absent from the restored backup, no longer labeled, no longer eligible (with the reason) or no longer existing in Home Assistant.
 - Restore Preview redesigned as a three-column plan: **Not restored** (impossible entities locked, others restorable with one click), **Name or room changed** (restored with current Home Assistant values) and **Result for Google** (exactly what will be written: added, already exposed, current name/room, and in red the entities exposed today but absent from the backup, with **Keep** / **Keep all**). Each column has an ⓘ help. A single summary (exposed after restoration, added, already exposed, no longer exposed) is reused by the final confirmation, and HA label details move to a collapsed technical section.
 - Opening a backup restore now starts from the recommended selection computed by the server: entities that cannot be regenerated are not restored, renamed or moved ones use current values, and the result follows the backup. **Back to the recommendation** resets manual choices.
