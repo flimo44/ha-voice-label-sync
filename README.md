@@ -17,7 +17,7 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 >
 > HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. You can select entities, inspect a Preview and manage the YAML **without Google Assistant being connected**; configure Google Assistant separately only when you want to expose the selected entities to Google Home.
 
-**Latest release:** [`v1.2.0`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.2.0) (release candidate; previous stable: [`v1.1.2`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.1.2)). Download the release ZIP from [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases).  
+**Latest published stable:** [`v1.2.0`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.2.0) (published on 2026-11-19). Download the release ZIP from [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases).  
 **Python core dependency:** `ha-voice-label-sync==0.3.8` (published on PyPI and required by the Home Assistant integration's `manifest.json`).
 
 ## 🧭 v1.2.0 — Restore plan and clearer Preview
@@ -373,7 +373,7 @@ Future backends may share the label-driven workflow. Only Google Assistant YAML 
 
 ## 🧪 Tests and releases
 
-For v1.2.0, the release-candidate checks passed Python, JavaScript, HACS validation, Hassfest, package checks and the Home Assistant sandbox. The restore plan was also exercised on an isolated Synology Home Assistant VM with a deliberately divergent backup (missing, ineligible, renamed and moved entities, and entities absent from the backup) before the release.
+For v1.2.0, the release checks passed Python, JavaScript, HACS validation, Hassfest, package checks and the Home Assistant sandbox. The restore plan was also exercised on an isolated Synology Home Assistant VM with a deliberately divergent backup (missing, ineligible, renamed and moved entities, and entities absent from the backup) before the stable release.
 
 See [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for the latest tagged and published version and [CHANGELOG.md](CHANGELOG.md) for details. The v1.0.0 stable release is distinct from the earlier beta.5 pre-release.
 
