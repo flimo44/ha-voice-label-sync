@@ -88,4 +88,6 @@ def test_language_resolution_falls_back_to_english():
     assert google_config.setup_text("de", "title") == "HVLS-Erstdiagnose"
     assert resolve("es-419") == "es"
     assert google_config.setup_text("es", "title") == "Diagnóstico inicial de HVLS"
+    assert resolve("it-CH") == "it"
+    assert google_config.setup_text("it", "title") == "Diagnostica iniziale di HVLS"
     assert google_config.setup_text("fr", "title") == "Diagnostic initial HVLS"

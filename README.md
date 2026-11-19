@@ -320,7 +320,7 @@ The Preview panel shows included-entity counts **by domain and room**. Under **N
 - Preview generation and explicit, reviewed Preview → Apply actions (legacy direct generation is disabled)
 - WebSocket Preview, diagnostics, reviewed Apply, backup browsing and safe Restore operations
 - SHA-256 guards, serialized HVLS workflows, atomic writes, optional ordinary backups and mandatory pre-restore safety copies
-- English, French, German and Spanish translations (the interface follows your Home Assistant language; other languages fall back to English)
+- English, French, German, Spanish and Italian translations (the interface follows your Home Assistant language; other languages fall back to English)
 - Python/JavaScript regression tests and GitHub Actions validation
 
 ## 🐍 Python engine and CLI

@@ -450,7 +450,7 @@ def initial_setup_output_error(report: dict[str, Any]) -> str | None:
 
 # Languages with complete integration texts. Adding a language means adding
 # a block below, a translations/<code>.json file and a panel dictionary.
-SUPPORTED_LANGUAGES = ("de", "en", "es", "fr")
+SUPPORTED_LANGUAGES = ("de", "en", "es", "fr", "it")
 
 SETUP_TEXTS: dict[str, dict[str, str]] = {
     "en": {
@@ -542,6 +542,33 @@ SETUP_TEXTS: dict[str, dict[str, str]] = {
             "Se ha encontrado un archivo YAML existente; no cambiará."
         ),
         "menu_absent": "No se ha detectado el archivo YAML habitual de HVLS.",
+    },
+    "it": {
+        "discovery_found": "File rilevato",
+        "discovery_not_found": "Nessuna fonte di Google Assistant identificata",
+        "discovery_file_missing": "File dichiarato ma mancante",
+        "discovery_ambiguous": "Configurazione ambigua",
+        "discovery_unsafe_path": "Percorso di origine non sicuro",
+        "output_absent": "Il file non esiste",
+        "output_existing": "File esistente rilevato",
+        "output_unsafe": "Percorso non sicuro",
+        "title": "Diagnostica iniziale di HVLS",
+        "source": "Fonte di Google Assistant",
+        "source_file": "File di origine",
+        "not_identified": "Non identificato",
+        "hvls_file": "File YAML di HVLS",
+        "source_matches_output": (
+            "L'output coincide con il file di Google Assistant dichiarato."
+        ),
+        "review_required": "Verifica necessaria. Nessuna adozione automatica.",
+        "existing_hint": (
+            "Puoi installare HVLS: il file esistente non cambierà. Apri poi "
+            "l'Assistente di HVLS per esaminarlo e confermare separatamente "
+            "che HVLS lo gestisca prima di applicare modifiche."
+        ),
+        "no_write": "Il rilevamento non autorizza alcuna modifica ai file.",
+        "menu_existing": "Trovato un file YAML esistente; non cambierà.",
+        "menu_absent": "Il file YAML abituale di HVLS non è stato rilevato.",
     },
     "fr": {
         "discovery_found": "Fichier détecté",
