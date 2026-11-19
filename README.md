@@ -86,42 +86,41 @@ Maintaining large Google Assistant `entity_config` sections by hand is tedious a
 
 ## 📸 Screenshots
 
-The screenshots illustrate the **V1 interface** developed and tested through beta.5, including Statistics, Entity Management, Preview and Backups. Some screenshots predate the final production-status indicators.
+The screenshots show the current interface in English: integration settings, the Google Assistant check, the HVLS panel (Statistics, Entity Management, Preview, Backups), the restoration plan and the generated YAML.
 
 ### HA Voice Label Sync settings
 
 <img width="690" height="490" alt="HA Voice Label Sync integration configuration in Home Assistant" src="https://github.com/user-attachments/assets/d3d63114-94c9-4006-99b0-8ba87a2a668b" />
 
-<img width="391" height="454" alt="HA Voice Label Sync settings in Home Assistan" src="https://github.com/user-attachments/assets/2c793b8b-ec2e-4051-b131-e3d1be5b063b" />
+<img width="391" height="454" alt="HA Voice Label Sync settings in Home Assistant" src="https://github.com/user-attachments/assets/2c793b8b-ec2e-4051-b131-e3d1be5b063b" />
 
-<img width="463" height="449" alt="HA Voice Label Sync Check Google Assistan OK" src="https://github.com/user-attachments/assets/54282313-2b09-4f0b-b556-913fcaef69db" />
-<img width="391" height="368" alt="HA Voice Label Sync Check Google Assistant KO" src="https://github.com/user-attachments/assets/5755cfe5-9dcc-47fe-a890-6baf8bcb4c7e" />
+<img width="463" height="449" alt="HA Voice Label Sync: Check Google Assistant passed" src="https://github.com/user-attachments/assets/54282313-2b09-4f0b-b556-913fcaef69db" />
 
-### HVLS panel 
+<img width="391" height="368" alt="HA Voice Label Sync: Check Google Assistant failed" src="https://github.com/user-attachments/assets/5755cfe5-9dcc-47fe-a890-6baf8bcb4c7e" />
 
-<img width="820" height="805" alt="Panel" src="https://github.com/user-attachments/assets/266dfba3-eef0-4b9f-aa2c-6150d545bd42" />
+### HVLS panel — Statistics
 
-### HVLS "Entitiy Management" 
+<img width="820" height="805" alt="HVLS panel Statistics tab" src="https://github.com/user-attachments/assets/266dfba3-eef0-4b9f-aa2c-6150d545bd42" />
 
-<img width="813" height="585" alt="Entitiy Management" src="https://github.com/user-attachments/assets/8a7eaa9e-7a6f-43e0-a6f6-10e6655987f9" />
+### HVLS panel — Entity Management
 
-### HVLS "Preview" 
-<img width="822" height="671" alt="HA Voice Label Sync Peview" src="https://github.com/user-attachments/assets/e9e675d0-c054-4d2f-a795-11ce2b6d62a8" />
+<img width="813" height="585" alt="HVLS panel Entity Management tab" src="https://github.com/user-attachments/assets/8a7eaa9e-7a6f-43e0-a6f6-10e6655987f9" />
 
-### HVLS "Backups list" 
-<img width="828" height="526" alt="Backups" src="https://github.com/user-attachments/assets/6bd0e771-640b-4bbe-bad8-6ae0ea5abedd" />
+### HVLS panel — Preview
 
-### HVLS "Restoration Preview before apply"
-<img width="814" height="594" alt="Restore" src="https://github.com/user-attachments/assets/6cc639f1-4a92-4078-9e76-b54e4078af7c" />
+<img width="822" height="671" alt="HVLS panel Preview tab" src="https://github.com/user-attachments/assets/e9e675d0-c054-4d2f-a795-11ce2b6d62a8" />
 
+### HVLS panel — Backups
 
+<img width="828" height="526" alt="HVLS panel Backups tab" src="https://github.com/user-attachments/assets/6bd0e771-640b-4bbe-bad8-6ae0ea5abedd" />
 
+### HVLS panel — Restoration plan before Apply
+
+<img width="814" height="594" alt="HVLS restoration plan before Apply" src="https://github.com/user-attachments/assets/6cc639f1-4a92-4078-9e76-b54e4078af7c" />
 
 ### Generated YAML
 
-<img width="846" height="387" alt="Generated YAML" src="https://github.com/user-attachments/assets/2cae9d3d-5f97-486e-b5f0-fa1c079e7c06" />
-
-
+<img width="846" height="387" alt="Generated Google Assistant YAML" src="https://github.com/user-attachments/assets/2cae9d3d-5f97-486e-b5f0-fa1c079e7c06" />
 
 ## 🚀 Installation
 
@@ -205,7 +204,7 @@ A summary shows how many backup entities are restored (for example **25 / 40**),
 | **Name or room changed** | Entities renamed or moved in Home Assistant since the backup, shown as *backup value → current value*. They are restored with today's name and room. | **← Withdraw** |
 | **Result for Google** | Exactly what will be written: **added**, **already exposed**, **current name/room**, and in red the entities **exposed today but absent from the backup**, which will be removed. | **Don't restore**, **Keep** / **Withdraw**, and **Keep all** / **Remove all** for entities absent from the backup |
 
-By default the result is the backup's result. If the backup is incomplete, keep the entities exposed today that it does not contain, one by one or with **Keep all**. **↺ Back to the recommendation** resets your choices. The underlying HA label operations remain available under **Technical details**, and the YAML diff stays below the plan.
+If another restoration or label proposal is already pending, HVLS asks before replacing it; answering no changes nothing. By default the result is the backup's result. If the backup is incomplete, keep the entities exposed today that it does not contain, one by one or with **Keep all**. **↺ Back to the recommendation** resets your choices. The underlying HA label operations remain available under **Technical details**, and the YAML diff stays below the plan.
 
 Restore is administrator-only. Every choice is recalculated by Home Assistant; the browser only proposes it. At **Apply**, HVLS re-checks the backup and production SHA-256 fingerprints, current ownership and your exact choices. The final confirmation summarises the result and lists the entities removed, restored with current values and not restored. A current production file is always backed up before replacement; if the file is missing, there is no current file to back up, and existing backups are preserved. HVLS then updates the HVLS labels, verifies that they reproduce the restored YAML and protects incomplete restore operations. After restoration, reload Google Assistant or restart Home Assistant and sync devices if necessary.
 
