@@ -10,6 +10,7 @@ The format is inspired by Keep a Changelog.
 - English panel: the message shown when a takeover backup succeeds but ownership is not transferred was in French.
 
 ### Improvements
+- Dutch translation of the panel, configuration screens and setup diagnostic (including regional variants such as nl-BE).
 - Italian translation of the panel, configuration screens and setup diagnostic (including regional variants such as it-CH).
 - Spanish translation of the panel, configuration screens and setup diagnostic (including regional variants such as es-419).
 - German translation of the panel, configuration screens and setup diagnostic. Home Assistant users with German (including regional variants such as de-CH) get the German interface automatically.

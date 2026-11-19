@@ -450,7 +450,7 @@ def initial_setup_output_error(report: dict[str, Any]) -> str | None:
 
 # Languages with complete integration texts. Adding a language means adding
 # a block below, a translations/<code>.json file and a panel dictionary.
-SUPPORTED_LANGUAGES = ("de", "en", "es", "fr", "it")
+SUPPORTED_LANGUAGES = ("de", "en", "es", "fr", "it", "nl")
 
 SETUP_TEXTS: dict[str, dict[str, str]] = {
     "en": {
@@ -569,6 +569,33 @@ SETUP_TEXTS: dict[str, dict[str, str]] = {
         "no_write": "Il rilevamento non autorizza alcuna modifica ai file.",
         "menu_existing": "Trovato un file YAML esistente; non cambierà.",
         "menu_absent": "Il file YAML abituale di HVLS non è stato rilevato.",
+    },
+    "nl": {
+        "discovery_found": "Bestand gevonden",
+        "discovery_not_found": "Geen Google Assistant-bron gevonden",
+        "discovery_file_missing": "Gedeclareerd bestand ontbreekt",
+        "discovery_ambiguous": "Dubbelzinnige configuratie",
+        "discovery_unsafe_path": "Onveilig bronpad",
+        "output_absent": "Bestand bestaat niet",
+        "output_existing": "Bestaand bestand gevonden",
+        "output_unsafe": "Onveilig pad",
+        "title": "Eerste HVLS-diagnose",
+        "source": "Google Assistant-bron",
+        "source_file": "Bronbestand",
+        "not_identified": "Niet gevonden",
+        "hvls_file": "HVLS-YAML-bestand",
+        "source_matches_output": (
+            "De uitvoer is hetzelfde als het gedeclareerde Google Assistant-bestand."
+        ),
+        "review_required": "Controle nodig. Geen automatische overname.",
+        "existing_hint": (
+            "Je kunt HVLS installeren: het bestaande bestand verandert niet. Open "
+            "daarna de HVLS-Assistent om het te bekijken en afzonderlijk te "
+            "bevestigen dat HVLS het beheert voordat je wijzigingen toepast."
+        ),
+        "no_write": "De detectie staat geen enkele bestandswijziging toe.",
+        "menu_existing": "Bestaand YAML-bestand gevonden; het verandert niet.",
+        "menu_absent": "Het gebruikelijke HVLS-YAML-bestand is niet gevonden.",
     },
     "fr": {
         "discovery_found": "Fichier détecté",
