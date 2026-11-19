@@ -6,6 +6,10 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.2.0] - Release candidate (date set at publication)
+
+Requires the Python core `ha-voice-label-sync==0.3.8`.
+
 ### Improvements
 - Backups: preparing a backup while a restoration or label proposal is pending in Preview now asks whether to cancel it and prepare the selected backup instead; answering no changes nothing. Preparing the backup that is already staged simply opens Preview.
 - Preview: each removed entity shows why it leaves the YAML: HVLS label removed in this proposal, absent from the restored backup, no longer labeled, no longer eligible (with the reason) or no longer existing in Home Assistant.
@@ -27,7 +31,7 @@ The format is inspired by Keep a Changelog.
 
 ### Upgrade notes
 - Backups created before the entity name fix may contain the previous generic names (for example "Temperature"). Their label-based restoration is then not exact: use **Ignore** on the affected entities in the restore Preview, or restore them later after renaming.
-- The two Python core fixes require publishing a new `ha-voice-label-sync` package and updating the `manifest.json` requirement; the entity name fix ships with the integration itself.
+- The two Python core fixes are shipped in `ha-voice-label-sync==0.3.8`, now required by `manifest.json`; the entity name fix ships with the integration itself.
 
 ## [1.1.2] - Release candidate (pending Synology VM validation)
 

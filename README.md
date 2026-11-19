@@ -17,8 +17,16 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 >
 > HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. You can select entities, inspect a Preview and manage the YAML **without Google Assistant being connected**; configure Google Assistant separately only when you want to expose the selected entities to Google Home.
 
-**Latest published stable:** [`v1.1.2`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.1.2) (published on 2026-11-17). Download the release ZIP from [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases).  
-**Python core dependency:** `ha-voice-label-sync==0.3.7` (published on PyPI and required by the Home Assistant integration's `manifest.json`).
+**Latest release:** [`v1.2.0`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.2.0) (release candidate; previous stable: [`v1.1.2`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.1.2)). Download the release ZIP from [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases).  
+**Python core dependency:** `ha-voice-label-sync==0.3.8` (published on PyPI and required by the Home Assistant integration's `manifest.json`).
+
+## 🧭 v1.2.0 — Restore plan and clearer Preview
+
+- **Restore plan:** restoring a backup opens a three-column plan (*Not restored*, *Name or room changed*, *Result for Google*) that starts from the recommended restoration and shows exactly what Google will receive. Entities renamed or moved in Home Assistant since the backup can be restored with their current name and room; entities exposed today but absent from the backup are shown in red and can be kept, one by one or all at once.
+- **Consistent figures:** the summary, tab badge, status line and final confirmation use the same counts; each removed entity shows why it leaves the YAML.
+- **No duplicate Google names:** an entity that only has a generic name (such as *Temperature*) is prefixed with its device name; names you set yourself are kept.
+- **Fixes:** non-Latin or emoji labels no longer match each other, control characters can no longer break the generated YAML, restored files use the HVLS format, and untranslated texts were fixed (*No area*, device subtitle, French options menu).
+- Backups made before this version may contain the previous generic names: the restore plan restores those entities with their current name.
 
 ## 🔐 v1.1.2 — Security and reliability
 
@@ -302,7 +310,7 @@ An entity is also skipped when it:
 
 The Preview panel shows included-entity counts **by domain and room**. Under **Non-enabled domains**, it groups *labeled* entities excluded because their domain is not enabled; the **Excluded entities** diagnostic lists labeled exclusions and their reasons. Entities without the selected label are not included in these exclusion statistics.
 
-> **Note:** The current Home Assistant integration v1.1.2 requires the separately versioned Python core `ha-voice-label-sync==0.3.7`. Check `manifest.json` and `pyproject.toml` when changing core behavior or eligibility.
+> **Note:** The current Home Assistant integration v1.2.0 requires the separately versioned Python core `ha-voice-label-sync==0.3.8`. Check `manifest.json` and `pyproject.toml` when changing core behavior or eligibility.
 
 ## 🏠 Home Assistant integration features
 
@@ -365,7 +373,7 @@ Future backends may share the label-driven workflow. Only Google Assistant YAML 
 
 ## 🧪 Tests and releases
 
-For v1.1.2, the release-candidate checks passed Python, JavaScript, HACS validation, Hassfest, package checks and the Home Assistant sandbox. The bulk-removal confirmation and YAML string-quoting changes were also exercised on an isolated Synology Home Assistant VM before the stable release.
+For v1.2.0, the release-candidate checks passed Python, JavaScript, HACS validation, Hassfest, package checks and the Home Assistant sandbox. The restore plan was also exercised on an isolated Synology Home Assistant VM with a deliberately divergent backup (missing, ineligible, renamed and moved entities, and entities absent from the backup) before the release.
 
 See [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases) for the latest tagged and published version and [CHANGELOG.md](CHANGELOG.md) for details. The v1.0.0 stable release is distinct from the earlier beta.5 pre-release.
 
