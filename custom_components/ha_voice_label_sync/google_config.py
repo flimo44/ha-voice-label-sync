@@ -448,15 +448,93 @@ def initial_setup_output_error(report: dict[str, Any]) -> str | None:
     return None
 
 
+# Languages with complete integration texts. Adding a language means adding
+# a block below, a translations/<code>.json file and a panel dictionary.
+SUPPORTED_LANGUAGES = ("en", "fr")
+
+SETUP_TEXTS: dict[str, dict[str, str]] = {
+    "en": {
+        "discovery_found": "File detected",
+        "discovery_not_found": "No Google Assistant source identified",
+        "discovery_file_missing": "Declared file missing",
+        "discovery_ambiguous": "Ambiguous configuration",
+        "discovery_unsafe_path": "Unsafe source path",
+        "output_absent": "File does not exist",
+        "output_existing": "Existing file detected",
+        "output_unsafe": "Unsafe path",
+        "title": "HVLS initial diagnostic",
+        "source": "Google Assistant source",
+        "source_file": "Source file",
+        "not_identified": "Not identified",
+        "hvls_file": "HVLS YAML file",
+        "source_matches_output": (
+            "The output matches the declared Google Assistant file."
+        ),
+        "review_required": "Review required. No automatic adoption.",
+        "existing_hint": (
+            "You can install HVLS: the existing file will remain unchanged. "
+            "Then open the HVLS Assistant to review it and separately confirm "
+            "its takeover before applying any changes."
+        ),
+        "no_write": "Discovery does not authorize file modification.",
+        "menu_existing": (
+            "An existing YAML file was found; it will remain unchanged."
+        ),
+        "menu_absent": "No standard HVLS YAML file was detected.",
+    },
+    "fr": {
+        "discovery_found": "Fichier détecté",
+        "discovery_not_found": "Aucune source Google Assistant identifiée",
+        "discovery_file_missing": "Fichier déclaré mais absent",
+        "discovery_ambiguous": "Configuration ambiguë",
+        "discovery_unsafe_path": "Chemin source non sûr",
+        "output_absent": "Fichier absent",
+        "output_existing": "Fichier existant détecté",
+        "output_unsafe": "Chemin non sûr",
+        "title": "Diagnostic initial HVLS",
+        "source": "Source Google Assistant",
+        "source_file": "Fichier source",
+        "not_identified": "Non identifié",
+        "hvls_file": "Fichier YAML HVLS",
+        "source_matches_output": (
+            "La destination correspond au fichier Google Assistant déclaré."
+        ),
+        "review_required": "Vérification nécessaire. Aucune adoption automatique.",
+        "existing_hint": (
+            "Vous pouvez installer HVLS : le fichier existant restera intact. "
+            "Ouvrez ensuite l'Assistant HVLS pour l'examiner et confirmer "
+            "séparément sa prise en charge dans le Preview."
+        ),
+        "no_write": "La détection ne donne aucune autorisation de modification.",
+        "menu_existing": "Un fichier YAML existe déjà ; il restera intact.",
+        "menu_absent": "Aucun fichier YAML HVLS habituel détecté.",
+    },
+}
+
+
+def resolve_language(language: Any) -> str:
+    """Map a Home Assistant language (``de``, ``pt-BR``...) to a supported one."""
+    code = str(language or "en").strip().lower().replace("_", "-")
+    if code in SUPPORTED_LANGUAGES:
+        return code
+    base = code.split("-", 1)[0]
+    return base if base in SUPPORTED_LANGUAGES else "en"
+
+
+def setup_text(language: Any, key: str) -> str:
+    """Text in the requested language, falling back to English."""
+    texts = SETUP_TEXTS.get(resolve_language(language), {})
+    return texts.get(key) or SETUP_TEXTS["en"][key]
+
+
 def render_initial_setup_diagnostic(
     report: dict[str, Any],
     language: str = "en",
 ) -> str:
     """Display a read-only installation diagnostic."""
-    french = str(language).lower().startswith("fr")
 
-    def tr(fr: str, en: str) -> str:
-        return fr if french else en
+    def tr(key: str) -> str:
+        return setup_text(language, key)
 
     def safe(value: Any) -> str:
         value = str(value).replace("\r", " ").replace("\n", " ")[:240]
@@ -464,70 +542,32 @@ def render_initial_setup_diagnostic(
             value = value.replace(char, "\\" + char)
         return value
 
-    discoveries = {
-        "found": tr("Fichier détecté", "File detected"),
-        "not_found": tr(
-            "Aucune source Google Assistant identifiée",
-            "No Google Assistant source identified",
-        ),
-        "file_missing": tr("Fichier déclaré mais absent", "Declared file missing"),
-        "ambiguous": tr("Configuration ambiguë", "Ambiguous configuration"),
-        "unsafe_path": tr("Chemin source non sûr", "Unsafe source path"),
-    }
-
-    outputs = {
-        "absent": tr("Fichier absent", "File does not exist"),
-        "existing": tr(
-            "Fichier existant détecté",
-            "Existing file detected",
-        ),
-        "unsafe": tr("Chemin non sûr", "Unsafe path"),
-    }
-
     discovery = report.get("discovery_status", "ambiguous")
+    if discovery not in {
+        "found", "not_found", "file_missing", "ambiguous", "unsafe_path",
+    }:
+        discovery = "ambiguous"
     output = report.get("output_status", "unsafe")
+    if output not in {"absent", "existing", "unsafe"}:
+        output = "unsafe"
 
     lines = [
-        "### " + tr("Diagnostic initial HVLS", "HVLS initial diagnostic"),
-        "**" + tr("Source Google Assistant", "Google Assistant source") + " :** "
-        + safe(discoveries.get(discovery, discoveries["ambiguous"])),
-        "**" + tr("Fichier source", "Source file") + " :** "
-        + safe(report.get("source_path") or tr("Non identifié", "Not identified")),
-        "**" + tr("Fichier YAML HVLS", "HVLS YAML file") + " :** "
-        + safe(outputs.get(output, outputs["unsafe"])),
+        "### " + tr("title"),
+        "**" + tr("source") + " :** " + safe(tr("discovery_" + discovery)),
+        "**" + tr("source_file") + " :** "
+        + safe(report.get("source_path") or tr("not_identified")),
+        "**" + tr("hvls_file") + " :** " + safe(tr("output_" + output)),
     ]
 
     if report.get("source_matches_output"):
-        lines.append(
-            "⚠️ " + tr(
-                "La destination correspond au fichier Google Assistant déclaré.",
-                "The output matches the declared Google Assistant file.",
-            )
-        )
+        lines.append("⚠️ " + tr("source_matches_output"))
 
     if report.get("review_required"):
-        lines.append(
-            "⚠️ " + tr(
-                "Vérification nécessaire. Aucune adoption automatique.",
-                "Review required. No automatic adoption.",
-            )
-        )
+        lines.append("⚠️ " + tr("review_required"))
 
     if output == "existing":
-        lines.append(tr(
-            "Vous pouvez installer HVLS : le fichier existant restera intact. "
-            "Ouvrez ensuite l'Assistant HVLS pour l'examiner et confirmer "
-            "séparément sa prise en charge dans le Preview.",
-            "You can install HVLS: the existing file will remain unchanged. "
-            "Then open the HVLS Assistant to review it and separately confirm "
-            "its takeover before applying any changes.",
-        ))
+        lines.append(tr("existing_hint"))
 
-    lines.append(
-        tr(
-            "La détection ne donne aucune autorisation de modification.",
-            "Discovery does not authorize file modification.",
-        )
-    )
+    lines.append(tr("no_write"))
 
     return "\n\n".join(lines)

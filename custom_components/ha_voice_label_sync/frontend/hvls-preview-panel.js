@@ -593,7 +593,26 @@ const HVLS_TRANSLATIONS = {
     removalNote: "Retirer une entité ici ne la supprime pas de Home Assistant : seule sa configuration Google Assistant change.",
     firstProduction: "Aucune configuration de production existante : impossible de calculer les différences avec un fichier précédent.",
     fieldBefore: "Avant",
-    fieldAfter: "Après"
+    fieldAfter: "Après",
+    fileIssue_invalid_entity_file_path: "chemin invalide",
+    fileIssue_sensitive_file_reference: "fichier sensible",
+    fileIssue_symlink_entity_file_not_allowed: "lien symbolique interdit",
+    fileIssue_include_missing: "fichier introuvable",
+    fileIssue_yaml_syntax_error: "syntaxe YAML incorrecte",
+    fileIssue_duplicate_mapping_key: "clé YAML en double",
+    fileIssue_yaml_file_too_large: "fichier trop volumineux",
+    fileIssue_expected_mapping: "structure YAML incorrecte",
+    fileIssue_unreadable_yaml_file: "fichier illisible",
+    fileIssue_entity_file_unavailable: "fichier inaccessible",
+    fileIssue_invalid_entity_id: "identifiant d'entité incorrect",
+    fileIssue_invalid_entity_options: "options d'entité incorrectes",
+    fileIssue_invalid_expose_value: "valeur expose incorrecte",
+    fileIssue_invalid_room_option: "option room incorrecte",
+    fileIssue_invalid_name_option: "option name incorrecte",
+    fileIssue_invalid_aliases_option: "option aliases incorrecte",
+    fileIssue_unhandled_entity_option: "option non prise en charge",
+    fileIssueUnknown: "problème non identifié",
+    fileIssueLine: "ligne"
   },
   en: {
     generate: "Generate Preview",
@@ -1189,9 +1208,37 @@ const HVLS_TRANSLATIONS = {
     removalNote: "Removing an entity here does not delete it from Home Assistant: only its Google Assistant configuration changes.",
     firstProduction: "No existing production configuration: differences cannot be calculated against a previous file.",
     fieldBefore: "Before",
-    fieldAfter: "After"
+    fieldAfter: "After",
+    fileIssue_invalid_entity_file_path: "invalid path",
+    fileIssue_sensitive_file_reference: "sensitive file",
+    fileIssue_symlink_entity_file_not_allowed: "symlink prohibited",
+    fileIssue_include_missing: "file not found",
+    fileIssue_yaml_syntax_error: "invalid YAML",
+    fileIssue_duplicate_mapping_key: "duplicate YAML key",
+    fileIssue_yaml_file_too_large: "file too large",
+    fileIssue_expected_mapping: "invalid YAML structure",
+    fileIssue_unreadable_yaml_file: "unreadable file",
+    fileIssue_entity_file_unavailable: "file unavailable",
+    fileIssue_invalid_entity_id: "invalid entity ID",
+    fileIssue_invalid_entity_options: "invalid entity options",
+    fileIssue_invalid_expose_value: "invalid expose value",
+    fileIssue_invalid_room_option: "invalid room option",
+    fileIssue_invalid_name_option: "invalid name option",
+    fileIssue_invalid_aliases_option: "invalid aliases option",
+    fileIssue_unhandled_entity_option: "unsupported option",
+    fileIssueUnknown: "unknown issue",
+    fileIssueLine: "line"
   }
 };
+
+// Map a Home Assistant language ("de", "pt-BR", "zh-Hans"...) to a panel
+// dictionary; unknown languages fall back to English.
+function hvlsResolveLanguage(language) {
+  const code = String(language || "en").trim().toLowerCase().replace("_", "-");
+  if (HVLS_TRANSLATIONS[code]) return code;
+  const base = code.split("-")[0];
+  return HVLS_TRANSLATIONS[base] ? base : "en";
+}
 
 const HVLS_APPLY_REASON_KEYS = Object.freeze({
   "missing_identity": "applyReasonMissingIdentity",
@@ -1456,9 +1503,7 @@ class HVLSPreviewPanel extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     const oldLanguage = this._language;
-    this._language = String(hass?.language || "en")
-      .toLowerCase()
-      .startsWith("fr") ? "fr" : "en";
+    this._language = hvlsResolveLanguage(hass?.language);
     if (!this._initialized) {
       this._initialized = true;
       this._render();
@@ -5778,29 +5823,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
   }
 
   _assistantFileExplanation(code) {
-    const reasons = {
-      invalid_entity_file_path: ["chemin invalide", "invalid path"],
-      sensitive_file_reference: ["fichier sensible", "sensitive file"],
-      symlink_entity_file_not_allowed: ["lien symbolique interdit", "symlink prohibited"],
-      include_missing: ["fichier introuvable", "file not found"],
-      yaml_syntax_error: ["syntaxe YAML incorrecte", "invalid YAML"],
-      duplicate_mapping_key: ["clé YAML en double", "duplicate YAML key"],
-      yaml_file_too_large: ["fichier trop volumineux", "file too large"],
-      expected_mapping: ["structure YAML incorrecte", "invalid YAML structure"],
-      unreadable_yaml_file: ["fichier illisible", "unreadable file"],
-      entity_file_unavailable: ["fichier inaccessible", "file unavailable"],
-      invalid_entity_id: ["identifiant d'entité incorrect", "invalid entity ID"],
-      invalid_entity_options: ["options d'entité incorrectes", "invalid entity options"],
-      invalid_expose_value: ["valeur expose incorrecte", "invalid expose value"],
-      invalid_room_option: ["option room incorrecte", "invalid room option"],
-      invalid_name_option: ["option name incorrecte", "invalid name option"],
-      invalid_aliases_option: ["option aliases incorrecte", "invalid aliases option"],
-      unhandled_entity_option: ["option non prise en charge", "unsupported option"],
-    };
-    const translated = reasons[code];
-    return translated
-      ? translated[this._language === "fr" ? 0 : 1]
-      : (this._language === "fr" ? "problème non identifié" : "unknown issue");
+    const key = "fileIssue_" + code;
+    return HVLS_TRANSLATIONS.en[key] ? this._t(key) : this._t("fileIssueUnknown");
   }
 
   _assistantHistoryEligible() {
@@ -6544,7 +6568,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
         const reasons = (issue.reasons || []).map(
           code => this._assistantFileExplanation(code)
         ).join(", ");
-        const line = this._language === "fr" ? "ligne" : "line";
+        const line = this._t("fileIssueLine");
         return `${issue.entity_id || "—"} (${line} ${issue.line}: ${reasons})`;
       });
       status.textContent = intro + " " + (issueList.length

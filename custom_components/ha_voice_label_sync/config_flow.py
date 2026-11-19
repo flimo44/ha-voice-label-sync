@@ -36,6 +36,7 @@ from .google_config import (
     inspect_initial_setup,
     read_google_config,
     render_initial_setup_diagnostic,
+    setup_text,
 )
 from .label_setup import ensure_configured_label
 from .label_update import LabelUpdateError
@@ -107,19 +108,10 @@ class HVLSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self.hass.config.path(DEFAULT_OUTPUT),
         )
         existing = report["output_status"] == "existing"
-        french = str(
-            getattr(self.hass.config, "language", "en")
-        ).lower().startswith("fr")
-        if french:
-            hint = (
-                "Un fichier YAML existe déjà ; il restera intact."
-                if existing else "Aucun fichier YAML HVLS habituel détecté."
-            )
-        else:
-            hint = (
-                "An existing YAML file was found; it will remain unchanged."
-                if existing else "No standard HVLS YAML file was detected."
-            )
+        hint = setup_text(
+            getattr(self.hass.config, "language", "en"),
+            "menu_existing" if existing else "menu_absent",
+        )
         return self.async_show_menu(
             step_id="user",
             menu_options=["new", "existing"],
