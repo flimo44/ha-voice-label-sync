@@ -15,7 +15,7 @@ Requires the Python core `ha-voice-label-sync==0.3.9` (to publish on PyPI before
 ### Upgrade notes
 - Entities of these domains that already carry the HVLS label were ineligible until now: the next Preview proposes adding them to the YAML. Review them before Apply, or remove the label from those you do not want in Google Assistant.
 
-## [1.3.0] - Release candidate (date set at publication)
+## [1.3.0] - 2026-11-20
 
 Requires the Python core `ha-voice-label-sync==0.3.8` (unchanged).
 
