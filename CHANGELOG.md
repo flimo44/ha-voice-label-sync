@@ -10,6 +10,7 @@ The format is inspired by Keep a Changelog.
 - English panel: the message shown when a takeover backup succeeds but ownership is not transferred was in French.
 
 ### Improvements
+- HVLS Entity Management: each ineligible entity now shows its reason as a colored badge, with a hint on what to fix (current sensor class, domain or category). With the "Ineligible" filter, one checkbox per reason narrows the list, "only" isolates a single reason and "Select all" restores them; the choice is remembered in the browser.
 - Dutch translation of the panel, configuration screens and setup diagnostic (including regional variants such as nl-BE).
 - Italian translation of the panel, configuration screens and setup diagnostic (including regional variants such as it-CH).
 - Spanish translation of the panel, configuration screens and setup diagnostic (including regional variants such as es-419).
