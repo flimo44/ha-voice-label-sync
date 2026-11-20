@@ -1,3 +1,12 @@
+const HVLS_INELIGIBLE_REASONS = Object.freeze([
+  "domain_not_enabled",
+  "unsupported_device_class",
+  "disabled",
+  "hidden",
+  "entity_category",
+  "other",
+]);
+
 const HVLS_TRANSLATIONS = {
   fr: {
     generate: "Générer le Preview",
@@ -439,6 +448,22 @@ const HVLS_TRANSLATIONS = {
     excludedEmpty: "Aucune entité étiquetée exclue.",
     excludedNote: "Diagnostic calculé sur les registres actuels. Le YAML affiché provient du dernier Preview généré.",
     unknownReason: "Motif inconnu",
+    reasonFilterTitle: "Motifs de non-éligibilité",
+    reasonFilterAll: "Tout cocher",
+    reasonFilterOnly: "seulement",
+    reasonFilterOnlyAria: "Afficher seulement : {reason}",
+    reasonFilterNone: "Aucun motif coché. Coche au moins un motif pour afficher des entités.",
+    reasonShort_domain_not_enabled: "Domaine non pris en charge",
+    reasonShort_unsupported_device_class: "Classe de capteur non prise en charge",
+    reasonShort_disabled: "Désactivée",
+    reasonShort_hidden: "Masquée",
+    reasonShort_entity_category: "Configuration / diagnostic",
+    reasonShort_other: "Motif inconnu",
+    reasonDetailDomain: "domaine : {domain}",
+    reasonDetailClass: "classe : {deviceClass}",
+    reasonDetailNoClass: "classe : aucune",
+    reasonDetailConfig: "catégorie : configuration",
+    reasonDetailDiagnostic: "catégorie : diagnostic",
     reasonCategoryFull: "Entité de configuration ou de diagnostic",
     metricEntities: "Entités en production",
     productionStatsUnavailable: "Statistiques de production indisponibles : fichier absent, illisible ou invalide.",
@@ -1053,6 +1078,22 @@ const HVLS_TRANSLATIONS = {
     excludedEmpty: "Keine gelabelten Entitäten sind ausgeschlossen.",
     excludedNote: "Die Diagnose verwendet die aktuellen Registries. Die angezeigte YAML stammt aus der zuletzt erzeugten Preview.",
     unknownReason: "Unbekannter Grund",
+    reasonFilterTitle: "Gründe für fehlende Eignung",
+    reasonFilterAll: "Alle auswählen",
+    reasonFilterOnly: "nur",
+    reasonFilterOnlyAria: "Nur anzeigen: {reason}",
+    reasonFilterNone: "Kein Grund ausgewählt. Wähle mindestens einen Grund, um Entitäten anzuzeigen.",
+    reasonShort_domain_not_enabled: "Nicht unterstützte Domäne",
+    reasonShort_unsupported_device_class: "Nicht unterstützte Sensorklasse",
+    reasonShort_disabled: "Deaktiviert",
+    reasonShort_hidden: "Ausgeblendet",
+    reasonShort_entity_category: "Konfiguration / Diagnose",
+    reasonShort_other: "Unbekannter Grund",
+    reasonDetailDomain: "Domäne: {domain}",
+    reasonDetailClass: "Klasse: {deviceClass}",
+    reasonDetailNoClass: "Klasse: keine",
+    reasonDetailConfig: "Kategorie: Konfiguration",
+    reasonDetailDiagnostic: "Kategorie: Diagnose",
     reasonCategoryFull: "Konfigurations- oder Diagnose-Entität",
     metricEntities: "Produktive Entitäten",
     productionStatsUnavailable: "Produktionsstatistik nicht verfügbar: Datei fehlt, ist unlesbar oder ungültig.",
@@ -1667,6 +1708,22 @@ const HVLS_TRANSLATIONS = {
     excludedEmpty: "No hay entidades etiquetadas excluidas.",
     excludedNote: "El diagnóstico usa los registros actuales. El YAML mostrado procede de la última Preview generada.",
     unknownReason: "Motivo desconocido",
+    reasonFilterTitle: "Motivos de no idoneidad",
+    reasonFilterAll: "Marcar todos",
+    reasonFilterOnly: "solo",
+    reasonFilterOnlyAria: "Mostrar solo: {reason}",
+    reasonFilterNone: "Ningún motivo marcado. Marca al menos un motivo para mostrar entidades.",
+    reasonShort_domain_not_enabled: "Dominio no compatible",
+    reasonShort_unsupported_device_class: "Clase de sensor no compatible",
+    reasonShort_disabled: "Desactivada",
+    reasonShort_hidden: "Oculta",
+    reasonShort_entity_category: "Configuración / diagnóstico",
+    reasonShort_other: "Motivo desconocido",
+    reasonDetailDomain: "dominio: {domain}",
+    reasonDetailClass: "clase: {deviceClass}",
+    reasonDetailNoClass: "clase: ninguna",
+    reasonDetailConfig: "categoría: configuración",
+    reasonDetailDiagnostic: "categoría: diagnóstico",
     reasonCategoryFull: "Entidad de configuración o de diagnóstico",
     metricEntities: "Entidades en producción",
     productionStatsUnavailable: "Estadísticas de producción no disponibles: archivo ausente, ilegible o no válido.",
@@ -2281,6 +2338,22 @@ const HVLS_TRANSLATIONS = {
     excludedEmpty: "Nessuna entità etichettata è esclusa.",
     excludedNote: "La diagnostica usa i registri attuali. Lo YAML mostrato proviene dall'ultima Preview generata.",
     unknownReason: "Motivo sconosciuto",
+    reasonFilterTitle: "Motivi di non idoneità",
+    reasonFilterAll: "Seleziona tutti",
+    reasonFilterOnly: "solo",
+    reasonFilterOnlyAria: "Mostra solo: {reason}",
+    reasonFilterNone: "Nessun motivo selezionato. Seleziona almeno un motivo per mostrare le entità.",
+    reasonShort_domain_not_enabled: "Dominio non supportato",
+    reasonShort_unsupported_device_class: "Classe di sensore non supportata",
+    reasonShort_disabled: "Disattivata",
+    reasonShort_hidden: "Nascosta",
+    reasonShort_entity_category: "Configurazione / diagnostica",
+    reasonShort_other: "Motivo sconosciuto",
+    reasonDetailDomain: "dominio: {domain}",
+    reasonDetailClass: "classe: {deviceClass}",
+    reasonDetailNoClass: "classe: nessuna",
+    reasonDetailConfig: "categoria: configurazione",
+    reasonDetailDiagnostic: "categoria: diagnostica",
     reasonCategoryFull: "Entità di configurazione o di diagnostica",
     metricEntities: "Entità in produzione",
     productionStatsUnavailable: "Statistiche di produzione non disponibili: file mancante, illeggibile o non valido.",
@@ -2895,6 +2968,22 @@ const HVLS_TRANSLATIONS = {
     excludedEmpty: "Er zijn geen gelabelde entiteiten uitgesloten.",
     excludedNote: "De diagnose gebruikt de huidige registers. De getoonde YAML komt uit de laatst gegenereerde Preview.",
     unknownReason: "Onbekende reden",
+    reasonFilterTitle: "Redenen waarom niet in aanmerking",
+    reasonFilterAll: "Alles selecteren",
+    reasonFilterOnly: "alleen",
+    reasonFilterOnlyAria: "Alleen tonen: {reason}",
+    reasonFilterNone: "Geen reden geselecteerd. Selecteer minstens één reden om entiteiten te tonen.",
+    reasonShort_domain_not_enabled: "Niet-ondersteund domein",
+    reasonShort_unsupported_device_class: "Niet-ondersteunde sensorklasse",
+    reasonShort_disabled: "Uitgeschakeld",
+    reasonShort_hidden: "Verborgen",
+    reasonShort_entity_category: "Configuratie / diagnose",
+    reasonShort_other: "Onbekende reden",
+    reasonDetailDomain: "domein: {domain}",
+    reasonDetailClass: "klasse: {deviceClass}",
+    reasonDetailNoClass: "klasse: geen",
+    reasonDetailConfig: "categorie: configuratie",
+    reasonDetailDiagnostic: "categorie: diagnose",
     reasonCategoryFull: "Configuratie- of diagnose-entiteit",
     metricEntities: "Entiteiten in productie",
     productionStatsUnavailable: "Productiestatistieken niet beschikbaar: bestand ontbreekt, is onleesbaar of ongeldig.",
@@ -3510,6 +3599,22 @@ const HVLS_TRANSLATIONS = {
     excludedEmpty: "No labeled entities are excluded.",
     excludedNote: "Diagnostics use the current registries. The displayed YAML comes from the last generated Preview.",
     unknownReason: "Unknown reason",
+    reasonFilterTitle: "Ineligibility reasons",
+    reasonFilterAll: "Select all",
+    reasonFilterOnly: "only",
+    reasonFilterOnlyAria: "Show only: {reason}",
+    reasonFilterNone: "No reason selected. Select at least one reason to show entities.",
+    reasonShort_domain_not_enabled: "Unsupported domain",
+    reasonShort_unsupported_device_class: "Unsupported sensor class",
+    reasonShort_disabled: "Disabled",
+    reasonShort_hidden: "Hidden",
+    reasonShort_entity_category: "Configuration / diagnostic",
+    reasonShort_other: "Unknown reason",
+    reasonDetailDomain: "domain: {domain}",
+    reasonDetailClass: "class: {deviceClass}",
+    reasonDetailNoClass: "class: none",
+    reasonDetailConfig: "category: configuration",
+    reasonDetailDiagnostic: "category: diagnostic",
     reasonCategoryFull: "Configuration or diagnostic entity",
     metricEntities: "Production entities",
     productionStatsUnavailable: "Production statistics unavailable: file missing, unreadable or invalid.",
@@ -3954,6 +4059,147 @@ class HVLSPreviewPanel extends HTMLElement {
       return entity.eligible === true && entity.has_label !== true;
     if (filter === "ineligible") return entity.eligible !== true;
     return true;
+  }
+
+  _ineligibleReasonCode(entity) {
+    const reason = entity?.exclusion_reason;
+    return HVLS_INELIGIBLE_REASONS.includes(reason) && reason !== "other"
+      ? reason : "other";
+  }
+
+  _reasonFilterStorageKey() {
+    // Same per-user scoping as the label draft. This is only a display
+    // preference: it never grants or blocks any write.
+    const userId = this._hass?.user?.id;
+    return typeof userId === "string" && /^[a-zA-Z0-9_-]{8,128}$/.test(userId)
+      ? "hvls:ineligible-reasons:v1:" + userId : null;
+  }
+
+  _reasonFilterSelection() {
+    if (this._reasonFilter instanceof Set) return this._reasonFilter;
+    let selected = new Set(HVLS_INELIGIBLE_REASONS);
+    const key = this._reasonFilterStorageKey();
+    if (key) {
+      try {
+        const saved = JSON.parse(window.localStorage?.getItem(key) || "null");
+        if (Array.isArray(saved)) {
+          selected = new Set(
+            saved.filter(code => HVLS_INELIGIBLE_REASONS.includes(code))
+          );
+        }
+      } catch (_error) {
+        // Malformed browser data: fall back to every reason.
+      }
+    }
+    this._reasonFilter = selected;
+    return selected;
+  }
+
+  _setReasonFilter(codes) {
+    this._reasonFilter = new Set(
+      codes.filter(code => HVLS_INELIGIBLE_REASONS.includes(code))
+    );
+    const key = this._reasonFilterStorageKey();
+    if (key) {
+      try {
+        window.localStorage?.setItem(key, JSON.stringify(
+          HVLS_INELIGIBLE_REASONS.filter(code => this._reasonFilter.has(code))
+        ));
+      } catch (_error) {
+        // Storage unavailable: keep the choice for this session only.
+      }
+    }
+    this._entityLimit = 100;
+    this._renderEntities();
+  }
+
+  _reasonDetail(entity) {
+    const reason = this._ineligibleReasonCode(entity);
+    if (reason === "domain_not_enabled") {
+      return this._tf("reasonDetailDomain", {domain: entity.domain || ""});
+    }
+    if (reason === "unsupported_device_class") {
+      return typeof entity.device_class === "string" && entity.device_class
+        ? this._tf("reasonDetailClass", {deviceClass: entity.device_class})
+        : this._t("reasonDetailNoClass");
+    }
+    if (reason === "entity_category") {
+      if (entity.category === "config") return this._t("reasonDetailConfig");
+      if (entity.category === "diagnostic") {
+        return this._t("reasonDetailDiagnostic");
+      }
+    }
+    return "";
+  }
+
+  _renderReasonFilter(container, ineligible, visible) {
+    if (!container) return;
+    container.hidden = !visible;
+    if (!visible) {
+      container.replaceChildren();
+      return;
+    }
+    const selected = this._reasonFilterSelection();
+    const counts = new Map(HVLS_INELIGIBLE_REASONS.map(code => [code, 0]));
+    for (const entity of ineligible) {
+      const code = this._ineligibleReasonCode(entity);
+      counts.set(code, counts.get(code) + 1);
+    }
+
+    const header = document.createElement("div");
+    header.className = "ineligible-reasons-header";
+    const title = document.createElement("strong");
+    title.textContent = this._t("reasonFilterTitle");
+    const all = document.createElement("button");
+    all.type = "button";
+    all.className = "reason-filter-link";
+    all.textContent = this._t("reasonFilterAll");
+    all.addEventListener("click", () => {
+      this._setReasonFilter([...HVLS_INELIGIBLE_REASONS]);
+    });
+    header.append(title, all);
+
+    const chips = document.createElement("div");
+    chips.className = "ineligible-reasons-chips";
+    for (const code of HVLS_INELIGIBLE_REASONS) {
+      // "Other" only appears when the server sent an unknown reason.
+      if (code === "other" && !counts.get(code)) continue;
+      const reasonLabel = this._t("reasonShort_" + code);
+      const chip = document.createElement("span");
+      chip.className = "reason-filter-chip";
+
+      const option = document.createElement("label");
+      option.className = "reason-filter-option";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = selected.has(code);
+      box.dataset.reason = code;
+      box.addEventListener("change", () => {
+        const next = new Set(this._reasonFilterSelection());
+        if (box.checked) next.add(code); else next.delete(code);
+        this._setReasonFilter([...next]);
+      });
+      const badge = document.createElement("span");
+      badge.className = `reason-badge reason-${code}`;
+      badge.textContent = reasonLabel;
+      const count = document.createElement("span");
+      count.className = "reason-filter-count";
+      count.textContent = String(counts.get(code));
+      option.append(box, badge, count);
+
+      const only = document.createElement("button");
+      only.type = "button";
+      only.className = "reason-filter-link";
+      only.textContent = this._t("reasonFilterOnly");
+      only.setAttribute("aria-label", this._tf("reasonFilterOnlyAria", {
+        reason: reasonLabel,
+      }));
+      only.addEventListener("click", () => this._setReasonFilter([code]));
+
+      chip.append(option, only);
+      chips.appendChild(chip);
+    }
+    container.replaceChildren(header, chips);
   }
 
   set hass(hass) {
@@ -6364,12 +6610,82 @@ class HVLSPreviewPanel extends HTMLElement {
           cursor: not-allowed;
         }
         .entity-eligibility-info {
-          margin-left: 6px;
-          padding: 2px 7px;
-          border-radius: 6px;
-          background: transparent;
-          color: var(--secondary-text-color);
+          border: 0;
+          font: inherit;
+          font-size: 12px;
           cursor: pointer;
+        }
+        .ineligible-reasons {
+          margin: 0 0 14px;
+          padding: 10px 12px;
+          border-radius: 8px;
+          background: var(--secondary-background-color);
+        }
+        .ineligible-reasons[hidden] { display: none !important; }
+        .ineligible-reasons-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          gap: 12px;
+          margin-bottom: 8px;
+        }
+        .ineligible-reasons-chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px 14px;
+        }
+        .reason-filter-chip,
+        .reason-filter-option {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .reason-filter-option { cursor: pointer; }
+        .reason-filter-option input { accent-color: var(--primary-color); }
+        .reason-filter-count {
+          color: var(--secondary-text-color);
+          font-size: 12px;
+        }
+        .reason-filter-link {
+          padding: 0;
+          border: 0;
+          background: transparent;
+          color: var(--primary-color);
+          font: inherit;
+          font-size: 12px;
+          cursor: pointer;
+        }
+        .reason-badge {
+          display: inline-block;
+          padding: 2px 8px;
+          border-radius: 6px;
+          font-size: 12px;
+          line-height: 1.5;
+          color: var(--secondary-text-color);
+          background: rgba(136, 135, 128, 0.18);
+        }
+        .reason-badge.reason-domain_not_enabled {
+          color: #8f87e6; background: rgba(127, 119, 221, 0.18);
+        }
+        .reason-badge.reason-unsupported_device_class {
+          color: #e0952a; background: rgba(239, 159, 39, 0.18);
+        }
+        .reason-badge.reason-hidden {
+          color: #2aa880; background: rgba(29, 158, 117, 0.18);
+        }
+        .reason-badge.reason-entity_category {
+          color: #d9628a; background: rgba(212, 83, 126, 0.18);
+        }
+        .entity-reason-line {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 4px 8px;
+          margin-top: 4px;
+        }
+        .entity-reason-detail {
+          color: var(--secondary-text-color);
+          font-size: 12px;
         }
         .entity-eligibility-info:focus-visible {
           outline: 2px solid var(--primary-color);
@@ -6592,6 +6908,7 @@ class HVLSPreviewPanel extends HTMLElement {
               <option value="ineligible">Non éligibles</option>
             </select>
           </div>
+          <div id="ineligibleReasons" class="ineligible-reasons" hidden></div>
           <div id="entityList"></div>
           <button id="entityMore" class="secondary" hidden>
             Afficher 100 entités supplémentaires
@@ -7287,7 +7604,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
     );
 
     // Recherche sur l'ensemble du catalogue HA.
-    const matching = (catalog.entities || []).filter((entity) => {
+    const searched = (catalog.entities || []).filter((entity) => {
       if (!this._entityMatchesFilter(entity, filter)) return false;
 
       const searchable = [
@@ -7300,6 +7617,19 @@ entity_config: !include google_assistant_entities.yaml</pre>
 
       return searchable.includes(query);
     });
+
+    // In the ineligible view, the reason checkboxes narrow the list. Counts
+    // follow the search so they always describe what can be shown.
+    this._renderReasonFilter(
+      this.querySelector("#ineligibleReasons"), searched,
+      filter === "ineligible"
+    );
+    const reasons = filter === "ineligible"
+      ? this._reasonFilterSelection() : null;
+    const matching = reasons
+      ? searched.filter(entity =>
+        reasons.has(this._ineligibleReasonCode(entity)))
+      : searched;
 
     matching.sort((a, b) =>
       a.domain.localeCompare(b.domain) ||
@@ -7421,13 +7751,26 @@ entity_config: !include google_assistant_entities.yaml</pre>
           if (entity.eligible === false) {
             // A touch/keyboard-accessible explanation, not a hover-only tooltip.
             const explanation = this._eligibilityExplanation(entity.exclusion_reason);
+            const reasonCode = this._ineligibleReasonCode(entity);
+            const reasonLine = document.createElement("div");
+            reasonLine.className = "entity-reason-line";
             const reason = document.createElement("button");
             reason.type = "button";
-            reason.className = "entity-eligibility-info";
-            reason.textContent = "ⓘ";
+            reason.className =
+              `entity-eligibility-info reason-badge reason-${reasonCode}`;
+            reason.textContent = this._t("reasonShort_" + reasonCode);
             reason.title = explanation;
-            reason.setAttribute("aria-label", this._t("exclusionHelp"));
+            reason.setAttribute("aria-label",
+              `${this._t("reasonShort_" + reasonCode)} — ${this._t("exclusionHelp")}`);
             reason.setAttribute("aria-expanded", "false");
+            reasonLine.appendChild(reason);
+            const detailText = this._reasonDetail(entity);
+            if (detailText) {
+              const detail = document.createElement("small");
+              detail.className = "entity-reason-detail";
+              detail.textContent = detailText;
+              reasonLine.appendChild(detail);
+            }
 
             const explanationText = document.createElement("p");
             explanationText.className = "entity-eligibility-detail";
@@ -7437,7 +7780,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
               explanationText.hidden = !explanationText.hidden;
               reason.setAttribute("aria-expanded", String(!explanationText.hidden));
             });
-            info.append(reason, explanationText);
+            info.append(reasonLine, explanationText);
           }
 
           const checkbox = document.createElement("input");
@@ -7518,6 +7861,10 @@ entity_config: !include google_assistant_entities.yaml</pre>
         count: unsupportedDomainCount, entities: unsupportedCount
       })})`;
 
+    if (!supportedDomainCount && unsupportedDomainCount) {
+      unsupportedDetails.open = true;
+    }
+
     unsupportedDetails.addEventListener("toggle", () => {
       this._unsupportedDomainsOpen = unsupportedDetails.open;
     });
@@ -7533,7 +7880,8 @@ entity_config: !include google_assistant_entities.yaml</pre>
     if (matching.length === 0) {
       const empty = document.createElement("p");
       empty.className = "diagnostic-note";
-      empty.textContent = this._t("noMatches");
+      empty.textContent = reasons && !reasons.size
+        ? this._t("reasonFilterNone") : this._t("noMatches");
       fragment.appendChild(empty);
     }
 

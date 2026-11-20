@@ -87,6 +87,11 @@ def build_entity_catalog(
                 "disabled": bool(entity.get("disabled_by")),
                 "hidden": bool(entity.get("hidden_by")),
                 "category": entity.get("entity_category"),
+                "device_class": (
+                    entity.get("device_class")
+                    if isinstance(entity.get("device_class"), str)
+                    else None
+                ),
                 "eligible": exclusion_reason is None,
                 "exclusion_reason": exclusion_reason,
             }

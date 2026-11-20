@@ -6726,3 +6726,84 @@ test("Dutch panel texts are used for a Dutch Home Assistant", () => {
     "Resultaat voor Google (3)");
   assert.equal(panel._roomLabel("Sans pièce"), "Geen ruimte");
 });
+
+test("Ineligible entities show their reason and a fix hint", () => {
+  const {panel} = makePanel(async () => ({}));
+  assert.equal(panel._ineligibleReasonCode({exclusion_reason: "hidden"}),
+    "hidden");
+  assert.equal(panel._ineligibleReasonCode({exclusion_reason: "new_rule"}),
+    "other");
+  assert.equal(panel._reasonDetail({domain: "camera",
+    exclusion_reason: "domain_not_enabled"}), "domaine : camera");
+  assert.equal(panel._reasonDetail({device_class: "motion",
+    exclusion_reason: "unsupported_device_class"}), "classe : motion");
+  assert.equal(panel._reasonDetail({device_class: null,
+    exclusion_reason: "unsupported_device_class"}), "classe : aucune");
+  assert.equal(panel._reasonDetail({category: "diagnostic",
+    exclusion_reason: "entity_category"}), "catégorie : diagnostic");
+  assert.equal(panel._reasonDetail({exclusion_reason: "disabled"}), "");
+  assert.match(source, /reasonLine\.appendChild\(reason\)/);
+});
+
+test("Ineligibility reason checkboxes filter, isolate and are remembered", () => {
+  const store = fakeLocalStorage();
+  const userId = "user_abcdef12";
+  const key = "hvls:ineligible-reasons:v1:" + userId;
+  const {panel} = makePanel(async () => ({}), () => true, store);
+  panel._hass.user = {id: userId};
+  let renders = 0;
+  panel._renderEntities = () => { renders++; };
+
+  // Nothing saved yet: every reason is selected.
+  assert.equal(panel._reasonFilterSelection().size, 6);
+
+  const container = {hidden: true, children: [],
+    replaceChildren(...children) { this.children = children; }};
+  const entities = [
+    {exclusion_reason: "unsupported_device_class"},
+    {exclusion_reason: "unsupported_device_class"},
+    {exclusion_reason: "disabled"},
+  ];
+  panel._renderReasonFilter(container, entities, true);
+  assert.equal(container.hidden, false);
+  const [header, chips] = container.children;
+  assert.equal(header.children[0].textContent, "Motifs de non-éligibilité");
+  // The unknown-reason chip only appears when such entities exist.
+  assert.equal(chips.children.length, 5);
+  const classChip = chips.children[1];
+  const [option, only] = classChip.children;
+  assert.equal(option.children[1].textContent,
+    "Classe de capteur non prise en charge");
+  assert.equal(option.children[2].textContent, "2");
+
+  only.on_click();
+  assert.deepEqual([...panel._reasonFilter], ["unsupported_device_class"]);
+  assert.deepEqual(JSON.parse(store.getItem(key)),
+    ["unsupported_device_class"]);
+
+  // A new panel instance restores the saved choice.
+  const second = makePanel(async () => ({}), () => true, store).panel;
+  second._hass.user = {id: userId};
+  assert.deepEqual([...second._reasonFilterSelection()],
+    ["unsupported_device_class"]);
+
+  // Unchecking the last box leaves an empty selection, "all" restores it.
+  const box = option.children[0];
+  box.checked = false;
+  box.on_change();
+  assert.equal(panel._reasonFilter.size, 0);
+  header.children[1].on_click();
+  assert.equal(panel._reasonFilter.size, 6);
+  assert.equal(JSON.parse(store.getItem(key)).length, 6);
+  assert.equal(renders, 3);
+
+  // Other filters hide the block.
+  panel._renderReasonFilter(container, entities, false);
+  assert.equal(container.hidden, true);
+
+  // Corrupted storage falls back to every reason.
+  store.setItem(key, "{oops");
+  const third = makePanel(async () => ({}), () => true, store).panel;
+  third._hass.user = {id: userId};
+  assert.equal(third._reasonFilterSelection().size, 6);
+});
