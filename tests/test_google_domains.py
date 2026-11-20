@@ -123,3 +123,86 @@ def test_preview_exclusions_explain_non_doorbell_events():
         ("event.bouton", "unsupported_device_class"),
     ]
     assert excluded[0]["detail"] == "Unsupported event class: button"
+
+
+def test_restore_plan_handles_new_domains_and_doorbell_rule(tmp_path):
+    """A backup with new-domain entities restores like any other domain."""
+    import pytest as _pytest
+    from test_backup_restore import backup_module as fixture
+
+    monkeypatch = _pytest.MonkeyPatch()
+    try:
+        restore = fixture.__wrapped__(monkeypatch)
+        output = tmp_path / "google_entities.yaml"
+        output.write_text(
+            "switch.a:\n  expose: true\n  name: A\n"
+            "button.restart:\n  expose: true\n  name: Restart\n",
+            encoding="utf-8",
+        )
+        (tmp_path / ".hvls_backups").mkdir()
+        backup_id = "google_entities.yaml.20261120-100000.bak"
+        (tmp_path / ".hvls_backups" / backup_id).write_text(
+            "switch.a:\n  expose: true\n  name: A\n"
+            "button.ring:\n  expose: true\n  name: Ring\n"
+            "event.sonnette:\n  expose: true\n  name: Sonnette\n"
+            "event.bouton:\n  expose: true\n  name: Bouton\n",
+            encoding="utf-8",
+        )
+
+        def entity(entity_id, name, labels, device_class=None):
+            return {
+                "entity_id": entity_id, "name": name, "labels": labels,
+                "area_id": None, "device_id": None, "disabled_by": None,
+                "hidden_by": None, "entity_category": None,
+                "device_class": device_class,
+            }
+
+        registries = {
+            "entity_registry": {"data": {"entities": [
+                entity("switch.a", "A", ["hvls"]),
+                entity("button.restart", "Restart", ["hvls"]),
+                entity("button.ring", "Ring", []),
+                entity("event.sonnette", "Sonnette", [], "doorbell"),
+                entity("event.bouton", "Bouton", [], "button"),
+            ]}},
+            "device_registry": {"data": {"devices": []}},
+            "area_registry": {"data": {"areas": []}},
+            "label_registry": {"data": {"labels": [
+                {"label_id": "hvls", "name": "HVLS"}]}},
+        }
+        catalog = restore.build_entity_catalog(
+            registries, "HVLS", GOOGLE_DOMAINS
+        )
+        review = restore.review_backup(output, backup_id)
+        result = restore.prepare_backup_preview(
+            output, backup_id, review["backup_sha256"],
+            review["production_sha256"], catalog,
+            registries=registries, label="HVLS", domains=GOOGLE_DOMAINS,
+        )
+        cases = {row["entity_id"]: row["case"] for row in result["restore_rows"]}
+        assert cases == {
+            "switch.a": "unchanged",
+            "button.ring": "added",
+            "event.sonnette": "added",
+            "event.bouton": "impossible",
+            "button.restart": "removed",
+        }
+        assert result["label_plan"]["add"] == ["button.ring", "event.sonnette"]
+        assert result["label_plan"]["remove"] == ["button.restart"]
+        assert result["label_plan"]["review"] == [
+            {"entity_id": "event.bouton", "reason": "unsupported_device_class"}
+        ]
+        # Not restoring the non-doorbell event makes the projection exact.
+        ignored = restore.prepare_backup_preview(
+            output, backup_id, review["backup_sha256"],
+            review["production_sha256"], catalog,
+            registries=registries, label="HVLS", domains=GOOGLE_DOMAINS,
+            ignored_entities=["event.bouton"],
+        )
+        assert ignored["projection"]["ready"] is True
+        # What HA labels would generate matches the restored YAML exactly,
+        # doorbell event included.
+        assert ignored["projection"]["comparison"]["identical_entities"] is True
+        assert "event.sonnette" in ignored["label_plan"]["add"]
+    finally:
+        monkeypatch.undo()
