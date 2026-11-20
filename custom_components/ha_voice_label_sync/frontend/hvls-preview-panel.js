@@ -50,7 +50,7 @@ const HVLS_TRANSLATIONS = {
     assistantExampleDirect: "Dans configuration.yaml :",
     assistantExampleInclude: "Variante avec fichier inclus dans configuration.yaml :",
     assistantExampleIncludedContent: "Dans google_assistant.yaml :",
-    assistantExampleNote: "Adaptez project_id au projet Google et SERVICE_ACCOUNT.json à votre fichier de compte de service (sans afficher son contenu). project_id et service_account sont obligatoires pour la configuration manuelle ; report_state est facultatif. Vérifiez la configuration avant toute modification d'une installation active : ces exemples ne prouvent pas la connexion Google Home.",
+    assistantExampleNote: "Adaptez project_id au projet Google et SERVICE_ACCOUNT.json à votre fichier de compte de service (sans afficher son contenu). project_id et service_account sont obligatoires pour la configuration manuelle ; report_state est facultatif. Vérifiez la configuration avant toute modification d'une installation active : ces exemples ne prouvent pas la connexion Google Home. secure_devices_pin (facultatif, à décommenter) est le code à dire pour ouvrir une serrure, désarmer une alarme ou ouvrir une porte ou un portail ; mettez-le dans secrets.yaml, entre guillemets (par exemple google_secure_pin: \"1234\").",
     assistantFileTitle: "Fichier des entités",
     assistantFileCandidate: "Fichier détecté proposé ; vous pouvez modifier ce chemin.",
     assistantFileManual: "Indiquez le chemin du fichier YAML des entités.",
@@ -681,7 +681,7 @@ const HVLS_TRANSLATIONS = {
     assistantExampleDirect: "In configuration.yaml:",
     assistantExampleInclude: "Alternative mit eingebundener Datei in configuration.yaml:",
     assistantExampleIncludedContent: "In google_assistant.yaml:",
-    assistantExampleNote: "Ersetzen Sie project_id durch Ihr Google-Projekt und SERVICE_ACCOUNT.json durch Ihre Dienstkontodatei (zeigen Sie deren Inhalt nie an). project_id und service_account sind für die manuelle Einrichtung erforderlich; report_state ist optional. Prüfen Sie die aktiven Einstellungen, bevor Sie sie ändern: Diese Beispiele stellen keine funktionierende Google-Home-Verbindung her.",
+    assistantExampleNote: "Ersetzen Sie project_id durch Ihr Google-Projekt und SERVICE_ACCOUNT.json durch Ihre Dienstkontodatei (zeigen Sie deren Inhalt nie an). project_id und service_account sind für die manuelle Einrichtung erforderlich; report_state ist optional. Prüfen Sie die aktiven Einstellungen, bevor Sie sie ändern: Diese Beispiele stellen keine funktionierende Google-Home-Verbindung her. secure_devices_pin (optional, Kommentarzeichen entfernen) ist der Code, den Sie sagen, um ein Schloss zu öffnen, eine Alarmanlage zu entschärfen oder eine Tür bzw. ein Tor zu öffnen; legen Sie ihn in secrets.yaml in Anführungszeichen ab (zum Beispiel google_secure_pin: \"1234\").",
     assistantFileTitle: "Entitätsdatei",
     assistantFileCandidate: "Vorgeschlagene gefundene Datei; Sie können diesen Pfad ändern.",
     assistantFileManual: "Geben Sie den Pfad der Entitäts-YAML-Datei ein.",
@@ -1311,7 +1311,7 @@ const HVLS_TRANSLATIONS = {
     assistantExampleDirect: "En configuration.yaml:",
     assistantExampleInclude: "Alternativa con un archivo incluido en configuration.yaml:",
     assistantExampleIncludedContent: "En google_assistant.yaml:",
-    assistantExampleNote: "Sustituye project_id por tu proyecto de Google y SERVICE_ACCOUNT.json por tu archivo de cuenta de servicio (nunca muestres su contenido). project_id y service_account son obligatorios para la configuración manual; report_state es opcional. Revisa los ajustes activos antes de cambiarlos: estos ejemplos no establecen una conexión funcional con Google Home.",
+    assistantExampleNote: "Sustituye project_id por tu proyecto de Google y SERVICE_ACCOUNT.json por tu archivo de cuenta de servicio (nunca muestres su contenido). project_id y service_account son obligatorios para la configuración manual; report_state es opcional. Revisa los ajustes activos antes de cambiarlos: estos ejemplos no establecen una conexión funcional con Google Home. secure_devices_pin (opcional, quita el comentario) es el código que dices para abrir una cerradura, desarmar una alarma o abrir una puerta o un portón; guárdalo en secrets.yaml, entre comillas (por ejemplo google_secure_pin: \"1234\").",
     assistantFileTitle: "Archivo de entidades",
     assistantFileCandidate: "Archivo detectado sugerido; puedes modificar esta ruta.",
     assistantFileManual: "Introduce la ruta del archivo YAML de entidades.",
@@ -1941,7 +1941,7 @@ const HVLS_TRANSLATIONS = {
     assistantExampleDirect: "In configuration.yaml:",
     assistantExampleInclude: "Alternativa con un file incluso in configuration.yaml:",
     assistantExampleIncludedContent: "In google_assistant.yaml:",
-    assistantExampleNote: "Sostituisci project_id con il tuo progetto Google e SERVICE_ACCOUNT.json con il file del tuo account di servizio (non mostrarne mai il contenuto). project_id e service_account sono obbligatori per la configurazione manuale; report_state è facoltativo. Controlla le impostazioni attive prima di modificarle: questi esempi non stabiliscono una connessione funzionante con Google Home.",
+    assistantExampleNote: "Sostituisci project_id con il tuo progetto Google e SERVICE_ACCOUNT.json con il file del tuo account di servizio (non mostrarne mai il contenuto). project_id e service_account sono obbligatori per la configurazione manuale; report_state è facoltativo. Controlla le impostazioni attive prima di modificarle: questi esempi non stabiliscono una connessione funzionante con Google Home. secure_devices_pin (facoltativo, da decommentare) è il codice da pronunciare per aprire una serratura, disattivare un allarme o aprire una porta o un cancello; mettilo in secrets.yaml, tra virgolette (per esempio google_secure_pin: \"1234\").",
     assistantFileTitle: "File delle entità",
     assistantFileCandidate: "File rilevato suggerito; puoi modificare questo percorso.",
     assistantFileManual: "Inserisci il percorso del file YAML delle entità.",
@@ -2571,7 +2571,7 @@ const HVLS_TRANSLATIONS = {
     assistantExampleDirect: "In configuration.yaml:",
     assistantExampleInclude: "Alternatief met een bestand dat in configuration.yaml wordt opgenomen:",
     assistantExampleIncludedContent: "In google_assistant.yaml:",
-    assistantExampleNote: "Vervang project_id door je Google-project en SERVICE_ACCOUNT.json door het bestand van je serviceaccount (toon de inhoud nooit). project_id en service_account zijn verplicht voor handmatige configuratie; report_state is optioneel. Controleer je actieve instellingen voordat je ze wijzigt: deze voorbeelden zorgen niet voor een werkende verbinding met Google Home.",
+    assistantExampleNote: "Vervang project_id door je Google-project en SERVICE_ACCOUNT.json door het bestand van je serviceaccount (toon de inhoud nooit). project_id en service_account zijn verplicht voor handmatige configuratie; report_state is optioneel. Controleer je actieve instellingen voordat je ze wijzigt: deze voorbeelden zorgen niet voor een werkende verbinding met Google Home. secure_devices_pin (optioneel, verwijder het commentaarteken) is de code die je uitspreekt om een slot te openen, een alarm uit te schakelen of een deur of poort te openen; zet hem tussen aanhalingstekens in secrets.yaml (bijvoorbeeld google_secure_pin: \"1234\").",
     assistantFileTitle: "Entiteitenbestand",
     assistantFileCandidate: "Voorgesteld gevonden bestand; je kunt dit pad wijzigen.",
     assistantFileManual: "Voer het pad in van het YAML-bestand met entiteiten.",
@@ -3201,7 +3201,7 @@ const HVLS_TRANSLATIONS = {
     assistantExampleDirect: "In configuration.yaml:",
     assistantExampleInclude: "Alternative with an included file in configuration.yaml:",
     assistantExampleIncludedContent: "In google_assistant.yaml:",
-    assistantExampleNote: "Replace project_id with your Google project and SERVICE_ACCOUNT.json with your service-account file (never display its contents). project_id and service_account are required for manual setup; report_state is optional. Review active settings before changing them: these examples do not establish a working Google Home connection.",
+    assistantExampleNote: "Replace project_id with your Google project and SERVICE_ACCOUNT.json with your service-account file (never display its contents). project_id and service_account are required for manual setup; report_state is optional. Review active settings before changing them: these examples do not establish a working Google Home connection. secure_devices_pin (optional, uncomment it) is the code you say to unlock a lock, disarm an alarm or open a door or gate; keep it in secrets.yaml, in quotes (for example google_secure_pin: \"1234\").",
     assistantFileTitle: "Entity file",
     assistantFileCandidate: "Suggested detected file; you can edit this path.",
     assistantFileManual: "Enter the path to the entity YAML file.",
@@ -6977,6 +6977,7 @@ class HVLSPreviewPanel extends HTMLElement {
   service_account: !include SERVICE_ACCOUNT.json
   report_state: true
   expose_by_default: false
+  # secure_devices_pin: !secret google_secure_pin
   entity_config: !include google_assistant_entities.yaml</pre>
             <p>${this._t("assistantExampleInclude")}</p>
             <pre>google_assistant: !include google_assistant.yaml</pre>
@@ -6985,6 +6986,7 @@ class HVLSPreviewPanel extends HTMLElement {
 service_account: !include SERVICE_ACCOUNT.json
 report_state: true
 expose_by_default: false
+# secure_devices_pin: !secret google_secure_pin
 entity_config: !include google_assistant_entities.yaml</pre>
             <p class="diagnostic-note">${this._t("assistantExampleNote")}</p>
           </details>

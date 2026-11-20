@@ -174,10 +174,13 @@ google_assistant:
   service_account: !include google_key.json
   report_state: true
   expose_by_default: false
+  # secure_devices_pin: !secret google_secure_pin
   entity_config: !include google_assistant_entities.yaml
 ```
 
 This is an example: retain your actual project settings, credentials and other Google Assistant options. HVLS does not create `google_key.json` or configure Google Cloud.
+
+`secure_devices_pin` is optional: it is the code you say to Google to unlock a lock, disarm an alarm or open a door, garage or gate cover (locking or closing needs no code). It is one code for all these devices and is not part of the HVLS entity file. Keep it in `secrets.yaml`, in quotes so that a leading zero is kept (`google_secure_pin: "0123"`), and choose a code you do not use elsewhere since it is spoken aloud.
 
 > [!IMPORTANT]
 > Applying a generated `entity_config` file does **not**, by itself, guarantee that Google Home has received the new device list. Reload the Google Assistant integration if available in your installation (or restart Home Assistant), then request a Google device sync if necessary. HVLS does not yet automate this end-to-end.
