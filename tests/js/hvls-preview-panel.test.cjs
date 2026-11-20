@@ -6807,3 +6807,15 @@ test("Ineligibility reason checkboxes filter, isolate and are remembered", () =>
   third._hass.user = {id: userId};
   assert.equal(third._reasonFilterSelection().size, 6);
 });
+
+test("Ineligible entities without the label show no checkbox", () => {
+  assert.match(source,
+    /else if \(entity\.eligible === false\) \{[\s\S]{0,300}?this\._t\("ineligibleState"\)/);
+  assert.match(source,
+    /if \(ineligibleToAdd && !pendingChange\) \{[\s\S]{0,400}?entity-hvls-control-area/);
+  // A labeled ineligible entity still gets its checkbox to remove the label.
+  assert.match(source,
+    /const ineligibleToAdd = entity\.eligible !== true && entity\.has_label !== true;/);
+  const {panel} = makePanel(async () => ({}));
+  assert.equal(panel._t("ineligibleState"), "Inéligible");
+});

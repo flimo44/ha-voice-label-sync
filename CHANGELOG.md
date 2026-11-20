@@ -11,6 +11,7 @@ Requires the Python core `ha-voice-label-sync==0.3.9` (to publish on PyPI before
 ### Improvements
 - 11 more domains supported by the Home Assistant Google Assistant integration are now enabled: `alarm_control_panel`, `button`, `camera`, `event`, `group`, `humidifier`, `input_button`, `lawn_mower`, `media_player`, `valve` and `water_heater` (25 domains in total). `event` entities are only selected with the `doorbell` device class (Python core 0.3.9); others are shown as "Unsupported class".
 - The CLI enables the same domains, except `sensor` and `binary_sensor` (23 domains).
+- HVLS Entity Management: an ineligible entity without the HVLS label shows "Ineligible" and no checkbox, since adding the label would change nothing. An ineligible entity that has the label keeps its checkbox so the label can be removed.
 - Assistant and README: the Google Assistant configuration examples show `secure_devices_pin` (commented out, stored with `!secret`) with a short explanation, for locks, alarms and door, garage or gate covers.
 
 ### Upgrade notes
