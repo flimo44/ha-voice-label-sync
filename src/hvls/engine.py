@@ -38,6 +38,16 @@ SUPPORTED_SENSOR_CLASSES = frozenset(
 )
 
 
+# Google Assistant only exposes doorbell events (ObjectDetection trait).
+SUPPORTED_EVENT_CLASSES = frozenset({"doorbell"})
+
+
+def supported_event_class(entity: dict[str, Any]) -> bool:
+    """Whether an event entity can be exposed to Google Assistant."""
+    value = entity.get("device_class")
+    return isinstance(value, str) and value in SUPPORTED_EVENT_CLASSES
+
+
 def supported_sensor_class(entity: dict[str, Any]) -> bool:
     """Whether a numeric sensor class is supported by Google Assistant."""
     value = entity.get("device_class")
@@ -163,6 +173,8 @@ def select_entities(
         if domain == "binary_sensor" and not supported_device_class(entity):
             continue
         if domain == "sensor" and not supported_sensor_class(entity):
+            continue
+        if domain == "event" and not supported_event_class(entity):
             continue
 
         if entity.get("disabled_by") or entity.get("hidden_by"):

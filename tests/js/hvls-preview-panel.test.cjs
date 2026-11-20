@@ -1672,7 +1672,7 @@ test("Eligibility explanations distinguish Home Assistant state from Google expo
     disabled: /désactivée dans Home Assistant/,
     hidden: /masquée dans Home Assistant/,
     domain_not_enabled: /domaine n’est pas pris en charge/,
-    unsupported_device_class: /classe de capteur n’est pas prise en charge/,
+    unsupported_device_class: /classe \(capteur, capteur binaire ou événement\) n’est pas prise en charge/,
     entity_category: /configuration ou de diagnostic/,
   };
   for (const [reason, expected] of Object.entries(actual)) {
@@ -6773,7 +6773,7 @@ test("Ineligibility reason checkboxes filter, isolate and are remembered", () =>
   const classChip = chips.children[1];
   const [option, only] = classChip.children;
   assert.equal(option.children[1].textContent,
-    "Classe de capteur non prise en charge");
+    "Classe non prise en charge");
   assert.equal(option.children[2].textContent, "2");
 
   only.on_click();

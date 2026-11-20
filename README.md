@@ -17,7 +17,7 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 >
 > HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. You can select entities, inspect a Preview and manage the YAML **without Google Assistant being connected**; configure Google Assistant separately only when you want to expose the selected entities to Google Home.
 
-**Latest release:** [`v1.3.0`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.3.0) (release candidate; previous stable: [`v1.2.0`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.2.0)). Download the release ZIP from [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases).  
+**Latest published stable:** [`v1.3.0`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.3.0) (published on 2026-11-20). Download the release ZIP from [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases).  
 **Python core dependency:** `ha-voice-label-sync==0.3.8` (published on PyPI and required by the Home Assistant integration's `manifest.json`).
 
 ## 🌍 v1.3.0 — Six languages and clearer eligibility
@@ -258,17 +258,23 @@ Adding the HVLS label makes an entity a **candidate**, not a guarantee that it w
 
 ### Domains enabled by the Home Assistant integration
 
-The native integration enables these **14 domains** by default:
+The native integration enables these **25 domains** by default, which are the domains supported by the Home Assistant Google Assistant integration:
 
 | | | |
 | --- | --- | --- |
-| `binary_sensor` | `climate` | `cover` |
-| `fan` | `input_boolean` | `input_select` |
-| `light` | `lock` | `scene` |
+| `alarm_control_panel` | `binary_sensor` | `button` |
+| `camera` | `climate` | `cover` |
+| `event` | `fan` | `group` |
+| `humidifier` | `input_boolean` | `input_button` |
+| `input_select` | `lawn_mower` | `light` |
+| `lock` | `media_player` | `scene` |
 | `script` | `select` | `sensor` |
-| `switch` | `vacuum` | |
+| `switch` | `vacuum` | `valve` |
+| `water_heater` |  |  |
 
-> **CLI difference:** The standalone CLI defaults to the same list **except** `sensor` and `binary_sensor` (12 domains). This section otherwise describes the native Home Assistant integration.
+Some of them need care on the Google side: `lock`, `alarm_control_panel` and door, garage or gate covers are *secure devices* that Google Assistant only opens or disarms with `secure_devices_pin`; `camera` needs a camera that supports streaming; `media_player` may not show well in the Google Home app although voice commands work. `button` and `input_button` act like scenes.
+
+> **CLI difference:** The standalone CLI defaults to the same list **except** `sensor` and `binary_sensor` (23 domains). This section otherwise describes the native Home Assistant integration.
 
 ### Supported `sensor` device classes
 
@@ -304,12 +310,16 @@ Only these `binary_sensor` device classes are selected:
 
 **Example:** A Zigbee2MQTT rain `binary_sensor` configured in Home Assistant as **Show as → Moisture** may become eligible if its effective `device_class` is `moisture`. This does not change the Zigbee device itself.
 
+### Supported `event` device classes
+
+Only `event` entities with the `doorbell` device class are selected: Google Assistant uses them for doorbell notifications. Other events (buttons, motion, etc.) are excluded with `unsupported_device_class`.
+
 ### Other reasons an entity may be excluded
 
 An entity is also skipped when it:
 
 - belongs to a domain not enabled in HVLS (`domain_not_enabled`);
-- has an unsupported `sensor` or `binary_sensor` device class (`unsupported_device_class`);
+- has an unsupported `sensor`, `binary_sensor` or `event` device class (`unsupported_device_class`);
 - is disabled (`disabled`) or hidden (`hidden`);
 - belongs to the `diagnostic` or `config` entity category (`entity_category`);
 - does not carry the selected HVLS label.

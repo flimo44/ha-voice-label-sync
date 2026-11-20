@@ -7,6 +7,7 @@ from typing import Any
 from hvls.engine import (
     resolve_label_ids,
     supported_device_class,
+    supported_event_class,
     supported_sensor_class,
 )
 from hvls.registry import get_registry_items
@@ -65,6 +66,8 @@ def build_entity_catalog(
         elif domain == "binary_sensor" and not supported_device_class(entity):
             exclusion_reason = "unsupported_device_class"
         elif domain == "sensor" and not supported_sensor_class(entity):
+            exclusion_reason = "unsupported_device_class"
+        elif domain == "event" and not supported_event_class(entity):
             exclusion_reason = "unsupported_device_class"
         elif entity.get("disabled_by"):
             exclusion_reason = "disabled"
