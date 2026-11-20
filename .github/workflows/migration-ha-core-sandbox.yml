@@ -42,7 +42,7 @@ jobs:
             ghcr.io/home-assistant/home-assistant:2026.11.0 \
             /workspace/tests/ha_core_sandbox_smoke.py
 
-      - name: Run native automation and restart recovery smoke
+      - name: Run native automation smoke
         shell: bash
         run: |
           set -euo pipefail

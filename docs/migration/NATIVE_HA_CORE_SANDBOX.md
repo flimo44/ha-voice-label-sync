@@ -41,10 +41,7 @@ and actual HA event bus.
    - a stale CAS request is rejected without another update.
 6. Recheck the real manual Google runtime *after* the label change; the
    native `should_expose` results must be identical to those before.
-7. Exercise the actual `migration_staging_impact` read-only adapter against
-   that native Google object, verify that its output never grants staging
-   or cutover and never claims Google Home was tested.
-8. Assert the original source YAML remains **byte-for-byte identical**.
+7. Assert the original source YAML remains **byte-for-byte identical**.
 
 The ordinary tests remain unchanged and continue to run on Python 3.12.
 The new job is a distinct CI check so a Home Assistant breaking change

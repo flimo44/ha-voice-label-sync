@@ -6,16 +6,21 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
-Requires the Python core `ha-voice-label-sync==0.3.9` (to publish on PyPI before the release).
+Requires the Python core `ha-voice-label-sync==0.3.9` (published on PyPI on 2026-11-20).
 
 ### Improvements
 - 11 more domains supported by the Home Assistant Google Assistant integration are now enabled: `alarm_control_panel`, `button`, `camera`, `event`, `group`, `humidifier`, `input_button`, `lawn_mower`, `media_player`, `valve` and `water_heater` (25 domains in total). `event` entities are only selected with the `doorbell` device class (Python core 0.3.9); others are shown as "Unsupported class".
 - The CLI enables the same domains, except `sensor` and `binary_sensor` (23 domains).
 - HVLS Entity Management: an ineligible entity without the HVLS label shows "Ineligible" and no checkbox, since adding the label would change nothing. An ineligible entity that has the label keeps its checkbox so the label can be removed.
 - Assistant and README: the Google Assistant configuration examples show `secure_devices_pin` (commented out, stored with `!secret`) with a short explanation, for locks, alarms and door, garage or gate covers.
+- Assistant: the `project_id` placeholder of the YAML examples follows the panel language (it was always `VOTRE_PROJECT_ID`). The "Refresh simulation" button is now "Analyze the configuration again": it only re-reads how Google Assistant is configured.
+
+### Removed
+- The unfinished multi-step migration tools of the Assistant ("Diagnostics and migration tools (advanced)"): protected baseline copy, decision drafts, review attestation, interruption recovery journal, recovery simulation and investigation history, and the never-enabled staging/execution steps behind them. They could not apply anything; adopting an existing file, recovering after a reinstall and restoring backups are done by the Assistant's guided path, Backups and Preview. This removes 27 internal modules and 23 WebSocket commands; the Assistant now reads only the read-only Google Assistant diagnostic.
 
 ### Upgrade notes
 - Entities of these domains that already carry the HVLS label were ineligible until now: the next Preview proposes adding them to the YAML. Review them before Apply, or remove the label from those you do not want in Google Assistant.
+- If you ever used "Examine the protected backup" in those tools, Home Assistant still holds its data in `/config/.storage/hvls_migration`. Nothing reads it any more; you can delete that folder. HVLS does not delete it for you.
 
 ## [1.3.0] - 2026-11-20
 
