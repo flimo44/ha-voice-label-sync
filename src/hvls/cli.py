@@ -20,18 +20,29 @@ STORAGE_DIRECTORY = CONFIG_DIRECTORY / ".storage"
 DEFAULT_OUTPUT_FILE = CONFIG_DIRECTORY / "google_assistant_entities.yaml"
 
 DEFAULT_DOMAINS = {
-    "light",
-    "switch",
-    "cover",
+    "alarm_control_panel",
+    "button",
+    "camera",
     "climate",
+    "cover",
+    "event",
     "fan",
+    "group",
+    "humidifier",
     "input_boolean",
+    "input_button",
     "input_select",
+    "lawn_mower",
+    "light",
+    "lock",
+    "media_player",
     "scene",
     "script",
-    "lock",
-    "vacuum",
     "select",
+    "switch",
+    "vacuum",
+    "valve",
+    "water_heater",
 }
 
 

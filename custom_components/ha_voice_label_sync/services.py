@@ -46,20 +46,31 @@ DIRECT_GENERATION_DISABLED = (
 
 DEFAULT_DOMAINS = frozenset(
     {
+        "alarm_control_panel",
         "binary_sensor",
+        "button",
+        "camera",
         "climate",
         "cover",
+        "event",
         "fan",
+        "group",
+        "humidifier",
         "input_boolean",
+        "input_button",
         "input_select",
+        "lawn_mower",
         "light",
         "lock",
+        "media_player",
         "scene",
         "script",
         "select",
         "sensor",
         "switch",
         "vacuum",
+        "valve",
+        "water_heater",
     }
 )
 
