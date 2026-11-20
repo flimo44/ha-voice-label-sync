@@ -1,0 +1,103 @@
+{
+  "title": "HA Voice Label Sync",
+  "config": {
+    "step": {
+      "user": {
+        "title": "HA Voice Label Sync instellen",
+        "description": "Hoe wil je beginnen?\n\n{detected_file}\n\nGoogle Assistant hoeft niet verbonden te zijn.",
+        "menu_options": {
+          "new": "Een nieuwe configuratie maken",
+          "existing": "Een bestaande configuratie hergebruiken"
+        }
+      },
+      "new": {
+        "title": "Een nieuwe configuratie maken",
+        "description": "HVLS maakt pas een nieuw bestand aan na goedkeuring in de Preview. Open na de configuratie **HA Voice Label Sync** via de zijbalk of kies **Bezoeken** op de apparaatpagina van de integratie; de selectie van entiteiten wordt direct geopend.\n\n{diagnostic}",
+        "data": {
+          "backend": "Spraakassistent",
+          "label": "Home Assistant-label",
+          "output": "Uitvoerbestand",
+          "backup_retention": "Te bewaren back-ups",
+          "create_backup": "Back-up maken vóór overschrijven"
+        },
+        "data_description": {
+          "backend": "Selecteer de spraakassistent-configuratie die moet worden gegenereerd.",
+          "label": "Entiteiten met dit Home Assistant-label worden opgenomen.",
+          "output": "Pad van het gegenereerde YAML-bestand binnen Home Assistant.",
+          "backup_retention": "Maximaal aantal eerder gegenereerde bestanden dat wordt bewaard. Gebruik 0 om bewaren uit te schakelen.",
+          "create_backup": "Vóór elke latere vervanging die in de Preview is goedgekeurd, wordt een back-up gemaakt. De installatie overschrijft het bestaande bestand nooit."
+        }
+      },
+      "existing": {
+        "title": "Een bestaande configuratie hergebruiken",
+        "description": "Je bestaande YAML verandert niet. Rond na het opslaan de standaard configuratieschermen van Home Assistant af (naam en ruimte) en open **HA Voice Label Sync** via de zijbalk of kies **Bezoeken** op de apparaatpagina van de integratie. Het paneel brengt je direct naar de Assistent.\n\n{diagnostic}",
+        "data": {
+          "backend": "Spraakassistent",
+          "label": "Home Assistant-label",
+          "output": "Uitvoerbestand",
+          "backup_retention": "Te bewaren back-ups",
+          "create_backup": "Back-up maken vóór overschrijven"
+        },
+        "data_description": {
+          "backend": "Selecteer de spraakassistent-configuratie die moet worden gegenereerd.",
+          "label": "Entiteiten met dit Home Assistant-label worden opgenomen.",
+          "output": "Pad van het gegenereerde YAML-bestand binnen Home Assistant.",
+          "backup_retention": "Maximaal aantal eerder gegenereerde bestanden dat wordt bewaard. Gebruik 0 om bewaren uit te schakelen.",
+          "create_backup": "Vóór elke latere vervanging die in de Preview is goedgekeurd, wordt een back-up gemaakt. De installatie overschrijft het bestaande bestand nooit."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "HA Voice Label Sync is al geconfigureerd."
+    },
+    "error": {
+      "label_setup_failed": "Kan het Home Assistant-label niet aanmaken of vinden. Controleer de labelnamen en machtigingen.",
+      "source_output_conflict": "De uitvoer is hetzelfde als de Google Assistant-bron. Kies een ander bestand.",
+      "existing_output_not_owned": "Deze uitvoer bestaat al. Kies een andere bestemming.",
+      "unsafe_output_path": "Uitvoerpad onveilig of buiten Home Assistant.",
+      "new_output_exists": "Dit bestand bestaat al. Kies een nieuw uitvoerbestand, of ga terug en kies 'Een bestaande configuratie hergebruiken'.",
+      "existing_source_missing": "Geen normaal YAML-bestand op dit pad. Selecteer het bestaande bestand of kies 'Een nieuwe configuratie maken'."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configuratie van HA Voice Label Sync",
+        "menu_options": {
+          "settings": "HVLS-instellingen",
+          "google_config": "Google Assistant controleren"
+        },
+        "menu_option_descriptions": {
+          "settings": "Labels, uitvoer en back-ups beheren.",
+          "google_config": "De huidige Google Assistant-YAML-configuratie bekijken."
+        }
+      },
+      "settings": {
+        "title": "HVLS-instellingen",
+        "description": "Pas de selectie van entiteiten, de uitvoer en de back-ups aan.",
+        "data": {
+          "backend": "Spraakassistent",
+          "label": "Home Assistant-label",
+          "output": "Uitvoerbestand",
+          "backup_retention": "Te bewaren back-ups",
+          "create_backup": "Back-up maken vóór overschrijven"
+        },
+        "data_description": {
+          "backend": "Selecteer de spraakassistent-configuratie die moet worden gegenereerd.",
+          "label": "Entiteiten met dit Home Assistant-label worden opgenomen.",
+          "output": "Pad van het gegenereerde YAML-bestand binnen Home Assistant.",
+          "backup_retention": "Maximaal aantal eerder gegenereerde bestanden dat wordt bewaard. Gebruik 0 om bewaren uit te schakelen.",
+          "create_backup": "Een back-up maken van het huidige uitvoerbestand voordat het wordt vervangen."
+        }
+      },
+      "google_config": {
+        "title": "Google Assistant controleren",
+        "description": "{configuration}"
+      }
+    },
+    "error": {
+      "label_setup_failed": "Kan het Home Assistant-label niet aanmaken of vinden. Controleer de labelnamen en machtigingen.",
+      "unsafe_output_path": "Uitvoerpad onveilig of buiten Home Assistant."
+    }
+  }
+}
