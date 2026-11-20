@@ -6,6 +6,10 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.3.0] - Release candidate (date set at publication)
+
+Requires the Python core `ha-voice-label-sync==0.3.8` (unchanged).
+
 ### Fixes
 - English panel: the message shown when a takeover backup succeeds but ownership is not transferred was in French.
 
