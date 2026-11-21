@@ -26,9 +26,7 @@ const HVLS_TRANSLATIONS = {
     migrationGuideStepIdentify: "Étape 1 — Identifiez votre situation",
     migrationGuideStepVerify: "Étape 2 sur 2 — Vérifiez les points indiqués",
     assistantProvenanceStepVerify: "Vérifiez le fichier YAML à reprendre",
-    migrationAdvancedTitle: "Outils de diagnostic et de migration (avancé)",
     migrationManagedNotice: "Le fichier de production est pris en charge par HVLS. Pour modifier les entités, utilisez le Preview. Les anciens diagnostics restent disponibles dans les outils avancés.",
-    migrationRecoveryAttention: "Une opération antérieure nécessite une vérification. Ouvrez les outils avancés avant de continuer.",
     migrationGuideDetected: "Aucune déclaration google_assistant: détectée. Cela n'empêche pas HVLS de gérer et générer le fichier d'entités.",
     migrationGuideCandidate: "Un fichier google_assistant_entities.yaml existe. Vous pouvez le reprendre pour initialiser vos labels HVLS, même sans connexion Google Assistant.",
     migrationGuideNoCandidate: "Aucun fichier google_assistant_entities.yaml habituel n'a été détecté. D'autres sources peuvent néanmoins exister.",
@@ -48,6 +46,7 @@ const HVLS_TRANSLATIONS = {
     assistantFileHelp: "ⓘ Voir les exemples de syntaxe YAML",
     assistantGoogleConnectionHint: "Raccordement Google Assistant non détecté dans la configuration analysée. Consultez les exemples ci-dessous pour vérifier configuration.yaml. HVLS peut gérer les entités sans ce raccordement.",
     assistantExampleDirect: "Dans configuration.yaml :",
+    assistantExampleProjectId: "VOTRE_PROJECT_ID",
     assistantExampleInclude: "Variante avec fichier inclus dans configuration.yaml :",
     assistantExampleIncludedContent: "Dans google_assistant.yaml :",
     assistantExampleNote: "Adaptez project_id au projet Google et SERVICE_ACCOUNT.json à votre fichier de compte de service (sans afficher son contenu). project_id et service_account sont obligatoires pour la configuration manuelle ; report_state est facultatif. Vérifiez la configuration avant toute modification d'une installation active : ces exemples ne prouvent pas la connexion Google Home. secure_devices_pin (facultatif, à décommenter) est le code à dire pour ouvrir une serrure, désarmer une alarme ou ouvrir une porte ou un portail ; mettez-le dans secrets.yaml, entre guillemets (par exemple google_secure_pin: \"1234\").",
@@ -210,106 +209,10 @@ const HVLS_TRANSLATIONS = {
     assistantHistoryReasonMissing: "fichier inclus manquant",
     assistantHistoryReasonOther: "structure ou fichier non pris en charge",
     assistantHistorySafety: "Un chemin ou une empreinte identique indique seulement une correspondance entre fichiers examinés. Cela ne démontre ni l'utilisation historique réelle, ni l'état Google Home. Aucune migration ni écriture n'est autorisée.",
-    migrationAnalyze: "Actualiser la simulation (lecture seule)",
-    migrationLoading: "Analyse de migration en lecture seule…",
-    migrationEmpty: "Ouvrez cette section pour vérifier la configuration Google Assistant.",
-    migrationFailed: "Revue indisponible : {error}",
-    migrationBaseline: "Sauvegarde source protégée",
-    migrationBaselineMissing: "non vérifiée — simulation complète indisponible",
-    migrationBaselineOk: "vérifiée",
+    migrationAnalyze: "Analyser à nouveau la configuration (lecture seule)",
+    migrationLoading: "Analyse de la configuration Google Assistant en lecture seule…",
+    migrationFailed: "Analyse indisponible : {error}",
     migrationStatus: "État de la revue",
-    migrationToRecheck: "Décisions locales modifiées : relancez l’analyse.",
-    migrationDecisions: "Décisions provisoires (non enregistrées)",
-    migrationNoChoice: "À examiner",
-    migrationImport: "Importer",
-    migrationKeep: "Conserver",
-    migrationDisable: "Désactiver",
-    migrationRemove: "Retirer",
-    migrationRetain: "Conserver les personnalisations",
-    migrationDiscard: "Abandonner après revue",
-    migrationMetadataChoice: "Personnalisations",
-    migrationAcknowledge: "J’ai pris connaissance du changement",
-    migrationSensitive: "Confirmer l’exposition sensible",
-    migrationBefore: "Avant (projection)",
-    migrationAfter: "Après (hypothèse)",
-    migrationReasons: "Motifs / état",
-    migrationMore: "Afficher 100 entités supplémentaires",
-    migrationBaselinePrepare: "Examiner la sauvegarde protégée",
-    migrationBaselinePrepared: "Fichiers à protéger : {files} · Entités déclarées : {entities}. Autorisation valable 5 minutes.",
-    migrationBaselineConfirmAction: "Confirmer la sauvegarde",
-    migrationBaselineConfirm: "Créer maintenant une copie protégée des {files} fichiers YAML Google Assistant ({entities} entités déclarées) et initialiser le journal HVLS ? Aucun label, fichier de production ou réglage Google Assistant ne sera modifié.",
-    migrationBaselinePreparing: "Vérification des fichiers source en lecture seule…",
-    migrationBaselineInitializing: "Création et vérification de la sauvegarde et du journal…",
-    migrationBaselineSuccess: "Sauvegarde vérifiée. Journal : {phase} (révision {revision}). Les labels et le YAML sont inchangés.",
-    migrationBaselinePartial: "Sauvegarde vérifiée, mais journal indisponible : examen manuel requis. Aucun changement des labels ou du YAML.",
-    migrationBaselineError: "Préparation ou initialisation refusée. Revérifiez le diagnostic et les fichiers protégés.",
-    migrationBaselineWarning: "Attention : exposition implicite possible. La sauvegarde ne valide pas l’exposition Google.",
-    migrationDraftLoad: "Recharger les choix sauvegardés",
-    migrationDraftSave: "Enregistrer mes choix",
-    migrationDraftSaving: "Vérification des sources et enregistrement des choix…",
-    migrationDraftLoading: "Lecture des choix sauvegardés…",
-    migrationDraftLoaded: "{count} choix récupéré(s). Relisez les résultats de la simulation.",
-    migrationDraftStale: "Attention : les choix sauvegardés sont liés à une ancienne version du journal. Nouvelle revue indispensable.",
-    migrationDraftSaved: "{count} choix enregistrés (révision {revision}). Ce n’est PAS une autorisation de migration.",
-    migrationDraftSaveConfirm: "Enregistrer ces {count} décisions comme brouillon privé et non autorisant ? Les labels et fichiers Google Assistant resteront inchangés.",
-    migrationDraftNotReady: "Actualisez d’abord la simulation après vos modifications et vérifiez la sauvegarde protégée.",
-    migrationDraftError: "Lecture ou sauvegarde des choix refusée. Revérifiez le diagnostic, le journal et les fichiers protégés.",
-    migrationDraftConflict: "Un brouillon existe ou a changé. Rechargez-le avant de remplacer vos décisions, puis relancez la simulation.",
-    migrationAttestationRead: "Vérifier l’état de la revue",
-    migrationAttestationConfirmAction: "Attester ma revue",
-    migrationAttestationReading: "Relecture du brouillon et contrôle des preuves…",
-    migrationAttestationConfirm: "Attester que j’ai examiné les décisions enregistrées et leur simulation actuelle ? Cette attestation ne permet ni l’ajout de labels, ni la modification de Google Assistant.",
-    migrationAttestationConfirmIssues: "Des anomalies ou décisions non résolues subsistent. Confirmez-vous les avoir examinées et accepter de les conserver comme problèmes ouverts ? Aucun changement ne sera autorisé ou exécuté.",
-    migrationAttestationDone: "Revue attestée (révision {revision}). Ce n’est PAS une autorisation d’exécuter la migration.",
-    migrationAttestationWithIssues: "Revue attestée AVEC anomalies non résolues : aucune action de migration n’est autorisée.",
-    migrationAttestationFresh: "État de la revue enregistrée : {status}. Aucun droit d’exécution.",
-    migrationAttestationUnavailable: "Attestation indisponible ou périmée. Rechargez les choix enregistrés, actualisez la simulation et vérifiez les anomalies.",
-    migrationAttestationNotReady: "Enregistrez d’abord vos choix et actualisez la simulation. Aucun changement n’a été effectué.",
-    migrationRecoveryTitle: "État de reprise après interruption (lecture seule)",
-    migrationRecoveryRead: "Revérifier le journal et les labels",
-    migrationRecoveryLoading: "Lecture du journal protégé et des registres natifs…",
-    migrationRecoveryNotInitialized: "Journal non initialisé. Aucune opération de migration enregistrée ici.",
-    migrationRecoveryUnavailable: "État de reprise indisponible ou incomplet. Vérification manuelle nécessaire.",
-    migrationRecoveryChanged: "Journal modifié pendant la lecture : actualiser et examiner avant toute décision.",
-    migrationRecoveryRequired: "Examen manuel requis — une intention peut être restée en suspens ; aucune reprise automatique.",
-    migrationRecoveryObserved: "État observé, non autorisant. Aucune reprise automatique ni bascule Google.",
-    migrationRecoverySummary: "Phase : {phase} · Révision : {revision} · Opérations : {total} · Intentions non acquittées : {pending} · Autres anomalies : {issues} · Sources YAML : {sources}.",
-    migrationRecoveryRow: "{entity} · journal : {journal} · registre : {observed} · label : {membership} · revue : {review}",
-    migrationRecoverySafeView: "Observation instantanée uniquement ; aucun droit de staging ni de bascule.",
-    migrationRecoverySimulationTitle: "Validation humaine simulée (sans écriture)",
-    migrationRecoverySimulationAction: "Tester ma décision",
-    migrationRecoverySimulationInspect: "Enquêter sur les effets externes",
-    migrationRecoverySimulationQuarantine: "Isoler cette entité pour examen",
-    migrationRecoverySimulationDefer: "Reporter jusqu’à de nouvelles preuves",
-    migrationRecoverySimulationPreparing: "Nouvelle vérification du journal, du YAML et des labels…",
-    migrationRecoverySimulationConfirm: "SIMULATION UNIQUEMENT. Confirmer la décision « {disposition} » pour {entity} ? Les effets externes et Google Home restent inconnus. Cette confirmation n’est pas sauvegardée et ne réalise aucune correction.",
-    migrationRecoverySimulationComplete: "Simulation confirmée pour {entity} : preuves revérifiées, jeton consommé. Aucun journal, label ou YAML modifié ; aucune autorisation d’exécution.",
-    migrationRecoverySimulationDeclined: "Simulation annulée. Aucune action effectuée.",
-    migrationRecoverySimulationRefused: "Simulation refusée : preuves périmées, incertaines ou confirmation invalide. Actualisez le diagnostic avant une nouvelle tentative.",
-    migrationLedgerTitle: "Historique protégé des décisions d’enquête (sans correction)",
-    migrationLedgerRead: "Consulter l’historique vérifié",
-    migrationLedgerButton: "Enregistrer ce choix d’enquête",
-    migrationLedgerConfirm: "ENREGISTREMENT DURABLE : consigner « {disposition} » pour {entity} dans l’historique privé ? Ceci écrit UNIQUEMENT une preuve de décision, pas le journal de migration, les labels ni Google Assistant.",
-    migrationLedgerSaving: "Vérification des preuves et préparation de l’enregistrement…",
-    migrationLedgerRecorded: "Décision d’enquête n°{sequence} enregistrée et synchronisée sur disque. Aucun label ni YAML modifié, aucune reprise autorisée.",
-    migrationLedgerCount: "{count} décisions d’enquête archivées et chaînées. Ces entrées ne sont jamais des autorisations d’exécution.",
-    migrationLedgerRow: "n°{sequence} · {entity} · {disposition} · preuves : {relation}",
-    migrationLedgerUnavailable: "Historique indisponible ou suspect : aucune décision ne peut être enregistrée.",
-    migrationLedgerRejected: "Enregistrement refusé : preuves modifiées, jeton expiré ou historique non vérifiable. Réexaminer la situation.",
-    migrationLedgerCancelled: "Enregistrement annulé, aucune écriture.",
-    migrationLedgerReading: "Vérification intégrale de la chaîne des décisions…",
-    migrationResolutionSummary: "Scénarios d’enquête (simulation seulement) : {pending} intentions non acquittées, {investigate} à examiner, {quarantine} cas à isoler. Aucune décision n’a été appliquée.",
-    migrationResolutionLine: "Hypothèse : {scenario} · catégorie : {category} · vérifications : {reasons}.",
-    migrationScenario_intent_desired_membership_observed: "état voulu observé, intention NON acquittée",
-    migrationScenario_intent_original_membership_observed: "état initial observé, intention NON acquittée",
-    migrationScenario_identity_or_membership_unknown: "identité ou appartenance indéterminée",
-    migrationScenario_recorded_state_no_longer_matches: "divergence entre journal et registre",
-    migrationScenario_applied_record_matches_observation: "application enregistrée, état local cohérent uniquement",
-    migrationScenario_rollback_record_matches_observation: "retour arrière enregistré, état local cohérent uniquement",
-    migrationScenario_inconsistent_journal_observation: "journal et observations incohérents",
-    migrationStagingImpact: "Impact prévisionnel des labels sur Google Assistant manuel : {status}. Les autres consommateurs de labels et Google Home restent non vérifiés. Staging interdit.",
-    migrationConsumerAudit: "Audit indirect limité : {files} fichiers YAML inspectés, {writers} références à la génération HVLS, {events} références à un événement du registre, {labels} références à des fonctions de label. Effets externes non certifiés ; staging interdit.",
-    migrationConsumerOverlap: "Attention : le fichier de sortie HVLS correspond à une source Google manuelle protégée. Toute génération V1 pourrait modifier cette source.",
     backupIntro: "Choisissez une sauvegarde pour préparer ses modifications dans le Preview. Aucune restauration directe ni modification d'étiquette.",
     backupLoading: "Chargement des sauvegardes…",
     backupEmpty: "Aucune sauvegarde disponible.",
@@ -658,9 +561,7 @@ const HVLS_TRANSLATIONS = {
     migrationGuideStepIdentify: "Schritt 1 — Ausgangslage ermitteln",
     migrationGuideStepVerify: "Schritt 2 von 2 — Empfohlene Prüfungen durchgehen",
     assistantProvenanceStepVerify: "Die YAML-Datei prüfen, die Sie wiederverwenden möchten",
-    migrationAdvancedTitle: "Diagnose- und Migrationswerkzeuge (fortgeschritten)",
     migrationManagedNotice: "HVLS verwaltet jetzt die produktive Entitätsdatei. Nehmen Sie Änderungen über die Preview vor. Frühere Diagnosen bleiben unter den erweiterten Werkzeugen verfügbar.",
-    migrationRecoveryAttention: "Ein früherer Vorgang muss geprüft werden. Öffnen Sie die erweiterten Werkzeuge, bevor Sie fortfahren.",
     migrationGuideDetected: "Keine google_assistant:-Deklaration gefunden. Das hindert HVLS nicht daran, eine Entitäts-YAML-Datei zu verwalten und zu erzeugen.",
     migrationGuideCandidate: "Eine Datei google_assistant_entities.yaml ist vorhanden. Sie können sie verwenden, um die HVLS-Labels zu initialisieren, auch ohne Google-Assistant-Verbindung.",
     migrationGuideNoCandidate: "Keine übliche Datei google_assistant_entities.yaml gefunden. Es können dennoch andere Quellen existieren.",
@@ -680,6 +581,7 @@ const HVLS_TRANSLATIONS = {
     assistantFileHelp: "ⓘ YAML-Syntaxbeispiele anzeigen",
     assistantGoogleConnectionHint: "In der geprüften Konfiguration wurde keine Google-Assistant-Verbindung gefunden. Prüfen Sie configuration.yaml anhand der Beispiele unten. HVLS kann Entitäten auch ohne diese Verbindung verwalten.",
     assistantExampleDirect: "In configuration.yaml:",
+    assistantExampleProjectId: "IHRE_PROJEKT_ID",
     assistantExampleInclude: "Alternative mit eingebundener Datei in configuration.yaml:",
     assistantExampleIncludedContent: "In google_assistant.yaml:",
     assistantExampleNote: "Ersetzen Sie project_id durch Ihr Google-Projekt und SERVICE_ACCOUNT.json durch Ihre Dienstkontodatei (zeigen Sie deren Inhalt nie an). project_id und service_account sind für die manuelle Einrichtung erforderlich; report_state ist optional. Prüfen Sie die aktiven Einstellungen, bevor Sie sie ändern: Diese Beispiele stellen keine funktionierende Google-Home-Verbindung her. secure_devices_pin (optional, Kommentarzeichen entfernen) ist der Code, den Sie sagen, um ein Schloss zu öffnen, eine Alarmanlage zu entschärfen oder eine Tür bzw. ein Tor zu öffnen; legen Sie ihn in secrets.yaml in Anführungszeichen ab (zum Beispiel google_secure_pin: \"1234\").",
@@ -841,106 +743,10 @@ const HVLS_TRANSLATIONS = {
     assistantHistoryReasonMissing: "eingebundene Datei fehlt",
     assistantHistoryReasonOther: "nicht unterstützte Datei oder Struktur",
     assistantHistorySafety: "Ein übereinstimmender Pfad oder eine übereinstimmende Prüfsumme betrifft nur die geprüften Dateien. Das beweist weder eine frühere Verwendung noch eine tatsächliche Freigabe in Google Home. Keine Migration und kein Schreibvorgang wird erlaubt.",
-    migrationAnalyze: "Simulation aktualisieren (schreibgeschützt)",
-    migrationLoading: "Schreibgeschützte Migrationsbewertung läuft…",
-    migrationEmpty: "Öffnen Sie diesen Bereich, um die Google-Assistant-Konfiguration zu prüfen.",
-    migrationFailed: "Prüfung nicht verfügbar: {error}",
-    migrationBaseline: "Geschützte Sicherung der Quelle",
-    migrationBaselineMissing: "nicht geprüft — vollständige Simulation nicht verfügbar",
-    migrationBaselineOk: "geprüft",
+    migrationAnalyze: "Konfiguration erneut analysieren (schreibgeschützt)",
+    migrationLoading: "Google-Assistant-Konfiguration wird schreibgeschützt analysiert…",
+    migrationFailed: "Analyse nicht verfügbar: {error}",
     migrationStatus: "Prüfstatus",
-    migrationToRecheck: "Lokale Entscheidungen geändert: Prüfung erneut ausführen.",
-    migrationDecisions: "Vorläufige Entscheidungen (nicht gespeichert)",
-    migrationNoChoice: "Zu prüfen",
-    migrationImport: "Importieren",
-    migrationKeep: "Behalten",
-    migrationDisable: "Deaktivieren",
-    migrationRemove: "Entfernen",
-    migrationRetain: "Manuelle Anpassungen beibehalten",
-    migrationDiscard: "Nach Prüfung verwerfen",
-    migrationMetadataChoice: "Anpassungen",
-    migrationAcknowledge: "Ich nehme diese Änderung zur Kenntnis",
-    migrationSensitive: "Sensible Freigabe zur Kenntnis nehmen",
-    migrationBefore: "Vorher (hochgerechnet)",
-    migrationAfter: "Nachher (hypothetisch)",
-    migrationReasons: "Gründe / Status",
-    migrationMore: "100 weitere Entitäten anzeigen",
-    migrationBaselinePrepare: "Geschützte Sicherung prüfen",
-    migrationBaselinePrepared: "Quelldateien: {files} · Ausdrückliche Einträge: {entities}. Die Bestätigung läuft in 5 Minuten ab.",
-    migrationBaselineConfirmAction: "Erstellung der Sicherung bestätigen",
-    migrationBaselineConfirm: "Eine geschützte Kopie von {files} Google-Assistant-YAML-Dateien ({entities} ausdrückliche Einträge) erstellen und das HVLS-Journal initialisieren? Labels, produktive YAML und geladene Google-Assistant-Einstellungen bleiben unverändert.",
-    migrationBaselinePreparing: "Aktuelle Quelldateien werden geprüft, ohne sie zu ändern…",
-    migrationBaselineInitializing: "Geschützte Sicherung und Journal werden erstellt und geprüft…",
-    migrationBaselineSuccess: "Geschützte Sicherung geprüft. Journal: {phase} (Revision {revision}). Labels und YAML unverändert.",
-    migrationBaselinePartial: "Geschützte Sicherung geprüft, aber Journal nicht verfügbar: manuelle Prüfung erforderlich. Labels und YAML unverändert.",
-    migrationBaselineError: "Vorbereitung oder Initialisierung abgelehnt. Prüfen Sie Diagnose und geschützte Dateien erneut.",
-    migrationBaselineWarning: "Warnung: Eine implizite Freigabe ist möglich. Die Sicherung prüft keine Google-Freigabe.",
-    migrationDraftLoad: "Gespeicherte Auswahl wiederherstellen",
-    migrationDraftSave: "Meine Auswahl speichern",
-    migrationDraftSaving: "Quellen werden geprüft und Auswahl gespeichert…",
-    migrationDraftLoading: "Gespeicherte Auswahl wird gelesen…",
-    migrationDraftLoaded: "{count} gespeicherte Auswahl(en) wiederhergestellt. Prüfen Sie die aktualisierte Simulation.",
-    migrationDraftStale: "Warnung: Die gespeicherte Auswahl bezieht sich auf eine frühere Journal-Revision. Eine neue Prüfung ist nötig.",
-    migrationDraftSaved: "{count} Auswahl(en) gespeichert (Revision {revision}). Das ist KEINE Genehmigung zur Migration.",
-    migrationDraftSaveConfirm: "Diese {count} Entscheidungen als privaten, nicht genehmigenden Entwurf speichern? HA-Labels und Google-Assistant-YAML bleiben unverändert.",
-    migrationDraftNotReady: "Aktualisieren Sie die Simulation nach dem Bearbeiten der Auswahl und prüfen Sie zuerst die geschützte Ausgangsbasis.",
-    migrationDraftError: "Auswahl kann nicht wiederhergestellt oder gespeichert werden. Prüfen Sie Diagnose, Journal und geschützte Dateien erneut.",
-    migrationDraftConflict: "Ein Entwurf existiert bereits oder wurde geändert. Stellen Sie ihn wieder her, bevor Sie die Auswahl ersetzen, und aktualisieren Sie dann die Simulation.",
-    migrationAttestationRead: "Prüfstatus kontrollieren",
-    migrationAttestationConfirmAction: "Meine Prüfung bestätigen",
-    migrationAttestationReading: "Entwurf wird erneut gelesen und Nachweise geprüft…",
-    migrationAttestationConfirm: "Bestätigen, dass Sie die gespeicherten Entscheidungen und die aktuelle Simulation geprüft haben? Das erlaubt weder Änderungen an HA-Labels noch eine Umstellung von Google Assistant.",
-    migrationAttestationConfirmIssues: "Es bestehen offene Auffälligkeiten oder ungeklärte Entscheidungen. Bestätigen, dass Sie sie geprüft haben, und zur Kenntnis nehmen, dass sie OFFEN bleiben? Keine Migrationsänderung wird erlaubt oder ausgeführt.",
-    migrationAttestationDone: "Prüfung bestätigt (Revision {revision}). Das ist KEINE Erlaubnis, die Migration auszuführen.",
-    migrationAttestationWithIssues: "Prüfung MIT offenen Punkten bestätigt: Keine Migrationsaktion ist erlaubt.",
-    migrationAttestationFresh: "Gespeicherter Prüfstatus: {status}. Keine Ausführungsberechtigung.",
-    migrationAttestationUnavailable: "Bestätigung nicht verfügbar oder veraltet. Gespeicherte Auswahl wiederherstellen, Simulation aktualisieren und Auffälligkeiten prüfen.",
-    migrationAttestationNotReady: "Speichern Sie zuerst die Auswahl und aktualisieren Sie die Simulation. Es wurde nichts geändert.",
-    migrationRecoveryTitle: "Wiederherstellungsstatus unterbrochener Vorgänge (schreibgeschützt)",
-    migrationRecoveryRead: "Journal und Labels erneut prüfen",
-    migrationRecoveryLoading: "Geschütztes Journal und native Registries werden gelesen…",
-    migrationRecoveryNotInitialized: "Journal nicht initialisiert. Hier sind keine Migrationsvorgänge verzeichnet.",
-    migrationRecoveryUnavailable: "Wiederherstellungsstatus nicht verfügbar oder unvollständig. Manuelle Prüfung erforderlich.",
-    migrationRecoveryChanged: "Das Journal hat sich beim Lesen geändert: Aktualisieren und prüfen Sie, bevor Sie entscheiden.",
-    migrationRecoveryRequired: "Manuelle Prüfung erforderlich — eine Absicht könnte noch ausstehen; keine automatische Wiederherstellung.",
-    migrationRecoveryObserved: "Beobachteter Zustand, keine Genehmigung. Keine automatische Wiederherstellung und keine Google-Umstellung.",
-    migrationRecoverySummary: "Phase: {phase} · Revision: {revision} · Vorgänge: {total} · Unbestätigte Absichten: {pending} · Weitere Probleme: {issues} · Quell-YAML: {sources}.",
-    migrationRecoveryRow: "{entity} · Journal: {journal} · Registry: {observed} · Label: {membership} · Prüfung: {review}",
-    migrationRecoverySafeView: "Nur Momentaufnahme; keine Erlaubnis zum Vorbereiten oder Umstellen.",
-    migrationRecoverySimulationTitle: "Simulierte menschliche Bestätigung (keine Schreibvorgänge)",
-    migrationRecoverySimulationAction: "Meine Entscheidung testen",
-    migrationRecoverySimulationInspect: "Externe Auswirkungen untersuchen",
-    migrationRecoverySimulationQuarantine: "Diese Entität zur Untersuchung isolieren",
-    migrationRecoverySimulationDefer: "Bis zu weiteren Nachweisen zurückstellen",
-    migrationRecoverySimulationPreparing: "Journal, YAML und native Labels werden erneut geprüft…",
-    migrationRecoverySimulationConfirm: "NUR SIMULATION. Die Wahl „{disposition}“ für {entity} bestätigen? Externe Auswirkungen und Google Home bleiben unbekannt. Diese Bestätigung wird nicht gespeichert und kann nichts reparieren.",
-    migrationRecoverySimulationComplete: "Simulation für {entity} bestätigt: aktuelle Nachweise erneut geprüft, Bestätigungscode verbraucht. Journal, Labels und YAML unverändert; keine Ausführungsberechtigung.",
-    migrationRecoverySimulationDeclined: "Simulation abgebrochen. Keine Aktion ausgeführt.",
-    migrationRecoverySimulationRefused: "Simulation abgelehnt: geänderte/unsichere Nachweise oder ungültige Bestätigung. Aktualisieren Sie den Wiederherstellungsbericht, bevor Sie es erneut versuchen.",
-    migrationLedgerTitle: "Geschützter Verlauf der Untersuchungsentscheidungen (keine Behebung)",
-    migrationLedgerRead: "Geprüften Untersuchungsverlauf lesen",
-    migrationLedgerButton: "Diese Untersuchungsentscheidung festhalten",
-    migrationLedgerConfirm: "DAUERHAFTER EINTRAG: „{disposition}“ für {entity} im privaten Prüfverlauf speichern? Es wird NUR ein Entscheidungseintrag geschrieben, NICHT das Migrationsjournal, die Labels oder Google Assistant.",
-    migrationLedgerSaving: "Nachweise werden erneut geprüft und der Eintrag vorbereitet…",
-    migrationLedgerRecorded: "Untersuchungseintrag #{sequence} gespeichert und synchronisiert. Labels und YAML unverändert; keine Wiederherstellung erlaubt.",
-    migrationLedgerCount: "{count} verkettete, archivierte Untersuchungsentscheidungen. Keine davon erlaubt eine Ausführung.",
-    migrationLedgerRow: "#{sequence} · {entity} · {disposition} · Nachweis: {relation}",
-    migrationLedgerUnavailable: "Verlauf nicht verfügbar oder verdächtig: Es kann keine Entscheidung gespeichert werden.",
-    migrationLedgerRejected: "Eintrag abgelehnt: geänderte Nachweise, abgelaufener Bestätigungscode oder ungeprüfter Verlauf. Untersuchen Sie erneut.",
-    migrationLedgerCancelled: "Eintrag ohne Schreibvorgang abgebrochen.",
-    migrationLedgerReading: "Die vollständige Untersuchungskette wird geprüft…",
-    migrationResolutionSummary: "Untersuchungsszenarien (nur Simulation): {pending} unbestätigte Absichten, {investigate} zu untersuchen, {quarantine} isoliert. Es wurde keine Entscheidung angewendet.",
-    migrationResolutionLine: "Hypothese: {scenario} · Kategorie: {category} · Prüfungen: {reasons}.",
-    migrationScenario_intent_desired_membership_observed: "gewünschte Zugehörigkeit beobachtet, Absicht NICHT bestätigt",
-    migrationScenario_intent_original_membership_observed: "ursprüngliche Zugehörigkeit beobachtet, Absicht NICHT bestätigt",
-    migrationScenario_identity_or_membership_unknown: "Identität oder Zugehörigkeit unbekannt",
-    migrationScenario_recorded_state_no_longer_matches: "Journal und Registry stimmen nicht überein",
-    migrationScenario_applied_record_matches_observation: "angewendeter Eintrag entspricht nur der lokalen Beobachtung",
-    migrationScenario_rollback_record_matches_observation: "Rücknahme-Eintrag entspricht nur der lokalen Beobachtung",
-    migrationScenario_inconsistent_journal_observation: "Journal und Beobachtung widersprüchlich",
-    migrationStagingImpact: "Hochgerechnete Label-Auswirkung auf manuelles Google Assistant: {status}. Andere Label-Nutzer und Google Home bleiben ungeprüft. Vorbereitung verboten.",
-    migrationConsumerAudit: "Begrenzte indirekte Prüfung: {files} YAML-Dateien geprüft, {writers} HVLS-Erzeugungsverweise, {events} Verweise auf Entity-Registry-Ereignisse, {labels} Verweise auf Label-Funktionen. Externe Auswirkungen bleiben ungeprüft; Vorbereitung verboten.",
-    migrationConsumerOverlap: "Warnung: Die HVLS-Ausgabedatei überschneidet sich mit einer geschützten manuellen Google-Assistant-Quelle. Jede V1-Erzeugung kann diese Quelle ändern.",
     backupIntro: "Wählen Sie eine Sicherung, um Änderungen in der Preview vorzubereiten. YAML und Labels werden nicht geändert.",
     backupLoading: "Sicherungen werden geladen…",
     backupEmpty: "Keine Sicherungen verfügbar.",
@@ -1289,9 +1095,7 @@ const HVLS_TRANSLATIONS = {
     migrationGuideStepIdentify: "Paso 1 — Identificar tu situación",
     migrationGuideStepVerify: "Paso 2 de 2 — Revisar las comprobaciones recomendadas",
     assistantProvenanceStepVerify: "Inspeccionar el archivo YAML que quieres reutilizar",
-    migrationAdvancedTitle: "Herramientas de diagnóstico y migración (avanzado)",
     migrationManagedNotice: "HVLS gestiona ahora el archivo de entidades de producción. Usa la Preview para hacer cambios. Los diagnósticos anteriores siguen disponibles en las herramientas avanzadas.",
-    migrationRecoveryAttention: "Una operación anterior necesita revisión. Abre las herramientas avanzadas antes de continuar.",
     migrationGuideDetected: "No se ha detectado ninguna declaración google_assistant:. Esto no impide que HVLS gestione y genere un archivo YAML de entidades.",
     migrationGuideCandidate: "Existe un archivo google_assistant_entities.yaml. Puedes reutilizarlo para inicializar las etiquetas HVLS, incluso sin conexión con Google Assistant.",
     migrationGuideNoCandidate: "No se ha detectado el archivo habitual google_assistant_entities.yaml. Puede haber otras fuentes.",
@@ -1311,6 +1115,7 @@ const HVLS_TRANSLATIONS = {
     assistantFileHelp: "ⓘ Mostrar ejemplos de sintaxis YAML",
     assistantGoogleConnectionHint: "No se ha detectado ninguna conexión con Google Assistant en la configuración inspeccionada. Revisa configuration.yaml con los ejemplos de abajo. HVLS puede gestionar entidades igualmente sin esta conexión.",
     assistantExampleDirect: "En configuration.yaml:",
+    assistantExampleProjectId: "TU_PROJECT_ID",
     assistantExampleInclude: "Alternativa con un archivo incluido en configuration.yaml:",
     assistantExampleIncludedContent: "En google_assistant.yaml:",
     assistantExampleNote: "Sustituye project_id por tu proyecto de Google y SERVICE_ACCOUNT.json por tu archivo de cuenta de servicio (nunca muestres su contenido). project_id y service_account son obligatorios para la configuración manual; report_state es opcional. Revisa los ajustes activos antes de cambiarlos: estos ejemplos no establecen una conexión funcional con Google Home. secure_devices_pin (opcional, quita el comentario) es el código que dices para abrir una cerradura, desarmar una alarma o abrir una puerta o un portón; guárdalo en secrets.yaml, entre comillas (por ejemplo google_secure_pin: \"1234\").",
@@ -1472,106 +1277,10 @@ const HVLS_TRANSLATIONS = {
     assistantHistoryReasonMissing: "falta el archivo incluido",
     assistantHistoryReasonOther: "archivo o estructura no compatible",
     assistantHistorySafety: "Una ruta o suma de comprobación coincidente solo se refiere a los archivos inspeccionados. No demuestra un uso histórico ni una exposición real en Google Home. No se autoriza ninguna migración ni escritura.",
-    migrationAnalyze: "Actualizar la simulación (solo lectura)",
-    migrationLoading: "Realizando la evaluación de migración de solo lectura…",
-    migrationEmpty: "Abre esta sección para revisar la configuración de Google Assistant.",
-    migrationFailed: "Revisión no disponible: {error}",
-    migrationBaseline: "Copia protegida del origen",
-    migrationBaselineMissing: "no verificada — simulación completa no disponible",
-    migrationBaselineOk: "verificada",
+    migrationAnalyze: "Volver a analizar la configuración (solo lectura)",
+    migrationLoading: "Analizando la configuración de Google Assistant en solo lectura…",
+    migrationFailed: "Análisis no disponible: {error}",
     migrationStatus: "Estado de la revisión",
-    migrationToRecheck: "Decisiones locales modificadas: vuelve a ejecutar la revisión.",
-    migrationDecisions: "Decisiones provisionales (no guardadas)",
-    migrationNoChoice: "Por revisar",
-    migrationImport: "Importar",
-    migrationKeep: "Mantener",
-    migrationDisable: "Desactivar",
-    migrationRemove: "Quitar",
-    migrationRetain: "Conservar las personalizaciones manuales",
-    migrationDiscard: "Descartar tras la revisión",
-    migrationMetadataChoice: "Personalizaciones",
-    migrationAcknowledge: "Tomo nota de este cambio",
-    migrationSensitive: "Tomar nota de la exposición sensible",
-    migrationBefore: "Antes (proyectado)",
-    migrationAfter: "Después (hipotético)",
-    migrationReasons: "Motivos / estado",
-    migrationMore: "Mostrar 100 entidades más",
-    migrationBaselinePrepare: "Revisar la copia protegida",
-    migrationBaselinePrepared: "Archivos de origen: {files} · Entradas explícitas: {entities}. La confirmación caduca en 5 minutos.",
-    migrationBaselineConfirmAction: "Confirmar la creación de la copia",
-    migrationBaselineConfirm: "¿Crear una copia protegida de {files} archivos YAML de Google Assistant ({entities} entradas explícitas) e inicializar el registro de HVLS? No cambiarán las etiquetas, el YAML de producción ni los ajustes de Google Assistant cargados.",
-    migrationBaselinePreparing: "Comprobando los archivos de origen actuales sin modificarlos…",
-    migrationBaselineInitializing: "Creando y verificando la copia protegida y el registro…",
-    migrationBaselineSuccess: "Copia protegida verificada. Registro: {phase} (revisión {revision}). Etiquetas y YAML sin cambios.",
-    migrationBaselinePartial: "Copia protegida verificada, pero registro no disponible: revisión manual necesaria. Etiquetas y YAML sin cambios.",
-    migrationBaselineError: "Preparación o inicialización rechazada. Vuelve a comprobar el diagnóstico y los archivos protegidos.",
-    migrationBaselineWarning: "Atención: es posible una exposición implícita. La copia no verifica la exposición en Google.",
-    migrationDraftLoad: "Restaurar la selección guardada",
-    migrationDraftSave: "Guardar mi selección",
-    migrationDraftSaving: "Comprobando las fuentes y guardando la selección…",
-    migrationDraftLoading: "Leyendo la selección guardada…",
-    migrationDraftLoaded: "{count} selección(es) guardada(s) restaurada(s). Revisa la simulación actualizada.",
-    migrationDraftStale: "Atención: la selección guardada se refiere a una revisión anterior del registro. Es necesaria una nueva revisión.",
-    migrationDraftSaved: "{count} selección(es) guardada(s) (revisión {revision}). Esto NO es una autorización para migrar.",
-    migrationDraftSaveConfirm: "¿Guardar estas {count} decisiones como borrador privado sin valor de autorización? Las etiquetas de HA y el YAML de Google Assistant no cambiarán.",
-    migrationDraftNotReady: "Actualiza la simulación después de editar la selección y verifica primero la base protegida.",
-    migrationDraftError: "No se puede restaurar ni guardar la selección. Vuelve a comprobar el diagnóstico, el registro y los archivos protegidos.",
-    migrationDraftConflict: "Ya existe un borrador o ha cambiado. Restáuralo antes de sustituir la selección y después actualiza la simulación.",
-    migrationAttestationRead: "Comprobar el estado de la revisión",
-    migrationAttestationConfirmAction: "Certificar mi revisión",
-    migrationAttestationReading: "Releyendo el borrador y verificando las pruebas…",
-    migrationAttestationConfirm: "¿Certificar que has examinado las decisiones guardadas y la simulación actual? Esto no autoriza cambios en las etiquetas de HA ni el cambio de Google Assistant.",
-    migrationAttestationConfirmIssues: "Quedan anomalías abiertas o decisiones sin resolver. ¿Confirmar que las has examinado y tomar nota de que siguen ABIERTAS? No se autorizará ni ejecutará ningún cambio de migración.",
-    migrationAttestationDone: "Revisión certificada (revisión {revision}). Esto NO es un permiso para ejecutar la migración.",
-    migrationAttestationWithIssues: "Revisión certificada CON puntos abiertos: no se autoriza ninguna acción de migración.",
-    migrationAttestationFresh: "Estado de revisión guardado: {status}. Sin capacidad de ejecución.",
-    migrationAttestationUnavailable: "Certificación no disponible o caducada. Restaura la selección guardada, actualiza la simulación y revisa las anomalías.",
-    migrationAttestationNotReady: "Guarda primero la selección y actualiza la simulación. No se ha cambiado nada.",
-    migrationRecoveryTitle: "Estado de recuperación de operaciones interrumpidas (solo lectura)",
-    migrationRecoveryRead: "Volver a comprobar el registro y las etiquetas",
-    migrationRecoveryLoading: "Leyendo el registro protegido y los registros nativos…",
-    migrationRecoveryNotInitialized: "Registro no inicializado. Aquí no hay operaciones de migración registradas.",
-    migrationRecoveryUnavailable: "Estado de recuperación no disponible o incompleto. Se requiere una comprobación manual.",
-    migrationRecoveryChanged: "El registro ha cambiado durante la lectura: actualiza y revisa antes de cualquier decisión.",
-    migrationRecoveryRequired: "Revisión manual necesaria — una intención podría seguir pendiente; sin recuperación automática.",
-    migrationRecoveryObserved: "Estado observado, no una autorización. Sin recuperación automática ni cambio de Google.",
-    migrationRecoverySummary: "Fase: {phase} · Revisión: {revision} · Operaciones: {total} · Intenciones no confirmadas: {pending} · Otros problemas: {issues} · YAML de origen: {sources}.",
-    migrationRecoveryRow: "{entity} · registro: {journal} · registro de HA: {observed} · etiqueta: {membership} · revisión: {review}",
-    migrationRecoverySafeView: "Solo una instantánea; sin permiso de preparación ni de cambio.",
-    migrationRecoverySimulationTitle: "Confirmación humana simulada (sin escrituras)",
-    migrationRecoverySimulationAction: "Probar mi decisión",
-    migrationRecoverySimulationInspect: "Investigar los efectos externos",
-    migrationRecoverySimulationQuarantine: "Poner esta entidad en cuarentena para investigarla",
-    migrationRecoverySimulationDefer: "Aplazar hasta tener más pruebas",
-    migrationRecoverySimulationPreparing: "Volviendo a comprobar el registro, el YAML y las etiquetas nativas…",
-    migrationRecoverySimulationConfirm: "SOLO SIMULACIÓN. ¿Confirmar la elección «{disposition}» para {entity}? Los efectos externos y Google Home siguen siendo desconocidos. Esta confirmación no se guarda y no puede reparar nada.",
-    migrationRecoverySimulationComplete: "Simulación confirmada para {entity}: pruebas actuales verificadas de nuevo, código de confirmación consumido. Registro, etiquetas y YAML sin cambios; sin permiso de ejecución.",
-    migrationRecoverySimulationDeclined: "Simulación cancelada. No se ha realizado ninguna acción.",
-    migrationRecoverySimulationRefused: "Simulación rechazada: pruebas cambiadas o inciertas, o confirmación no válida. Actualiza el informe de recuperación antes de volver a intentarlo.",
-    migrationLedgerTitle: "Historial protegido de decisiones de investigación (sin corrección)",
-    migrationLedgerRead: "Leer el historial de investigación verificado",
-    migrationLedgerButton: "Registrar esta decisión de investigación",
-    migrationLedgerConfirm: "REGISTRO PERMANENTE: ¿guardar «{disposition}» para {entity} en el historial de auditoría privado? Solo se escribe un registro de decisión, NO el registro de migración, las etiquetas ni Google Assistant.",
-    migrationLedgerSaving: "Volviendo a comprobar las pruebas y preparando el registro…",
-    migrationLedgerRecorded: "Registro de investigación n.º {sequence} guardado y sincronizado. Etiquetas y YAML sin cambios; ninguna recuperación autorizada.",
-    migrationLedgerCount: "{count} decisiones de investigación encadenadas y archivadas. Ninguna autoriza una ejecución.",
-    migrationLedgerRow: "n.º {sequence} · {entity} · {disposition} · prueba: {relation}",
-    migrationLedgerUnavailable: "Historial no disponible o sospechoso: no se puede guardar ninguna decisión.",
-    migrationLedgerRejected: "Registro rechazado: pruebas cambiadas, código caducado o historial no verificado. Vuelve a investigar.",
-    migrationLedgerCancelled: "Registro cancelado sin escribir nada.",
-    migrationLedgerReading: "Verificando la cadena de investigación completa…",
-    migrationResolutionSummary: "Escenarios de investigación (solo simulación): {pending} intenciones no confirmadas, {investigate} requieren inspección, {quarantine} en cuarentena. No se ha aplicado ninguna decisión.",
-    migrationResolutionLine: "Hipótesis: {scenario} · categoría: {category} · comprobaciones: {reasons}.",
-    migrationScenario_intent_desired_membership_observed: "pertenencia deseada observada, intención NO confirmada",
-    migrationScenario_intent_original_membership_observed: "pertenencia original observada, intención NO confirmada",
-    migrationScenario_identity_or_membership_unknown: "identidad o pertenencia desconocida",
-    migrationScenario_recorded_state_no_longer_matches: "el registro y el registro de HA no coinciden",
-    migrationScenario_applied_record_matches_observation: "el registro aplicado solo coincide con la observación local",
-    migrationScenario_rollback_record_matches_observation: "el registro de reversión solo coincide con la observación local",
-    migrationScenario_inconsistent_journal_observation: "registro y observación incoherentes",
-    migrationStagingImpact: "Impacto proyectado de las etiquetas en Google Assistant manual: {status}. Los demás usos de etiquetas y Google Home siguen sin verificar. Preparación prohibida.",
-    migrationConsumerAudit: "Auditoría indirecta limitada: {files} archivos YAML inspeccionados, {writers} referencias de generación HVLS, {events} referencias a eventos del registro de entidades, {labels} referencias a funciones de etiquetas. Los efectos externos siguen sin verificar; preparación prohibida.",
-    migrationConsumerOverlap: "Atención: el archivo de salida de HVLS coincide con un origen manual protegido de Google Assistant. Cualquier generación V1 puede modificar ese origen.",
     backupIntro: "Selecciona una copia de seguridad para preparar cambios en la Preview. No se modificarán ni el YAML ni las etiquetas.",
     backupLoading: "Cargando copias de seguridad…",
     backupEmpty: "No hay copias de seguridad disponibles.",
@@ -1920,9 +1629,7 @@ const HVLS_TRANSLATIONS = {
     migrationGuideStepIdentify: "Passo 1 — Identificare la tua situazione",
     migrationGuideStepVerify: "Passo 2 di 2 — Esaminare i controlli consigliati",
     assistantProvenanceStepVerify: "Ispeziona il file YAML che vuoi riutilizzare",
-    migrationAdvancedTitle: "Strumenti di diagnostica e migrazione (avanzati)",
     migrationManagedNotice: "HVLS ora gestisce il file delle entità in produzione. Usa la Preview per le modifiche. Le diagnostiche precedenti restano disponibili negli strumenti avanzati.",
-    migrationRecoveryAttention: "Un'operazione precedente richiede una verifica. Apri gli strumenti avanzati prima di continuare.",
     migrationGuideDetected: "Nessuna dichiarazione google_assistant: rilevata. Questo non impedisce a HVLS di gestire e generare un file YAML delle entità.",
     migrationGuideCandidate: "Esiste un file google_assistant_entities.yaml. Puoi riutilizzarlo per inizializzare le etichette HVLS, anche senza connessione a Google Assistant.",
     migrationGuideNoCandidate: "Nessun file google_assistant_entities.yaml abituale rilevato. Potrebbero comunque esistere altre fonti.",
@@ -1942,6 +1649,7 @@ const HVLS_TRANSLATIONS = {
     assistantFileHelp: "ⓘ Mostra esempi di sintassi YAML",
     assistantGoogleConnectionHint: "Nessuna connessione a Google Assistant rilevata nella configurazione ispezionata. Controlla configuration.yaml con gli esempi qui sotto. HVLS può comunque gestire le entità senza questa connessione.",
     assistantExampleDirect: "In configuration.yaml:",
+    assistantExampleProjectId: "IL_TUO_PROJECT_ID",
     assistantExampleInclude: "Alternativa con un file incluso in configuration.yaml:",
     assistantExampleIncludedContent: "In google_assistant.yaml:",
     assistantExampleNote: "Sostituisci project_id con il tuo progetto Google e SERVICE_ACCOUNT.json con il file del tuo account di servizio (non mostrarne mai il contenuto). project_id e service_account sono obbligatori per la configurazione manuale; report_state è facoltativo. Controlla le impostazioni attive prima di modificarle: questi esempi non stabiliscono una connessione funzionante con Google Home. secure_devices_pin (facoltativo, da decommentare) è il codice da pronunciare per aprire una serratura, disattivare un allarme o aprire una porta o un cancello; mettilo in secrets.yaml, tra virgolette (per esempio google_secure_pin: \"1234\").",
@@ -2103,106 +1811,10 @@ const HVLS_TRANSLATIONS = {
     assistantHistoryReasonMissing: "file incluso mancante",
     assistantHistoryReasonOther: "file o struttura non supportati",
     assistantHistorySafety: "Un percorso o un checksum corrispondente riguarda solo i file ispezionati. Non dimostra un uso storico né un'esposizione reale in Google Home. Nessuna migrazione o scrittura è autorizzata.",
-    migrationAnalyze: "Aggiorna la simulazione (sola lettura)",
-    migrationLoading: "Valutazione della migrazione in sola lettura in corso…",
-    migrationEmpty: "Apri questa sezione per esaminare la configurazione di Google Assistant.",
-    migrationFailed: "Verifica non disponibile: {error}",
-    migrationBaseline: "Backup protetto della fonte",
-    migrationBaselineMissing: "non verificato — simulazione completa non disponibile",
-    migrationBaselineOk: "verificato",
+    migrationAnalyze: "Analizza di nuovo la configurazione (sola lettura)",
+    migrationLoading: "Analisi della configurazione di Google Assistant in sola lettura…",
+    migrationFailed: "Analisi non disponibile: {error}",
     migrationStatus: "Stato della verifica",
-    migrationToRecheck: "Decisioni locali modificate: esegui di nuovo la verifica.",
-    migrationDecisions: "Decisioni provvisorie (non salvate)",
-    migrationNoChoice: "Da verificare",
-    migrationImport: "Importa",
-    migrationKeep: "Mantieni",
-    migrationDisable: "Disattiva",
-    migrationRemove: "Rimuovi",
-    migrationRetain: "Mantieni le personalizzazioni manuali",
-    migrationDiscard: "Scarta dopo la verifica",
-    migrationMetadataChoice: "Personalizzazioni",
-    migrationAcknowledge: "Prendo atto di questa modifica",
-    migrationSensitive: "Prendere atto dell'esposizione sensibile",
-    migrationBefore: "Prima (previsto)",
-    migrationAfter: "Dopo (ipotetico)",
-    migrationReasons: "Motivi / stato",
-    migrationMore: "Mostra altre 100 entità",
-    migrationBaselinePrepare: "Esamina il backup protetto",
-    migrationBaselinePrepared: "File di origine: {files} · Voci esplicite: {entities}. La conferma scade tra 5 minuti.",
-    migrationBaselineConfirmAction: "Conferma la creazione del backup",
-    migrationBaselineConfirm: "Creare una copia protetta di {files} file YAML di Google Assistant ({entities} voci esplicite) e inizializzare il registro di HVLS? Etichette, YAML di produzione e impostazioni di Google Assistant caricate non cambieranno.",
-    migrationBaselinePreparing: "Verifica dei file di origine attuali senza modificarli…",
-    migrationBaselineInitializing: "Creazione e verifica del backup protetto e del registro…",
-    migrationBaselineSuccess: "Backup protetto verificato. Registro: {phase} (revisione {revision}). Etichette e YAML invariati.",
-    migrationBaselinePartial: "Backup protetto verificato, ma registro non disponibile: verifica manuale necessaria. Etichette e YAML invariati.",
-    migrationBaselineError: "Preparazione o inizializzazione rifiutata. Ricontrolla la diagnostica e i file protetti.",
-    migrationBaselineWarning: "Attenzione: è possibile un'esposizione implicita. Il backup non verifica l'esposizione in Google.",
-    migrationDraftLoad: "Ripristina la selezione salvata",
-    migrationDraftSave: "Salva la mia selezione",
-    migrationDraftSaving: "Verifica delle fonti e salvataggio della selezione…",
-    migrationDraftLoading: "Lettura della selezione salvata…",
-    migrationDraftLoaded: "{count} selezione/i salvata/e ripristinata/e. Esamina la simulazione aggiornata.",
-    migrationDraftStale: "Attenzione: la selezione salvata si riferisce a una revisione precedente del registro. È necessaria una nuova verifica.",
-    migrationDraftSaved: "{count} selezione/i salvata/e (revisione {revision}). Questa NON è un'autorizzazione a migrare.",
-    migrationDraftSaveConfirm: "Salvare queste {count} decisioni come bozza privata senza valore di autorizzazione? Le etichette di HA e lo YAML di Google Assistant resteranno invariati.",
-    migrationDraftNotReady: "Aggiorna la simulazione dopo aver modificato la selezione e verifica prima la base protetta.",
-    migrationDraftError: "Impossibile ripristinare o salvare la selezione. Ricontrolla diagnostica, registro e file protetti.",
-    migrationDraftConflict: "Esiste già una bozza o è cambiata. Ripristinala prima di sostituire la selezione, poi aggiorna la simulazione.",
-    migrationAttestationRead: "Controlla lo stato della verifica",
-    migrationAttestationConfirmAction: "Attesta la mia verifica",
-    migrationAttestationReading: "Rilettura della bozza e verifica delle prove…",
-    migrationAttestationConfirm: "Attestare di aver esaminato le decisioni salvate e la simulazione attuale? Ciò non autorizza modifiche alle etichette di HA né il passaggio di Google Assistant.",
-    migrationAttestationConfirmIssues: "Restano anomalie aperte o decisioni non risolte. Confermare di averle esaminate e prendere atto che restano APERTE? Nessuna modifica di migrazione sarà autorizzata o eseguita.",
-    migrationAttestationDone: "Verifica attestata (revisione {revision}). Questo NON è un permesso per eseguire la migrazione.",
-    migrationAttestationWithIssues: "Verifica attestata CON punti aperti: nessuna azione di migrazione è autorizzata.",
-    migrationAttestationFresh: "Stato della verifica salvato: {status}. Nessuna capacità di esecuzione.",
-    migrationAttestationUnavailable: "Attestazione non disponibile o scaduta. Ripristina la selezione salvata, aggiorna la simulazione ed esamina le anomalie.",
-    migrationAttestationNotReady: "Salva prima la selezione e aggiorna la simulazione. Nessuna modifica effettuata.",
-    migrationRecoveryTitle: "Stato di recupero delle operazioni interrotte (sola lettura)",
-    migrationRecoveryRead: "Ricontrolla registro ed etichette",
-    migrationRecoveryLoading: "Lettura del registro protetto e dei registri nativi…",
-    migrationRecoveryNotInitialized: "Registro non inizializzato. Nessuna operazione di migrazione registrata qui.",
-    migrationRecoveryUnavailable: "Stato di recupero non disponibile o incompleto. Verifica manuale necessaria.",
-    migrationRecoveryChanged: "Il registro è cambiato durante la lettura: aggiorna ed esamina prima di qualsiasi decisione.",
-    migrationRecoveryRequired: "Verifica manuale necessaria — un'intenzione potrebbe essere ancora in sospeso; nessun recupero automatico.",
-    migrationRecoveryObserved: "Stato osservato, non un'autorizzazione. Nessun recupero automatico né passaggio di Google.",
-    migrationRecoverySummary: "Fase: {phase} · Revisione: {revision} · Operazioni: {total} · Intenzioni non confermate: {pending} · Altri problemi: {issues} · YAML di origine: {sources}.",
-    migrationRecoveryRow: "{entity} · registro: {journal} · registro HA: {observed} · etichetta: {membership} · verifica: {review}",
-    migrationRecoverySafeView: "Solo un'istantanea; nessun permesso di preparazione o di passaggio.",
-    migrationRecoverySimulationTitle: "Conferma umana simulata (nessuna scrittura)",
-    migrationRecoverySimulationAction: "Testa la mia decisione",
-    migrationRecoverySimulationInspect: "Indaga sugli effetti esterni",
-    migrationRecoverySimulationQuarantine: "Metti questa entità in quarantena per indagare",
-    migrationRecoverySimulationDefer: "Rimanda in attesa di altre prove",
-    migrationRecoverySimulationPreparing: "Ricontrollo di registro, YAML ed etichette native…",
-    migrationRecoverySimulationConfirm: "SOLO SIMULAZIONE. Confermare la scelta «{disposition}» per {entity}? Effetti esterni e Google Home restano sconosciuti. Questa conferma non viene salvata e non può riparare nulla.",
-    migrationRecoverySimulationComplete: "Simulazione confermata per {entity}: prove attuali ricontrollate, codice di conferma consumato. Registro, etichette e YAML invariati; nessun permesso di esecuzione.",
-    migrationRecoverySimulationDeclined: "Simulazione annullata. Nessuna azione eseguita.",
-    migrationRecoverySimulationRefused: "Simulazione rifiutata: prove cambiate o incerte, o conferma non valida. Aggiorna il rapporto di recupero prima di riprovare.",
-    migrationLedgerTitle: "Cronologia protetta delle decisioni di indagine (nessuna correzione)",
-    migrationLedgerRead: "Leggi la cronologia di indagine verificata",
-    migrationLedgerButton: "Registra questa decisione di indagine",
-    migrationLedgerConfirm: "REGISTRAZIONE PERMANENTE: salvare «{disposition}» per {entity} nella cronologia di audit privata? Viene scritta SOLO una registrazione della decisione, NON il registro di migrazione, le etichette o Google Assistant.",
-    migrationLedgerSaving: "Ricontrollo delle prove e preparazione della registrazione…",
-    migrationLedgerRecorded: "Registrazione di indagine n. {sequence} salvata e sincronizzata. Etichette e YAML invariati; nessun recupero autorizzato.",
-    migrationLedgerCount: "{count} decisioni di indagine concatenate e archiviate. Nessuna autorizza un'esecuzione.",
-    migrationLedgerRow: "n. {sequence} · {entity} · {disposition} · prova: {relation}",
-    migrationLedgerUnavailable: "Cronologia non disponibile o sospetta: impossibile salvare decisioni.",
-    migrationLedgerRejected: "Registrazione rifiutata: prove cambiate, codice scaduto o cronologia non verificata. Indaga di nuovo.",
-    migrationLedgerCancelled: "Registrazione annullata senza scrivere nulla.",
-    migrationLedgerReading: "Verifica dell'intera catena di indagine…",
-    migrationResolutionSummary: "Scenari di indagine (solo simulazione): {pending} intenzioni non confermate, {investigate} da ispezionare, {quarantine} in quarantena. Nessuna decisione è stata applicata.",
-    migrationResolutionLine: "Ipotesi: {scenario} · categoria: {category} · controlli: {reasons}.",
-    migrationScenario_intent_desired_membership_observed: "appartenenza desiderata osservata, intenzione NON confermata",
-    migrationScenario_intent_original_membership_observed: "appartenenza originale osservata, intenzione NON confermata",
-    migrationScenario_identity_or_membership_unknown: "identità o appartenenza sconosciuta",
-    migrationScenario_recorded_state_no_longer_matches: "registro e registro HA non corrispondono",
-    migrationScenario_applied_record_matches_observation: "la registrazione applicata corrisponde solo all'osservazione locale",
-    migrationScenario_rollback_record_matches_observation: "la registrazione di annullamento corrisponde solo all'osservazione locale",
-    migrationScenario_inconsistent_journal_observation: "registro e osservazione incoerenti",
-    migrationStagingImpact: "Impatto previsto delle etichette su Google Assistant manuale: {status}. Gli altri usi delle etichette e Google Home restano non verificati. Preparazione vietata.",
-    migrationConsumerAudit: "Audit indiretto limitato: {files} file YAML ispezionati, {writers} riferimenti di generazione HVLS, {events} riferimenti a eventi del registro entità, {labels} riferimenti a funzioni delle etichette. Gli effetti esterni restano non verificati; preparazione vietata.",
-    migrationConsumerOverlap: "Attenzione: il file di output di HVLS si sovrappone a una fonte manuale protetta di Google Assistant. Qualsiasi generazione V1 può modificare quella fonte.",
     backupIntro: "Seleziona un backup per preparare le modifiche nella Preview. YAML ed etichette non verranno modificati.",
     backupLoading: "Caricamento dei backup…",
     backupEmpty: "Nessun backup disponibile.",
@@ -2551,9 +2163,7 @@ const HVLS_TRANSLATIONS = {
     migrationGuideStepIdentify: "Stap 1 — Je situatie bepalen",
     migrationGuideStepVerify: "Stap 2 van 2 — De aanbevolen controles bekijken",
     assistantProvenanceStepVerify: "Inspecteer het YAML-bestand dat je wilt hergebruiken",
-    migrationAdvancedTitle: "Diagnose- en migratietools (geavanceerd)",
     migrationManagedNotice: "HVLS beheert nu het productiebestand met entiteiten. Gebruik de Preview voor wijzigingen. Eerdere diagnoses blijven beschikbaar onder de geavanceerde tools.",
-    migrationRecoveryAttention: "Een eerdere bewerking moet worden gecontroleerd. Open de geavanceerde tools voordat je verdergaat.",
     migrationGuideDetected: "Geen google_assistant:-declaratie gevonden. Dit verhindert niet dat HVLS een YAML-bestand met entiteiten beheert en genereert.",
     migrationGuideCandidate: "Er bestaat een bestand google_assistant_entities.yaml. Je kunt het hergebruiken om HVLS-labels in te stellen, ook zonder verbinding met Google Assistant.",
     migrationGuideNoCandidate: "Geen gebruikelijk google_assistant_entities.yaml-bestand gevonden. Er kunnen nog andere bronnen bestaan.",
@@ -2573,6 +2183,7 @@ const HVLS_TRANSLATIONS = {
     assistantFileHelp: "ⓘ Voorbeelden van YAML-syntaxis tonen",
     assistantGoogleConnectionHint: "Geen verbinding met Google Assistant gevonden in de geïnspecteerde configuratie. Controleer configuration.yaml aan de hand van de voorbeelden hieronder. HVLS kan entiteiten ook zonder deze verbinding beheren.",
     assistantExampleDirect: "In configuration.yaml:",
+    assistantExampleProjectId: "JOUW_PROJECT_ID",
     assistantExampleInclude: "Alternatief met een bestand dat in configuration.yaml wordt opgenomen:",
     assistantExampleIncludedContent: "In google_assistant.yaml:",
     assistantExampleNote: "Vervang project_id door je Google-project en SERVICE_ACCOUNT.json door het bestand van je serviceaccount (toon de inhoud nooit). project_id en service_account zijn verplicht voor handmatige configuratie; report_state is optioneel. Controleer je actieve instellingen voordat je ze wijzigt: deze voorbeelden zorgen niet voor een werkende verbinding met Google Home. secure_devices_pin (optioneel, verwijder het commentaarteken) is de code die je uitspreekt om een slot te openen, een alarm uit te schakelen of een deur of poort te openen; zet hem tussen aanhalingstekens in secrets.yaml (bijvoorbeeld google_secure_pin: \"1234\").",
@@ -2734,106 +2345,10 @@ const HVLS_TRANSLATIONS = {
     assistantHistoryReasonMissing: "opgenomen bestand ontbreekt",
     assistantHistoryReasonOther: "bestand of structuur niet ondersteund",
     assistantHistorySafety: "Een overeenkomend pad of checksum betreft alleen de geïnspecteerde bestanden. Het bewijst geen historisch gebruik of werkelijke blootstelling in Google Home. Er is geen migratie of schrijfactie toegestaan.",
-    migrationAnalyze: "Simulatie vernieuwen (alleen-lezen)",
-    migrationLoading: "Alleen-lezen migratiebeoordeling bezig…",
-    migrationEmpty: "Open deze sectie om de Google Assistant-configuratie te bekijken.",
-    migrationFailed: "Controle niet beschikbaar: {error}",
-    migrationBaseline: "Beveiligde back-up van de bron",
-    migrationBaselineMissing: "niet gecontroleerd — volledige simulatie niet beschikbaar",
-    migrationBaselineOk: "gecontroleerd",
+    migrationAnalyze: "Configuratie opnieuw analyseren (alleen-lezen)",
+    migrationLoading: "Google Assistant-configuratie alleen-lezen analyseren…",
+    migrationFailed: "Analyse niet beschikbaar: {error}",
     migrationStatus: "Status van de controle",
-    migrationToRecheck: "Lokale beslissingen gewijzigd: voer de controle opnieuw uit.",
-    migrationDecisions: "Voorlopige beslissingen (niet opgeslagen)",
-    migrationNoChoice: "Te controleren",
-    migrationImport: "Importeren",
-    migrationKeep: "Behouden",
-    migrationDisable: "Uitschakelen",
-    migrationRemove: "Verwijderen",
-    migrationRetain: "Handmatige aanpassingen behouden",
-    migrationDiscard: "Verwerpen na controle",
-    migrationMetadataChoice: "Aanpassingen",
-    migrationAcknowledge: "Ik neem kennis van deze wijziging",
-    migrationSensitive: "Kennisnemen van gevoelige blootstelling",
-    migrationBefore: "Vóór (verwacht)",
-    migrationAfter: "Na (hypothetisch)",
-    migrationReasons: "Redenen / status",
-    migrationMore: "Nog 100 entiteiten tonen",
-    migrationBaselinePrepare: "Beveiligde back-up bekijken",
-    migrationBaselinePrepared: "Bronbestanden: {files} · Expliciete vermeldingen: {entities}. De bevestiging verloopt over 5 minuten.",
-    migrationBaselineConfirmAction: "Aanmaken van de back-up bevestigen",
-    migrationBaselineConfirm: "Een beveiligde kopie maken van {files} Google Assistant-YAML-bestanden ({entities} expliciete vermeldingen) en het HVLS-register initialiseren? Labels, productie-YAML en geladen Google Assistant-instellingen veranderen niet.",
-    migrationBaselinePreparing: "Huidige bronbestanden controleren zonder ze te wijzigen…",
-    migrationBaselineInitializing: "Beveiligde back-up en register aanmaken en controleren…",
-    migrationBaselineSuccess: "Beveiligde back-up gecontroleerd. Register: {phase} (revisie {revision}). Labels en YAML ongewijzigd.",
-    migrationBaselinePartial: "Beveiligde back-up gecontroleerd, maar register niet beschikbaar: handmatige controle nodig. Labels en YAML ongewijzigd.",
-    migrationBaselineError: "Voorbereiding of initialisatie geweigerd. Controleer de diagnose en de beveiligde bestanden opnieuw.",
-    migrationBaselineWarning: "Let op: impliciete blootstelling is mogelijk. De back-up controleert de blootstelling in Google niet.",
-    migrationDraftLoad: "Opgeslagen selectie herstellen",
-    migrationDraftSave: "Mijn selectie opslaan",
-    migrationDraftSaving: "Bronnen controleren en selectie opslaan…",
-    migrationDraftLoading: "Opgeslagen selectie lezen…",
-    migrationDraftLoaded: "{count} opgeslagen selectie(s) hersteld. Bekijk de bijgewerkte simulatie.",
-    migrationDraftStale: "Let op: de opgeslagen selectie verwijst naar een eerdere revisie van het register. Een nieuwe controle is nodig.",
-    migrationDraftSaved: "{count} selectie(s) opgeslagen (revisie {revision}). Dit is GEEN toestemming om te migreren.",
-    migrationDraftSaveConfirm: "Deze {count} beslissingen opslaan als privéconcept zonder toestemmingswaarde? HA-labels en de Google Assistant-YAML blijven ongewijzigd.",
-    migrationDraftNotReady: "Vernieuw de simulatie nadat je de selectie hebt gewijzigd en controleer eerst de beveiligde basis.",
-    migrationDraftError: "Kan de selectie niet herstellen of opslaan. Controleer de diagnose, het register en de beveiligde bestanden opnieuw.",
-    migrationDraftConflict: "Er bestaat al een concept of het is gewijzigd. Herstel het eerst voordat je de selectie vervangt en vernieuw daarna de simulatie.",
-    migrationAttestationRead: "Status van de controle bekijken",
-    migrationAttestationConfirmAction: "Mijn controle bevestigen",
-    migrationAttestationReading: "Concept opnieuw lezen en bewijs controleren…",
-    migrationAttestationConfirm: "Bevestigen dat je de opgeslagen beslissingen en de huidige simulatie hebt bekeken? Dit staat geen wijzigingen aan HA-labels of een overstap van Google Assistant toe.",
-    migrationAttestationConfirmIssues: "Er zijn nog open afwijkingen of onopgeloste beslissingen. Bevestigen dat je ze hebt bekeken en erkennen dat ze OPEN blijven? Er wordt geen migratiewijziging toegestaan of uitgevoerd.",
-    migrationAttestationDone: "Controle bevestigd (revisie {revision}). Dit is GEEN toestemming om de migratie uit te voeren.",
-    migrationAttestationWithIssues: "Controle bevestigd MET open punten: er is geen migratieactie toegestaan.",
-    migrationAttestationFresh: "Status van de controle opgeslagen: {status}. Geen uitvoeringsmogelijkheid.",
-    migrationAttestationUnavailable: "Bevestiging niet beschikbaar of verlopen. Herstel de opgeslagen selectie, vernieuw de simulatie en bekijk de afwijkingen.",
-    migrationAttestationNotReady: "Sla eerst de selectie op en vernieuw de simulatie. Er is niets gewijzigd.",
-    migrationRecoveryTitle: "Herstelstatus van onderbroken bewerkingen (alleen-lezen)",
-    migrationRecoveryRead: "Logboek en labels opnieuw controleren",
-    migrationRecoveryLoading: "Beveiligd logboek en native registers lezen…",
-    migrationRecoveryNotInitialized: "Register niet geïnitialiseerd. Hier zijn geen migratiebewerkingen geregistreerd.",
-    migrationRecoveryUnavailable: "Herstelstatus niet beschikbaar of onvolledig. Handmatige controle nodig.",
-    migrationRecoveryChanged: "Het register is tijdens het lezen gewijzigd: vernieuw en controleer voordat je iets beslist.",
-    migrationRecoveryRequired: "Handmatige controle nodig — een intentie kan nog openstaan; geen automatisch herstel.",
-    migrationRecoveryObserved: "Waargenomen status, geen toestemming. Geen automatisch herstel of overstap van Google.",
-    migrationRecoverySummary: "Fase: {phase} · Revisie: {revision} · Bewerkingen: {total} · Onbevestigde intenties: {pending} · Andere problemen: {issues} · Bron-YAML: {sources}.",
-    migrationRecoveryRow: "{entity} · logboek: {journal} · HA-register: {observed} · label: {membership} · controle: {review}",
-    migrationRecoverySafeView: "Alleen een momentopname; geen toestemming voor voorbereiding of overstap.",
-    migrationRecoverySimulationTitle: "Gesimuleerde menselijke bevestiging (geen schrijfactie)",
-    migrationRecoverySimulationAction: "Mijn beslissing testen",
-    migrationRecoverySimulationInspect: "Externe effecten onderzoeken",
-    migrationRecoverySimulationQuarantine: "Deze entiteit in quarantaine plaatsen voor onderzoek",
-    migrationRecoverySimulationDefer: "Uitstellen in afwachting van meer bewijs",
-    migrationRecoverySimulationPreparing: "Logboek, YAML en native labels opnieuw controleren…",
-    migrationRecoverySimulationConfirm: "ALLEEN SIMULATIE. De keuze '{disposition}' voor {entity} bevestigen? Externe effecten en Google Home blijven onbekend. Deze bevestiging wordt niet opgeslagen en kan niets herstellen.",
-    migrationRecoverySimulationComplete: "Simulatie bevestigd voor {entity}: huidig bewijs opnieuw gecontroleerd, bevestigingscode verbruikt. Logboek, labels en YAML ongewijzigd; geen uitvoeringstoestemming.",
-    migrationRecoverySimulationDeclined: "Simulatie geannuleerd. Er is niets uitgevoerd.",
-    migrationRecoverySimulationRefused: "Simulatie geweigerd: bewijs gewijzigd of onzeker, of bevestiging ongeldig. Vernieuw het herstelrapport voordat je het opnieuw probeert.",
-    migrationLedgerTitle: "Beveiligde geschiedenis van onderzoeksbeslissingen (geen correctie)",
-    migrationLedgerRead: "Gecontroleerde onderzoeksgeschiedenis lezen",
-    migrationLedgerButton: "Deze onderzoeksbeslissing vastleggen",
-    migrationLedgerConfirm: "PERMANENTE VASTLEGGING: '{disposition}' voor {entity} opslaan in de privé-auditgeschiedenis? ALLEEN een vastlegging van de beslissing wordt geschreven, NIET het migratielogboek, de labels of Google Assistant.",
-    migrationLedgerSaving: "Bewijs opnieuw controleren en vastlegging voorbereiden…",
-    migrationLedgerRecorded: "Onderzoeksvastlegging nr. {sequence} opgeslagen en gesynchroniseerd. Labels en YAML ongewijzigd; geen herstel toegestaan.",
-    migrationLedgerCount: "{count} geketende en gearchiveerde onderzoeksbeslissingen. Geen enkele staat een uitvoering toe.",
-    migrationLedgerRow: "nr. {sequence} · {entity} · {disposition} · bewijs: {relation}",
-    migrationLedgerUnavailable: "Geschiedenis niet beschikbaar of verdacht: beslissingen kunnen niet worden opgeslagen.",
-    migrationLedgerRejected: "Vastlegging geweigerd: bewijs gewijzigd, code verlopen of geschiedenis niet gecontroleerd. Onderzoek opnieuw.",
-    migrationLedgerCancelled: "Vastlegging geannuleerd zonder iets te schrijven.",
-    migrationLedgerReading: "Volledige onderzoeksketen controleren…",
-    migrationResolutionSummary: "Onderzoeksscenario's (alleen simulatie): {pending} onbevestigde intenties, {investigate} te inspecteren, {quarantine} in quarantaine. Er is geen beslissing toegepast.",
-    migrationResolutionLine: "Hypothese: {scenario} · categorie: {category} · controles: {reasons}.",
-    migrationScenario_intent_desired_membership_observed: "gewenst lidmaatschap waargenomen, intentie NIET bevestigd",
-    migrationScenario_intent_original_membership_observed: "oorspronkelijk lidmaatschap waargenomen, intentie NIET bevestigd",
-    migrationScenario_identity_or_membership_unknown: "identiteit of lidmaatschap onbekend",
-    migrationScenario_recorded_state_no_longer_matches: "logboek en HA-register komen niet overeen",
-    migrationScenario_applied_record_matches_observation: "de toegepaste vastlegging komt alleen overeen met de lokale waarneming",
-    migrationScenario_rollback_record_matches_observation: "de terugdraaivastlegging komt alleen overeen met de lokale waarneming",
-    migrationScenario_inconsistent_journal_observation: "logboek en waarneming inconsistent",
-    migrationStagingImpact: "Verwachte impact van labels op handmatige Google Assistant: {status}. Ander gebruik van labels en Google Home blijven ongecontroleerd. Voorbereiding verboden.",
-    migrationConsumerAudit: "Beperkte indirecte audit: {files} YAML-bestanden geïnspecteerd, {writers} HVLS-generatieverwijzingen, {events} verwijzingen naar entiteitenregister-gebeurtenissen, {labels} verwijzingen naar labelfuncties. Externe effecten blijven ongecontroleerd; voorbereiding verboden.",
-    migrationConsumerOverlap: "Let op: het HVLS-uitvoerbestand overlapt met een beveiligde handmatige Google Assistant-bron. Elke V1-generatie kan die bron wijzigen.",
     backupIntro: "Selecteer een back-up om de wijzigingen in de Preview voor te bereiden. YAML en labels worden niet gewijzigd.",
     backupLoading: "Back-ups laden…",
     backupEmpty: "Geen back-ups beschikbaar.",
@@ -3182,9 +2697,7 @@ const HVLS_TRANSLATIONS = {
     migrationGuideStepIdentify: "Step 1 — Identify your situation",
     migrationGuideStepVerify: "Step 2 of 2 — Review the recommended checks",
     assistantProvenanceStepVerify: "Inspect the YAML file you want to reuse",
-    migrationAdvancedTitle: "Diagnostics and migration tools (advanced)",
     migrationManagedNotice: "HVLS now manages the production entity file. Use Preview for changes. Earlier diagnostics remain available under advanced tools.",
-    migrationRecoveryAttention: "A previous operation needs review. Open the advanced tools before continuing.",
     migrationGuideDetected: "No google_assistant: declaration detected. This does not prevent HVLS from managing and generating an entity YAML file.",
     migrationGuideCandidate: "A google_assistant_entities.yaml file exists. You can reuse it to initialize HVLS labels, even without a Google Assistant connection.",
     migrationGuideNoCandidate: "No usual google_assistant_entities.yaml file was detected. Other sources may still exist.",
@@ -3204,6 +2717,7 @@ const HVLS_TRANSLATIONS = {
     assistantFileHelp: "ⓘ Show YAML syntax examples",
     assistantGoogleConnectionHint: "No Google Assistant connection detected in the inspected configuration. Review the examples below to check configuration.yaml. HVLS can still manage entities without this connection.",
     assistantExampleDirect: "In configuration.yaml:",
+    assistantExampleProjectId: "YOUR_PROJECT_ID",
     assistantExampleInclude: "Alternative with an included file in configuration.yaml:",
     assistantExampleIncludedContent: "In google_assistant.yaml:",
     assistantExampleNote: "Replace project_id with your Google project and SERVICE_ACCOUNT.json with your service-account file (never display its contents). project_id and service_account are required for manual setup; report_state is optional. Review active settings before changing them: these examples do not establish a working Google Home connection. secure_devices_pin (optional, uncomment it) is the code you say to unlock a lock, disarm an alarm or open a door or gate; keep it in secrets.yaml, in quotes (for example google_secure_pin: \"1234\").",
@@ -3366,106 +2880,10 @@ const HVLS_TRANSLATIONS = {
     assistantHistoryReasonMissing: "included file missing",
     assistantHistoryReasonOther: "unsupported file or structure",
     assistantHistorySafety: "A matching path or checksum only matches inspected files. It does not prove historical use or actual Google Home exposure. No migration or write is authorized.",
-    migrationAnalyze: "Refresh simulation (read-only)",
-    migrationLoading: "Running read-only migration assessment…",
-    migrationEmpty: "Open this section to review Google Assistant configuration.",
-    migrationFailed: "Review unavailable: {error}",
-    migrationBaseline: "Protected source backup",
-    migrationBaselineMissing: "not verified — complete simulation unavailable",
-    migrationBaselineOk: "verified",
+    migrationAnalyze: "Analyze the configuration again (read-only)",
+    migrationLoading: "Analyzing the Google Assistant configuration (read-only)…",
+    migrationFailed: "Analysis unavailable: {error}",
     migrationStatus: "Review status",
-    migrationToRecheck: "Local decisions changed: run the review again.",
-    migrationDecisions: "Provisional decisions (not saved)",
-    migrationNoChoice: "To review",
-    migrationImport: "Import",
-    migrationKeep: "Keep",
-    migrationDisable: "Disable",
-    migrationRemove: "Remove",
-    migrationRetain: "Retain manual customizations",
-    migrationDiscard: "Discard after review",
-    migrationMetadataChoice: "Customizations",
-    migrationAcknowledge: "I acknowledge this change",
-    migrationSensitive: "Acknowledge sensitive exposure",
-    migrationBefore: "Before (projected)",
-    migrationAfter: "After (hypothetical)",
-    migrationReasons: "Reasons / status",
-    migrationMore: "Show 100 more entities",
-    migrationBaselinePrepare: "Review protected backup",
-    migrationBaselinePrepared: "Source files: {files} · Explicit entries: {entities}. Confirmation expires in 5 minutes.",
-    migrationBaselineConfirmAction: "Confirm backup creation",
-    migrationBaselineConfirm: "Create a protected copy of {files} Google Assistant YAML files ({entities} explicit entries) and initialize the HVLS journal? No labels, production YAML or loaded Google Assistant settings will change.",
-    migrationBaselinePreparing: "Checking current source files without modifying them…",
-    migrationBaselineInitializing: "Creating and verifying protected backup and journal…",
-    migrationBaselineSuccess: "Protected backup verified. Journal: {phase} (revision {revision}). Labels and YAML unchanged.",
-    migrationBaselinePartial: "Protected backup verified, but journal unavailable: manual review required. No labels or YAML changed.",
-    migrationBaselineError: "Preparation or initialization refused. Recheck diagnostic and protected files.",
-    migrationBaselineWarning: "Warning: implicit exposure is possible. Backing up does not verify Google exposure.",
-    migrationDraftLoad: "Restore saved selections",
-    migrationDraftSave: "Save my selections",
-    migrationDraftSaving: "Verifying sources and saving selections…",
-    migrationDraftLoading: "Reading saved selections…",
-    migrationDraftLoaded: "{count} saved selection(s) restored. Review the refreshed simulation.",
-    migrationDraftStale: "Warning: saved selections refer to an earlier journal revision. A new review is required.",
-    migrationDraftSaved: "{count} selection(s) saved (revision {revision}). This is NOT authorization to migrate.",
-    migrationDraftSaveConfirm: "Save these {count} decisions as a private non-authorizing draft? HA labels and Google Assistant YAML will remain unchanged.",
-    migrationDraftNotReady: "Refresh simulation after editing selections and verify the protected baseline first.",
-    migrationDraftError: "Cannot restore or save selections. Recheck diagnostic, journal and protected files.",
-    migrationDraftConflict: "A draft already exists or has changed. Restore it before replacing selections, then refresh the simulation.",
-    migrationAttestationRead: "Check review status",
-    migrationAttestationConfirmAction: "Attest my review",
-    migrationAttestationReading: "Re-reading draft and verifying evidence…",
-    migrationAttestationConfirm: "Attest that I examined the saved decisions and current simulation? This does not authorize HA label changes or Google Assistant cutover.",
-    migrationAttestationConfirmIssues: "Open anomalies or unresolved decisions remain. Confirm that you examined them and acknowledge they remain OPEN? No migration change will be authorized or executed.",
-    migrationAttestationDone: "Review attested (revision {revision}). This is NOT permission to execute migration.",
-    migrationAttestationWithIssues: "Attested review WITH open issues: no migration action is authorized.",
-    migrationAttestationFresh: "Saved review status: {status}. No execution capability.",
-    migrationAttestationUnavailable: "Attestation unavailable or stale. Restore saved choices, refresh the simulation and inspect anomalies.",
-    migrationAttestationNotReady: "Save choices and refresh the simulation first. No changes were made.",
-    migrationRecoveryTitle: "Interrupted operation recovery status (read-only)",
-    migrationRecoveryRead: "Recheck journal and labels",
-    migrationRecoveryLoading: "Reading protected journal and native registries…",
-    migrationRecoveryNotInitialized: "Journal not initialized. No migration operations recorded here.",
-    migrationRecoveryUnavailable: "Recovery status unavailable or incomplete. Manual verification required.",
-    migrationRecoveryChanged: "Journal changed while reading: refresh and inspect before any decision.",
-    migrationRecoveryRequired: "Manual review required — an intent may still be pending; no automatic recovery.",
-    migrationRecoveryObserved: "Observed state, not authorization. No automatic recovery or Google cutover.",
-    migrationRecoverySummary: "Phase: {phase} · Revision: {revision} · Operations: {total} · Unacknowledged intents: {pending} · Other issues: {issues} · Source YAML: {sources}.",
-    migrationRecoveryRow: "{entity} · journal: {journal} · registry: {observed} · label: {membership} · review: {review}",
-    migrationRecoverySafeView: "Snapshot only; no staging or cutover permission.",
-    migrationRecoverySimulationTitle: "Simulated human confirmation (no writes)",
-    migrationRecoverySimulationAction: "Test my decision",
-    migrationRecoverySimulationInspect: "Investigate external effects",
-    migrationRecoverySimulationQuarantine: "Quarantine this entity for investigation",
-    migrationRecoverySimulationDefer: "Defer until further evidence",
-    migrationRecoverySimulationPreparing: "Rechecking journal, YAML and native labels…",
-    migrationRecoverySimulationConfirm: "SIMULATION ONLY. Confirm the « {disposition} » choice for {entity}? External effects and Google Home remain unknown. This confirmation is not saved and cannot fix anything.",
-    migrationRecoverySimulationComplete: "Simulation confirmed for {entity}: fresh evidence rechecked, challenge consumed. No journal, label or YAML changed; no execution permission.",
-    migrationRecoverySimulationDeclined: "Simulation canceled. No action performed.",
-    migrationRecoverySimulationRefused: "Simulation refused: changed/uncertain evidence or invalid confirmation. Refresh the recovery report before trying again.",
-    migrationLedgerTitle: "Protected investigation decision history (no remediation)",
-    migrationLedgerRead: "Read verified investigation history",
-    migrationLedgerButton: "Record this investigation choice",
-    migrationLedgerConfirm: "DURABLE RECORD: save « {disposition} » for {entity} in private audit history? This writes ONLY a decision record, NOT the migration journal, labels or Google Assistant.",
-    migrationLedgerSaving: "Rechecking evidence and preparing the record…",
-    migrationLedgerRecorded: "Investigation record #{sequence} saved and synced. No labels or YAML changed; no recovery authorized.",
-    migrationLedgerCount: "{count} chained, archived investigation decisions. None authorize execution.",
-    migrationLedgerRow: "#{sequence} · {entity} · {disposition} · evidence: {relation}",
-    migrationLedgerUnavailable: "History unavailable or suspect: no decision can be saved.",
-    migrationLedgerRejected: "Record refused: evidence changed, expired challenge or history not verified. Reinvestigate.",
-    migrationLedgerCancelled: "Record canceled without writing.",
-    migrationLedgerReading: "Verifying the complete investigation chain…",
-    migrationResolutionSummary: "Investigation scenarios (simulation only): {pending} unacknowledged intents, {investigate} require inspection, {quarantine} quarantined. No decision has been applied.",
-    migrationResolutionLine: "Hypothesis: {scenario} · category: {category} · checks: {reasons}.",
-    migrationScenario_intent_desired_membership_observed: "desired membership observed, intent NOT acknowledged",
-    migrationScenario_intent_original_membership_observed: "original membership observed, intent NOT acknowledged",
-    migrationScenario_identity_or_membership_unknown: "identity or membership unknown",
-    migrationScenario_recorded_state_no_longer_matches: "journal and registry disagree",
-    migrationScenario_applied_record_matches_observation: "applied record matches local observation only",
-    migrationScenario_rollback_record_matches_observation: "rollback record matches local observation only",
-    migrationScenario_inconsistent_journal_observation: "inconsistent journal and observation",
-    migrationStagingImpact: "Projected label impact on manual Google Assistant: {status}. Other label consumers and Google Home remain unverified. Staging is forbidden.",
-    migrationConsumerAudit: "Limited indirect audit: {files} YAML files inspected, {writers} HVLS generation references, {events} entity-registry event references, {labels} label-function references. External effects remain unverified; staging forbidden.",
-    migrationConsumerOverlap: "Warning: the HVLS output file overlaps a protected manual Google Assistant source. Any V1 generation may change that source.",
     backupIntro: "Select a backup to prepare changes in Preview. No YAML or labels will be changed.",
     backupLoading: "Loading backups…",
     backupEmpty: "No backups available.",
@@ -3940,31 +3358,9 @@ class HVLSPreviewPanel extends HTMLElement {
     if (migrationAnalyze) migrationAnalyze.textContent = this._t("migrationAnalyze");
     this._renderMigrationGuide();
     this._renderAssistantFileStatus();
-    const advancedSummary = this.querySelector("#migrationAdvanced > summary");
-    if (advancedSummary) advancedSummary.textContent = this._t("migrationAdvancedTitle");
-    const migrationPrepare = this.querySelector("#migrationPrepareBaseline");
-    if (migrationPrepare) migrationPrepare.textContent = this._t("migrationBaselinePrepare");
-    const migrationConfirm = this.querySelector("#migrationConfirmBaseline");
-    if (migrationConfirm) migrationConfirm.textContent = this._t("migrationBaselineConfirmAction");
-    const migrationRestoreDraft = this.querySelector("#migrationRestoreDraft");
-    if (migrationRestoreDraft) migrationRestoreDraft.textContent = this._t("migrationDraftLoad");
-    const migrationSaveDraft = this.querySelector("#migrationSaveDraft");
-    if (migrationSaveDraft) migrationSaveDraft.textContent = this._t("migrationDraftSave");
-    const migrationReadAttestation = this.querySelector("#migrationReadAttestation");
-    if (migrationReadAttestation) migrationReadAttestation.textContent = this._t("migrationAttestationRead");
-    const migrationAttestReview = this.querySelector("#migrationAttestReview");
-    if (migrationAttestReview) migrationAttestReview.textContent = this._t("migrationAttestationConfirmAction");
-    const recoveryTitle = this.querySelector("#migrationRecoveryTitle");
-    if (recoveryTitle) recoveryTitle.textContent = this._t("migrationRecoveryTitle");
-    const recoveryRead = this.querySelector("#migrationRecoveryRefresh");
-    if (recoveryRead) recoveryRead.textContent = this._t("migrationRecoveryRead");
-    if (this._migrationRecoveryReport) this._renderMigrationRecovery();
-    const ledgerTitle = this.querySelector("#migrationLedgerTitle");
-    if (ledgerTitle) ledgerTitle.textContent = this._t("migrationLedgerTitle");
-    const ledgerRefresh = this.querySelector("#migrationLedgerRefresh");
-    if (ledgerRefresh) ledgerRefresh.textContent = this._t("migrationLedgerRead");
-    const migrationMore = this.querySelector("#migrationMore");
-    if (migrationMore) migrationMore.textContent = this._t("migrationMore");
+    this.querySelectorAll?.(".assistant-example-project").forEach(item => {
+      item.textContent = this._t("assistantExampleProjectId");
+    });
     const nav = this.querySelector(".hvls-tabs");
     if (nav) nav.setAttribute("aria-label", this._t("tabsLabel"));
   }
@@ -4649,7 +4045,7 @@ class HVLSPreviewPanel extends HTMLElement {
 
       this._updateApplyButton();
       this._renderAssistantAdoption();
-      this._renderMigrationAdvanced();
+      this._renderMigrationManagedNotice();
       this._setContent(this._recoveryPending ? "" : result.content || "");
       if (this._recoveryPending) this._previewContent = "";
       this._renderAnalysis(result);
@@ -6222,9 +5618,6 @@ class HVLSPreviewPanel extends HTMLElement {
         .container { max-width:1200px; margin:0 auto; }
         .header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
         h1 { margin:0; font-size:28px; font-weight:500; }
-        .migration-scroll { overflow-x: auto; max-width: 100%; }
-        .migration-table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
-        .migration-table th, .migration-table td { padding: 8px; text-align: left; border-bottom: 1px solid var(--divider-color); vertical-align: top; }
         .migration-controls { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
         .migration-controls select { max-width: 220px; font: inherit; }
         .migration-controls label { display: flex; gap: 4px; align-items: center; }
@@ -6982,7 +6375,7 @@ class HVLSPreviewPanel extends HTMLElement {
             <summary>${this._t("assistantFileHelp")}</summary>
             <p>${this._t("assistantExampleDirect")}</p>
             <pre>google_assistant:
-  project_id: VOTRE_PROJECT_ID
+  project_id: <span class="assistant-example-project">${this._t("assistantExampleProjectId")}</span>
   service_account: !include SERVICE_ACCOUNT.json
   report_state: true
   expose_by_default: false
@@ -6991,7 +6384,7 @@ class HVLSPreviewPanel extends HTMLElement {
             <p>${this._t("assistantExampleInclude")}</p>
             <pre>google_assistant: !include google_assistant.yaml</pre>
             <p>${this._t("assistantExampleIncludedContent")}</p>
-            <pre>project_id: VOTRE_PROJECT_ID
+            <pre>project_id: <span class="assistant-example-project">${this._t("assistantExampleProjectId")}</span>
 service_account: !include SERVICE_ACCOUNT.json
 report_state: true
 expose_by_default: false
@@ -7162,57 +6555,7 @@ entity_config: !include google_assistant_entities.yaml</pre>
             ${this._t("migrationAnalyze")}
           </button>
           <p id="migrationManagedNotice" role="status" class="diagnostic-note" hidden></p>
-          <p id="migrationRecoveryAttention" role="alert" class="diagnostic-note" hidden></p>
-          <details id="migrationAdvanced">
-            <summary>${this._t("migrationAdvancedTitle")}</summary>
-          <div class="migration-controls">
-            <button id="migrationPrepareBaseline" type="button" class="secondary" disabled>
-              ${this._t("migrationBaselinePrepare")}
-            </button>
-            <button id="migrationConfirmBaseline" type="button" disabled hidden>
-              ${this._t("migrationBaselineConfirmAction")}
-            </button>
-          </div>
-          <p id="migrationBaselineStatus" role="status" class="diagnostic-note"></p>
-          <div class="migration-controls">
-            <button id="migrationRestoreDraft" type="button" class="secondary">
-              ${this._t("migrationDraftLoad")}
-            </button>
-            <button id="migrationSaveDraft" type="button" class="secondary">
-              ${this._t("migrationDraftSave")}
-            </button>
-          </div>
-          <p id="migrationDraftStatus" role="status" class="diagnostic-note"></p>
-          <div class="migration-controls">
-            <button id="migrationReadAttestation" type="button" class="secondary">
-              ${this._t("migrationAttestationRead")}
-            </button>
-            <button id="migrationAttestReview" type="button" class="secondary">
-              ${this._t("migrationAttestationConfirmAction")}
-            </button>
-          </div>
-          <p id="migrationAttestationStatus" role="status" class="diagnostic-note"></p>
-          <h3 id="migrationRecoveryTitle">${this._t("migrationRecoveryTitle")}</h3>
-          <button id="migrationRecoveryRefresh" type="button" class="secondary">
-            ${this._t("migrationRecoveryRead")}
-          </button>
-          <p id="migrationRecoveryStatus" role="status" class="diagnostic-note"></p>
-          <div id="migrationRecoveryRows" class="migration-scroll"></div>
-          <p id="migrationRecoveryDecisionStatus" role="status" class="diagnostic-note"></p>
-          <h3 id="migrationLedgerTitle">${this._t("migrationLedgerTitle")}</h3>
-          <button id="migrationLedgerRefresh" class="secondary" type="button">
-            ${this._t("migrationLedgerRead")}
-          </button>
-          <p id="migrationLedgerStatus" role="status" class="diagnostic-note"></p>
-          <div id="migrationLedgerRows" class="migration-scroll"></div>
-
-          <p id="migrationStatus" role="status">${this._t("migrationEmpty")}</p>
-          <div id="migrationSummary" class="migration-review-note"></div>
-          <div id="migrationRows" class="migration-scroll"></div>
-          <button id="migrationMore" type="button" class="secondary" hidden>
-            ${this._t("migrationMore")}
-          </button>
-          </details>
+          <p id="migrationStatus" role="status" class="diagnostic-note"></p>
         </section>
         <section id="tab-backups" class="hvls-tab-panel" role="tabpanel" hidden>
           <h2>${this._t("tabBackups")}</h2>
@@ -7333,20 +6676,6 @@ entity_config: !include google_assistant_entities.yaml</pre>
         "click", () => this._chooseAssistantProvenance(origin)
       );
     }
-    this.querySelector("#migrationPrepareBaseline").addEventListener("click", () => this._prepareMigrationBaseline());
-    this.querySelector("#migrationConfirmBaseline").addEventListener("click", () => this._confirmMigrationBaseline());
-    this.querySelector("#migrationRestoreDraft").addEventListener("click", () => this._restoreMigrationDecisionDraft());
-    this.querySelector("#migrationSaveDraft").addEventListener("click", () => this._saveMigrationDecisionDraft());
-    this.querySelector("#migrationReadAttestation").addEventListener("click", () => this._readMigrationAttestation());
-    this.querySelector("#migrationAttestReview").addEventListener("click", () => this._attestMigrationReview());
-    this.querySelector("#migrationRecoveryRefresh").addEventListener("click", () => this._loadMigrationRecovery());
-    this.querySelector("#migrationLedgerRefresh").addEventListener(
-      "click", () => this._loadMigrationInvestigationHistory()
-    );
-    this.querySelector("#migrationMore").addEventListener("click", () => {
-      this._migrationLimit = (this._migrationLimit || 100) + 100;
-      this._renderMigrationReview();
-    });
     this.querySelector("#settings").addEventListener("click", () => {
       window.location.assign("/config/integrations/integration/ha_voice_label_sync");
     });
@@ -8605,46 +7934,6 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._renderAssistantFileStatus();
   }
 
-  _renderMigrationAdvanced() {
-    const advanced = this.querySelector("#migrationAdvanced");
-    if (!advanced) return;
-    const mode = this._migrationReport?.diagnostic?.mode;
-    const recovery = this._migrationRecoveryReport;
-    const recoveryNeedsAttention = recovery?.needs_review === true ||
-      ["review_required", "snapshot_changed", "unavailable"].includes(recovery?.status);
-    // The legacy global migration audit is NOT the reviewed YAML takeover.
-    // Once ownership is verified and the recovery Apply has finished, keep
-    // its thousands of historical decisions behind the optional expert panel.
-    // An interrupted recovery or ownership reconciliation still takes priority.
-    const managed = this._ownershipManaged === true &&
-      this._recoveryPending === false &&
-      this._restoreReconcilePending !== true;
-    const normalOperation = managed && !recoveryNeedsAttention;
-    const managedNotice = this.querySelector("#migrationManagedNotice");
-    if (managedNotice) {
-      managedNotice.hidden = !normalOperation;
-      managedNotice.textContent = normalOperation
-        ? this._t("migrationManagedNotice") : "";
-    }
-    const alert = this.querySelector("#migrationRecoveryAttention");
-    if (alert) {
-      alert.hidden = !recoveryNeedsAttention;
-      alert.textContent = recoveryNeedsAttention
-        ? this._t("migrationRecoveryAttention") : "";
-    }
-    // Open serious recovery warnings, not a stale "pending_review" audit
-    // after successful YAML adoption. Preserve manual expand/collapse.
-    const key = String(mode || "loading") + ":" +
-      String(recoveryNeedsAttention) + ":" + String(normalOperation);
-    if (this._migrationAdvancedContext !== key) {
-      if (mode || recoveryNeedsAttention || normalOperation) {
-        advanced.open = recoveryNeedsAttention ||
-          (!normalOperation && mode !== "new_configuration");
-        this._migrationAdvancedContext = key;
-      }
-    }
-  }
-
   _assistantPackagesDetected() {
     return this._migrationReport?.diagnostic?.global_blockers
       ?.includes("packages_not_yet_supported") === true;
@@ -9589,891 +8878,6 @@ entity_config: !include google_assistant_entities.yaml</pre>
     this._renderAssistantFileStatus();
   }
 
-  _migrationBaselineEligible() {
-    const diag = this._migrationReport?.diagnostic;
-    return diag?.mode === "assisted_migration" &&
-      diag?.review_status === "pending_review" &&
-      diag?.source?.status === "resolved" &&
-      Array.isArray(diag.global_blockers) &&
-      diag.global_blockers.length === 0;
-  }
-
-  _migrationBaselineControls() {
-    const prepare = this.querySelector("#migrationPrepareBaseline");
-    const confirm = this.querySelector("#migrationConfirmBaseline");
-    if (prepare) prepare.disabled = this._baselineBusy === true ||
-      !this._migrationBaselineEligible();
-    if (confirm) {
-      confirm.hidden = !this._baselineChallenge;
-      confirm.disabled = this._baselineBusy === true ||
-        !this._baselineChallenge || !this._migrationBaselineEligible();
-    }
-  }
-
-  async _prepareMigrationBaseline() {
-    if (!this._hass || this._baselineBusy || !this._migrationBaselineEligible()) return;
-    this._baselineBusy = true;
-    this._baselineChallenge = null;
-    this._baselinePrepared = null;
-    this._migrationBaselineControls();
-    const status = this.querySelector("#migrationBaselineStatus");
-    if (status) status.textContent = this._t("migrationBaselinePreparing");
-    try {
-      const result = await this._hass.callWS({
-        type: "ha_voice_label_sync/prepare_migration_baseline",
-      });
-      if (result?.status !== "awaiting_explicit_confirmation" ||
-          typeof result.confirmation_token !== "string") {
-        throw new Error("preflight_unavailable");
-      }
-      this._baselineChallenge = result.confirmation_token;
-      this._baselinePrepared = result;
-      if (status) {
-        status.textContent = this._tf("migrationBaselinePrepared", {
-          files: result.source_files, entities: result.explicit_entities,
-        }) + (result.implicit_exposure_warning
-          ? " " + this._t("migrationBaselineWarning") : "");
-      }
-    } catch (_error) {
-      if (status) status.textContent = this._t("migrationBaselineError");
-    } finally {
-      this._baselineBusy = false;
-      this._migrationBaselineControls();
-    }
-  }
-
-  async _confirmMigrationBaseline() {
-    const prepared = this._baselinePrepared;
-    const challenge = this._baselineChallenge;
-    if (!this._hass || !challenge || !prepared || this._baselineBusy) return;
-    const accepted = window.confirm(this._tf("migrationBaselineConfirm", {
-      files: prepared.source_files,
-      entities: prepared.explicit_entities,
-    }));
-    if (!accepted) return;
-    // Consume the browser copy immediately; multiple clicks cannot replay.
-    this._baselineChallenge = null;
-    this._baselinePrepared = null;
-    this._baselineBusy = true;
-    this._migrationBaselineControls();
-    const status = this.querySelector("#migrationBaselineStatus");
-    if (status) status.textContent = this._t("migrationBaselineInitializing");
-    try {
-      const result = await this._hass.callWS({
-        type: "ha_voice_label_sync/initialize_migration_baseline",
-        confirmation_token: challenge,
-        confirmed: true,
-      });
-      if (status) {
-        status.textContent = result.status === "baseline_and_journal_verified"
-          ? this._tf("migrationBaselineSuccess", {
-              phase: result.journal_phase,
-              revision: result.journal_revision,
-            })
-          : this._t("migrationBaselinePartial");
-      }
-      await this._loadMigrationReview();
-    } catch (_error) {
-      if (status) status.textContent = this._t("migrationBaselineError");
-    } finally {
-      this._baselineBusy = false;
-      this._migrationBaselineControls();
-    }
-  }
-
-  _renderMigrationRecovery() {
-    const status = this.querySelector("#migrationRecoveryStatus");
-    const container = this.querySelector("#migrationRecoveryRows");
-    if (!status || !container) return;
-    container.replaceChildren();
-    const result = this._migrationRecoveryReport;
-    this._renderMigrationAdvanced();
-    if (!result) return;
-    if (result.status === "not_initialized") {
-      status.textContent = this._t("migrationRecoveryNotInitialized");
-      return;
-    }
-    if (result.status === "unavailable") {
-      status.textContent = this._t("migrationRecoveryUnavailable");
-      return;
-    }
-    if (result.status === "snapshot_changed") {
-      status.textContent = this._t("migrationRecoveryChanged");
-      return;
-    }
-    if (!["review_required", "observed_no_pending"].includes(result.status)) {
-      status.textContent = this._t("migrationRecoveryUnavailable");
-      return;
-    }
-    status.textContent =
-      this._t(result.needs_review
-        ? "migrationRecoveryRequired" : "migrationRecoveryObserved") +
-      " " + this._tf("migrationRecoverySummary", {
-        phase: result.phase,
-        revision: result.journal_revision,
-        total: result.summary?.total ?? 0,
-        pending: result.summary?.unconfirmed ?? 0,
-        issues: result.summary?.other_issues ?? 0,
-        sources: result.source_integrity,
-      }) + " " + this._t("migrationRecoverySafeView");
-    const scenarios = result.resolution_scenarios;
-    const scenariosSafe = scenarios?.read_only === true &&
-      scenarios?.automatic_recovery_allowed === false &&
-      scenarios?.journal_ack_allowed === false &&
-      scenarios?.retry_allowed === false &&
-      scenarios?.rollback_allowed === false &&
-      scenarios?.stage_allowed === false &&
-      scenarios?.apply_allowed === false &&
-      scenarios?.cutover_allowed === false &&
-      scenarios?.evidence_is_not_execution_authorization === true &&
-      Array.isArray(scenarios?.operations) &&
-      scenarios.operations.every(item => item.resolution_authorized === false);
-    const scenarioRows = new Map(
-      (scenariosSafe ? scenarios.operations : []).map(
-        item => [item.entity_id, item]
-      )
-    );
-    if (scenariosSafe) {
-      status.textContent += " " + this._tf("migrationResolutionSummary", {
-        pending: scenarios.summary?.unconfirmed ?? 0,
-        investigate: scenarios.summary?.requires_investigation ?? 0,
-        quarantine: scenarios.summary?.quarantined ?? 0,
-      });
-    }
-    // Bound rendering independently of the backend's 2,000-operation cap.
-    for (const row of (result.operations || []).slice(0, 100)) {
-      const line = document.createElement("p");
-      line.className = "diagnostic-note";
-      line.textContent = this._tf("migrationRecoveryRow", {
-        entity: row.entity_id,
-        journal: row.operation_status,
-        observed: row.observed_status,
-        membership: row.membership,
-        review: row.needs_review ? "required" : "observed",
-      });
-      const hypothesis = scenarioRows.get(row.entity_id);
-      if (hypothesis?.resolution_authorized === false) {
-        line.textContent += " " + this._tf("migrationResolutionLine", {
-          scenario: this._t("migrationScenario_" + hypothesis.scenario),
-          category: hypothesis.category,
-          reasons: (hypothesis.reason_codes || []).join(", ") || "—",
-        });
-      }
-      // A review simulation is offered ONLY for a fresh-looking, intact
-      // source and a uniquely diagnosed unresolved case. It cannot write.
-      if (scenariosSafe && result.read_only === true &&
-          result.automatic_recovery_allowed === false &&
-          result.stage_allowed === false &&
-          result.apply_allowed === false &&
-          result.cutover_allowed === false &&
-          result.source_integrity === "verified_unchanged" &&
-          result.phase === "labels_staging" &&
-          /^[0-9a-f]{64}$/.test(result.journal_evidence_sha256 || "") &&
-          row.needs_review === true &&
-          hypothesis?.human_investigation_required === true &&
-          hypothesis?.resolution_authorized === false) {
-        const choice = document.createElement("select");
-        choice.setAttribute("aria-label",
-          this._t("migrationRecoverySimulationTitle"));
-        const available = [
-          ["inspect_external_effects", "migrationRecoverySimulationInspect"],
-          ["quarantine_for_investigation", "migrationRecoverySimulationQuarantine"],
-          ["defer_until_further_evidence", "migrationRecoverySimulationDefer"],
-        ];
-        for (const [value, key] of available) {
-          const option = document.createElement("option");
-          option.value = value;
-          option.textContent = this._t(key);
-          choice.append(option);
-        }
-        choice.value = hypothesis.category === "quarantine"
-          ? "quarantine_for_investigation" : "inspect_external_effects";
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "secondary";
-        button.textContent = this._t("migrationRecoverySimulationAction");
-        button.disabled = this._recoverySimulationBusy === true;
-        button.addEventListener("click", () => {
-          this._simulateRecoveryDecision(row.entity_id, choice.value);
-        });
-        const durable = document.createElement("button");
-        durable.type = "button";
-        durable.className = "secondary";
-        durable.textContent = this._t("migrationLedgerButton");
-        durable.disabled = this._recoveryLedgerBusy === true;
-        durable.addEventListener("click", () => {
-          this._recordRecoveryInvestigation(row.entity_id, choice.value);
-        });
-        line.append(choice, button, durable);
-      }
-      container.append(line);
-    }
-  }
-
-  async _simulateRecoveryDecision(entityId, disposition) {
-    if (!this._hass || this._recoverySimulationBusy) return;
-    this._recoverySimulationBusy = true;
-    const status = this.querySelector("#migrationRecoveryDecisionStatus");
-    if (status) status.textContent = this._t("migrationRecoverySimulationPreparing");
-    // Remove clickable controls while awaiting a fresh server preparation.
-    this._renderMigrationRecovery();
-    try {
-      const prepared = await this._hass.callWS({
-        type: "ha_voice_label_sync/prepare_migration_recovery_decision",
-        entity_id: entityId, disposition,
-      });
-      if (prepared?.status !== "awaiting_simulated_human_confirmation" ||
-          prepared.entity_id !== entityId ||
-          prepared.disposition !== disposition ||
-          typeof prepared.confirmation_token !== "string" ||
-          prepared.read_only !== true ||
-          prepared.execution_authorized !== false ||
-          prepared.stage_allowed !== false ||
-          prepared.cutover_allowed !== false) {
-        throw new Error("invalid_simulation_prepare");
-      }
-      const confirmed = window.confirm(this._tf(
-        "migrationRecoverySimulationConfirm", {
-          entity: entityId,
-          disposition: this._t({
-            inspect_external_effects: "migrationRecoverySimulationInspect",
-            quarantine_for_investigation: "migrationRecoverySimulationQuarantine",
-            defer_until_further_evidence: "migrationRecoverySimulationDefer",
-          }[disposition]),
-        }
-      ));
-      if (!confirmed) {
-        if (status) status.textContent =
-          this._t("migrationRecoverySimulationDeclined");
-        return;
-      }
-      const result = await this._hass.callWS({
-        type: "ha_voice_label_sync/confirm_migration_recovery_decision",
-        entity_id: entityId, disposition,
-        confirmation_token: prepared.confirmation_token,
-        confirmed: true,
-        acknowledge_external_uncertainty: true,
-      });
-      if (result?.status !== "simulated_review_confirmation_no_execution" ||
-          result.entity_id !== entityId ||
-          result.read_only !== true ||
-          result.no_action_was_performed !== true ||
-          result.execution_authorized !== false ||
-          result.journal_ack_allowed !== false ||
-          result.retry_allowed !== false ||
-          result.rollback_allowed !== false ||
-          result.stage_allowed !== false ||
-          result.apply_allowed !== false ||
-          result.cutover_allowed !== false) {
-        throw new Error("invalid_simulation_confirmation");
-      }
-      if (status) status.textContent = this._tf(
-        "migrationRecoverySimulationComplete", {entity: entityId}
-      );
-    } catch (_error) {
-      if (status) status.textContent =
-        this._t("migrationRecoverySimulationRefused");
-    } finally {
-      this._recoverySimulationBusy = false;
-      this._renderMigrationRecovery();
-    }
-  }
-
-  async _recordRecoveryInvestigation(entityId, disposition) {
-    if (!this._hass || this._recoveryLedgerBusy) return;
-    this._recoveryLedgerBusy = true;
-    const status = this.querySelector("#migrationRecoveryDecisionStatus");
-    if (status) status.textContent = this._t("migrationLedgerSaving");
-    this._renderMigrationRecovery();
-    try {
-      const prepared = await this._hass.callWS({
-        type: "ha_voice_label_sync/prepare_migration_investigation_record",
-        entity_id: entityId, disposition,
-      });
-      if (prepared?.status !== "awaiting_durable_investigation_confirmation" ||
-          prepared.entity_id !== entityId ||
-          prepared.disposition !== disposition ||
-          typeof prepared.confirmation_token !== "string" ||
-          prepared.execution_authorized !== false ||
-          prepared.journal_ack_allowed !== false ||
-          prepared.stage_allowed !== false ||
-          prepared.cutover_allowed !== false) {
-        throw new Error("invalid_durable_prepare");
-      }
-      const accepted = window.confirm(this._tf("migrationLedgerConfirm", {
-        entity: entityId,
-        disposition: this._t({
-          inspect_external_effects: "migrationRecoverySimulationInspect",
-          quarantine_for_investigation: "migrationRecoverySimulationQuarantine",
-          defer_until_further_evidence: "migrationRecoverySimulationDefer",
-        }[disposition]),
-      }));
-      if (!accepted) {
-        if (status) status.textContent = this._t("migrationLedgerCancelled");
-        return;
-      }
-      const saved = await this._hass.callWS({
-        type: "ha_voice_label_sync/confirm_migration_investigation_record",
-        entity_id: entityId, disposition,
-        confirmation_token: prepared.confirmation_token,
-        confirmed: true, acknowledge_external_uncertainty: true,
-      });
-      if (saved?.status !== "durable_investigation_recorded_no_execution" ||
-          saved.record?.entity_id !== entityId ||
-          saved.record?.disposition !== disposition ||
-          saved.execution_authorized !== false ||
-          saved.journal_ack_allowed !== false ||
-          saved.retry_allowed !== false ||
-          saved.rollback_allowed !== false ||
-          saved.stage_allowed !== false ||
-          saved.apply_allowed !== false ||
-          saved.cutover_allowed !== false ||
-          saved.label_changed !== false ||
-          saved.journal_changed !== false ||
-          saved.production_yaml_changed !== false) {
-        throw new Error("invalid_durable_result");
-      }
-      if (status) status.textContent = this._tf("migrationLedgerRecorded", {
-        sequence: saved.record.sequence,
-      });
-      await this._loadMigrationInvestigationHistory();
-    } catch (_error) {
-      if (status) status.textContent = this._t("migrationLedgerRejected");
-    } finally {
-      this._recoveryLedgerBusy = false;
-      this._renderMigrationRecovery();
-    }
-  }
-
-  async _loadMigrationInvestigationHistory() {
-    if (!this._hass || this._ledgerLoading) return;
-    this._ledgerLoading = true;
-    const button = this.querySelector("#migrationLedgerRefresh");
-    const status = this.querySelector("#migrationLedgerStatus");
-    const container = this.querySelector("#migrationLedgerRows");
-    if (button) button.disabled = true;
-    if (status) status.textContent = this._t("migrationLedgerReading");
-    try {
-      const ledger = await this._hass.callWS({
-        type: "ha_voice_label_sync/get_migration_investigation_history",
-      });
-      if (ledger?.status !== "verified_investigation_history" ||
-          ledger.execution_authorized !== false ||
-          ledger.stage_allowed !== false ||
-          ledger.cutover_allowed !== false ||
-          ledger.history_read_only !== true ||
-          !Array.isArray(ledger.records)) {
-        throw new Error("invalid_history");
-      }
-      if (status) status.textContent = this._tf("migrationLedgerCount", {
-        count: ledger.record_count,
-      });
-      if (container) {
-        container.replaceChildren();
-        for (const record of ledger.records.slice(-50)) {
-          const row = document.createElement("p");
-          row.className = "diagnostic-note";
-          row.textContent = this._tf("migrationLedgerRow", {
-            sequence: record.sequence,
-            entity: record.entity_id,
-            disposition: record.disposition,
-            relation: record.evidence_relation,
-          });
-          container.append(row);
-        }
-      }
-    } catch (_error) {
-      if (container) container.replaceChildren();
-      if (status) status.textContent = this._t("migrationLedgerUnavailable");
-    } finally {
-      this._ledgerLoading = false;
-      if (button) button.disabled = false;
-    }
-  }
-
-  async _loadMigrationRecovery() {
-    if (!this._hass || this._migrationRecoveryLoading) return;
-    this._migrationRecoveryLoading = true;
-    const button = this.querySelector("#migrationRecoveryRefresh");
-    const status = this.querySelector("#migrationRecoveryStatus");
-    if (button) button.disabled = true;
-    if (status) status.textContent = this._t("migrationRecoveryLoading");
-    try {
-      const report = await this._hass.callWS({
-        type: "ha_voice_label_sync/get_migration_recovery_status",
-      });
-      if (!report || report.read_only !== true ||
-          report.automatic_recovery_allowed !== false ||
-          report.stage_allowed !== false ||
-          report.cutover_allowed !== false) {
-        throw new Error("invalid_recovery_response");
-      }
-      this._migrationRecoveryReport = report;
-      this._renderMigrationRecovery();
-    } catch (_error) {
-      this._migrationRecoveryReport = null;
-      this.querySelector("#migrationRecoveryRows")?.replaceChildren();
-      if (status) status.textContent = this._t("migrationRecoveryUnavailable");
-    } finally {
-      this._migrationRecoveryLoading = false;
-      if (button) button.disabled = false;
-    }
-  }
-
-  _attestationControls() {
-    const read = this.querySelector("#migrationReadAttestation");
-    const attest = this.querySelector("#migrationAttestReview");
-    if (read) read.disabled = this._attestationBusy === true;
-    if (attest) attest.disabled = this._attestationBusy === true;
-  }
-
-  async _readMigrationAttestation() {
-    if (!this._hass || this._attestationBusy || this._migrationLoading) return;
-    this._attestationBusy = true;
-    this._attestationControls();
-    const status = this.querySelector("#migrationAttestationStatus");
-    if (status) status.textContent = this._t("migrationAttestationReading");
-    try {
-      const observed = await this._hass.callWS({
-        type: "ha_voice_label_sync/get_migration_review_attestation",
-      });
-      if (!observed || observed.cutover_allowed !== false ||
-          observed.review_is_not_execution_authorization !== true) {
-        throw new Error("attestation_state_invalid");
-      }
-      if (status) status.textContent = this._tf(
-        "migrationAttestationFresh", {status: observed.status}
-      );
-    } catch (_error) {
-      if (status) status.textContent = this._t("migrationAttestationUnavailable");
-    } finally {
-      this._attestationBusy = false;
-      this._attestationControls();
-    }
-  }
-
-  async _attestMigrationReview() {
-    if (!this._hass || this._attestationBusy || this._migrationLoading) return;
-    const report = this._migrationReport;
-    const status = this.querySelector("#migrationAttestationStatus");
-    if (this._migrationDirty || !report ||
-        report.protected_baseline_status !== "verified" ||
-        this._draftExpectedRevision == null) {
-      if (status) status.textContent = this._t("migrationAttestationNotReady");
-      return;
-    }
-    this._attestationBusy = true;
-    this._attestationControls();
-    if (status) status.textContent = this._t("migrationAttestationReading");
-    try {
-      // Fresh backend evidence is recomputed from the PROTECTED SAVED
-      // decisions, not from untrusted browser choices.
-      const current = await this._hass.callWS({
-        type: "ha_voice_label_sync/get_migration_review_attestation",
-      });
-      const evidence = current?.fresh_review_evidence;
-      if (!evidence ||
-          !["reviewed_with_open_issues",
-            "reviewed_without_detected_issues"].includes(evidence.status) ||
-          evidence.review_token_sha256 !== report.preflight?.review_token_sha256 ||
-          current.cutover_allowed !== false ||
-          typeof current.attestation_revision !== "number") {
-        throw new Error("review_changed");
-      }
-      // The server handles CAS for the draft and journal; a changed draft
-      // will be refused even if an old preview still appears on screen.
-      const saved = await this._hass.callWS({
-        type: "ha_voice_label_sync/get_migration_decision_draft",
-      });
-      if (saved?.status !== "saved_unapproved_draft" ||
-          saved.draft_revision !== this._draftExpectedRevision ||
-          saved.review_token_sha256 !== evidence.review_token_sha256 ||
-          typeof saved.journal_revision !== "number") {
-        throw new Error("saved_choices_changed");
-      }
-      const prompt = evidence.observed_issues
-        ? this._t("migrationAttestationConfirmIssues")
-        : this._t("migrationAttestationConfirm");
-      if (!window.confirm(prompt)) {
-        if (status) status.textContent = "";
-        return;
-      }
-      const result = await this._hass.callWS({
-        type: "ha_voice_label_sync/attest_migration_review",
-        confirmed: true,
-        acknowledge_issues: evidence.observed_issues === true,
-        attestation_revision: current.attestation_revision,
-        draft_revision: saved.draft_revision,
-        journal_revision: saved.journal_revision,
-        baseline_manifest_sha256: saved.baseline_manifest_sha256,
-        review_evidence_sha256: evidence.review_evidence_sha256,
-      });
-      if (!result || result.cutover_allowed !== false ||
-          result.review_is_not_execution_authorization !== true ||
-          !["reviewed_with_open_issues",
-            "reviewed_without_detected_issues"].includes(result.status)) {
-        throw new Error("attestation_result_invalid");
-      }
-      if (status) {
-        status.textContent = this._tf("migrationAttestationDone", {
-          revision: result.attestation_revision,
-        }) + (result.observed_issues
-          ? " " + this._t("migrationAttestationWithIssues") : "");
-      }
-    } catch (_error) {
-      if (status) status.textContent = this._t("migrationAttestationUnavailable");
-    } finally {
-      this._attestationBusy = false;
-      this._attestationControls();
-    }
-  }
-
-  _draftControls() {
-    const save = this.querySelector("#migrationSaveDraft");
-    const restore = this.querySelector("#migrationRestoreDraft");
-    if (save) save.disabled = this._draftBusy === true;
-    if (restore) restore.disabled = this._draftBusy === true;
-  }
-
-  async _restoreMigrationDecisionDraft() {
-    if (!this._hass || this._draftBusy || this._migrationLoading) return;
-    this._draftBusy = true;
-    this._draftControls();
-    const status = this.querySelector("#migrationDraftStatus");
-    if (status) status.textContent = this._t("migrationDraftLoading");
-    try {
-      const saved = await this._hass.callWS({
-        type: "ha_voice_label_sync/get_migration_decision_draft",
-      });
-      if (!saved || !saved.stored_choices_unapproved ||
-          !saved.decisions || typeof saved.decisions !== "object") {
-        throw new Error("unavailable_draft");
-      }
-      const prior = saved.status === "stale_journal" || saved.status === "stale_source";
-      this._migrationDecisions = Object.assign(
-        Object.create(null), saved.decisions
-      );
-      this._draftExpectedRevision = saved.draft_revision;
-      this._migrationDirty = true;
-      await this._loadMigrationReview();
-      if (status) {
-        status.textContent = this._tf("migrationDraftLoaded", {
-          count: Object.keys(saved.decisions).length,
-        }) + (prior ? " " + this._t("migrationDraftStale") : "");
-      }
-    } catch (_error) {
-      if (status) status.textContent = this._t("migrationDraftError");
-    } finally {
-      this._draftBusy = false;
-      this._draftControls();
-    }
-  }
-
-  async _saveMigrationDecisionDraft() {
-    if (!this._hass || this._draftBusy || this._migrationLoading) return;
-    const report = this._migrationReport;
-    const plan = report?.preflight;
-    if (this._migrationDirty ||
-        report?.protected_baseline_status !== "verified" ||
-        !plan?.review_token_sha256) {
-      const status = this.querySelector("#migrationDraftStatus");
-      if (status) status.textContent = this._t("migrationDraftNotReady");
-      return;
-    }
-    this._migrationDecisions ||= Object.create(null);
-    const decisions = {...this._migrationDecisions};
-    if (!window.confirm(this._tf("migrationDraftSaveConfirm", {
-      count: Object.keys(decisions).length,
-    }))) return;
-
-    this._draftBusy = true;
-    this._draftControls();
-    const status = this.querySelector("#migrationDraftStatus");
-    if (status) status.textContent = this._t("migrationDraftSaving");
-    try {
-      const current = await this._hass.callWS({
-        type: "ha_voice_label_sync/get_migration_decision_draft",
-      });
-      if (!current || typeof current.journal_revision !== "number" ||
-          typeof current.draft_revision !== "number" ||
-          typeof current.baseline_manifest_sha256 !== "string") {
-        throw new Error("draft_state_invalid");
-      }
-      if (this._draftExpectedRevision == null) {
-        if (current.draft_revision !== -1) {
-          throw new Error("draft_conflict_needs_restore");
-        }
-        this._draftExpectedRevision = -1;
-      }
-      if (current.draft_revision !== this._draftExpectedRevision) {
-        throw new Error("draft_conflict_needs_restore");
-      }
-      const result = await this._hass.callWS({
-        type: "ha_voice_label_sync/save_migration_decision_draft",
-        decisions,
-        review_token_sha256: plan.review_token_sha256,
-        baseline_manifest_sha256: current.baseline_manifest_sha256,
-        journal_revision: current.journal_revision,
-        draft_revision: this._draftExpectedRevision,
-      });
-      if (result?.status !== "saved_unapproved_draft" ||
-          result.cutover_allowed !== false) {
-        throw new Error("draft_result_invalid");
-      }
-      this._draftExpectedRevision = result.draft_revision;
-      if (status) status.textContent = this._tf("migrationDraftSaved", {
-        count: result.saved_decision_count,
-        revision: result.draft_revision,
-      });
-    } catch (error) {
-      // A lost WS response may follow a durable write. Don't retry on a
-      // guessed revision; the administrator must inspect and refresh.
-      if (status) status.textContent = error?.message === "draft_conflict_needs_restore"
-        ? this._t("migrationDraftConflict") : this._t("migrationDraftError");
-    } finally {
-      this._draftBusy = false;
-      this._draftControls();
-    }
-  }
-
-  async _loadMigrationReview() {
-    if (!this._hass || this._migrationLoading) return;
-    this._migrationDecisions ||= Object.create(null);
-    this._migrationLoading = true;
-    const requestId = (this._migrationRequestId || 0) + 1;
-    this._migrationRequestId = requestId;
-    // A refreshed HA diagnostic invalidates any earlier standalone file check.
-    this._assistantFileRequestId = (this._assistantFileRequestId || 0) + 1;
-    this._assistantFileReport = null;
-    this._assistantFileError = null;
-    this._assistantFileChecking = false;
-    this._assistantProvenanceChoice = null;
-    this._invalidateHistoricalReview();
-    const button = this.querySelector("#migrationAnalyze");
-    const status = this.querySelector("#migrationStatus");
-    if (button) button.disabled = true;
-    if (status) status.textContent = this._t("migrationLoading");
-    try {
-      // This endpoint is admin-only and read-only. Decisions live solely in
-      // this panel's memory, never in a HA service or migration journal.
-      const result = await this._hass.callWS({
-        type: "ha_voice_label_sync/get_migration_review",
-        decisions: {...this._migrationDecisions},
-      });
-      if (requestId !== this._migrationRequestId) return;
-      this._migrationReport = result;
-      this._migrationError = null;
-      this._migrationDirty = false;
-    } catch (_error) {
-      if (requestId !== this._migrationRequestId) return;
-      // Do not display arbitrary backend exception text in the admin UI.
-      this._migrationError = "migration_review_unavailable";
-      this._migrationReport = null;
-    } finally {
-      if (requestId === this._migrationRequestId) {
-        this._migrationLoading = false;
-        if (button) button.disabled = false;
-        this._renderMigrationReview();
-      }
-    }
-  }
-
-  _setMigrationChoice(entityId, field, value) {
-    this._migrationDecisions ||= Object.create(null);
-    const current = {...(this._migrationDecisions[entityId] || {})};
-    if (field === "action" && !value) {
-      delete this._migrationDecisions[entityId];
-    } else {
-      current[field] = value;
-      this._migrationDecisions[entityId] = current;
-    }
-    this._migrationDirty = true;
-    this._renderMigrationReview();
-  }
-
-  _renderMigrationReview() {
-    const status = this.querySelector("#migrationStatus");
-    const summary = this.querySelector("#migrationSummary");
-    const content = this.querySelector("#migrationRows");
-    const more = this.querySelector("#migrationMore");
-    this._renderMigrationGuide();
-    this._renderMigrationAdvanced();
-    this._migrationBaselineControls();
-    if (!status || !summary || !content || !more) return;
-    content.replaceChildren();
-    const report = this._migrationReport;
-    if (!report) {
-      summary.textContent = "";
-      more.hidden = true;
-      if (!this._migrationLoading) {
-        status.textContent = this._migrationError
-          ? this._tf("migrationFailed", {error: this._migrationError})
-          : this._t("migrationEmpty");
-      }
-      return;
-    }
-
-    const diag = report.diagnostic || {};
-    const plan = report.preflight || {};
-    const simulation = report.simulation;
-    const preStageImpact = report.pre_stage_impact;
-    const consumerAudit = report.indirect_consumer_audit;
-    const baseline = report.protected_baseline_status === "verified"
-      ? this._t("migrationBaselineOk")
-      : this._t("migrationBaselineMissing");
-    status.textContent = this._migrationDirty
-      ? this._t("migrationToRecheck")
-      : `${this._t("migrationStatus")}: ${simulation?.status || diag.review_status || "unknown"}`;
-    const total = Array.isArray(diag.entities) ? diag.entities.length : 0;
-    const needReview = plan.summary?.needs_review ?? total;
-    const stageable = plan.summary?.proposed_label_additions ?? 0;
-    summary.textContent =
-      `${this._t("migrationBaseline")}: ${baseline}. ` +
-      `${this._t("migrationDecisions")}: ${total}; ` +
-      `needs_review=${needReview}; proposed_label_additions=${stageable}. ` +
-      "apply_allowed=false; cutover_allowed=false. " +
-      (preStageImpact && preStageImpact.stage_allowed === false
-        ? this._tf("migrationStagingImpact", {
-            status: preStageImpact.status || "unavailable",
-          })
-        : "") +
-      (consumerAudit && consumerAudit.stage_allowed === false
-        ? " " + this._tf("migrationConsumerAudit", {
-            files: consumerAudit.observed_standard_yaml_files ?? 0,
-            writers: consumerAudit.reference_counts?.explicit_hvls_generate_references ?? 0,
-            events: consumerAudit.reference_counts?.registry_event_references ?? 0,
-            labels: consumerAudit.reference_counts?.label_template_references ?? 0,
-          }) + (consumerAudit.original_google_source_overlap === true
-            ? " " + this._t("migrationConsumerOverlap") : "")
-        : "");
-
-    if (!Array.isArray(diag.entities)) {
-      more.hidden = true;
-      return;
-    }
-    this._migrationDecisions ||= Object.create(null);
-    const plans = new Map((plan.entities || []).map(item => [item.entity_id, item]));
-    const simulations = new Map((simulation?.entities || []).map(
-      item => [item.entity_id, item]
-    ));
-    const impactRows = new Map((preStageImpact?.entities || []).map(
-      item => [item.entity_id, item]
-    ));
-    const table = document.createElement("table");
-    table.className = "migration-table";
-    const head = document.createElement("thead");
-    const tr = document.createElement("tr");
-    for (const heading of [
-      "Entity ID", this._t("migrationBefore"), this._t("migrationAfter"),
-      this._t("migrationDecisions"), this._t("migrationReasons")
-    ]) {
-      const th = document.createElement("th");
-      th.textContent = heading;
-      tr.append(th);
-    }
-    head.append(tr);
-    table.append(head);
-    const body = document.createElement("tbody");
-    const max = Math.min(diag.entities.length, this._migrationLimit || 100);
-    for (const entity of diag.entities.slice(0, max)) {
-      const entityId = entity.entity_id;
-      const proposal = plans.get(entityId);
-      const simulated = simulations.get(entityId);
-      const impactRow = impactRows.get(entityId);
-      const choice = this._migrationDecisions[entityId] || {};
-      const row = document.createElement("tr");
-      for (const value of [
-        entityId,
-        entity.disk_ha_sync_projection || "unknown",
-        simulated?.hypothetical_after || "unknown",
-      ]) {
-        const cell = document.createElement("td");
-        cell.textContent = String(value);
-        row.append(cell);
-      }
-      const controlCell = document.createElement("td");
-      const controls = document.createElement("div");
-      controls.className = "migration-controls";
-      const action = document.createElement("select");
-      action.setAttribute("aria-label", `Migration decision: ${entityId}`);
-      for (const [value, key] of [
-        ["", "migrationNoChoice"],
-        ["import", "migrationImport"],
-        ["keep", "migrationKeep"],
-        ["disable", "migrationDisable"],
-        ["remove", "migrationRemove"],
-      ]) {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = this._t(key);
-        action.append(option);
-      }
-      action.value = choice.action || "";
-      action.addEventListener("change", () => {
-        this._setMigrationChoice(entityId, "action", action.value);
-      });
-      controls.append(action);
-
-      if (entity.customization_fields_present?.length) {
-        const metadata = document.createElement("select");
-        metadata.setAttribute("aria-label", `${this._t("migrationMetadataChoice")}: ${entityId}`);
-        for (const [value, label] of [
-          ["", "migrationMetadataChoice"],
-          ["retain_manual_yaml", "migrationRetain"],
-          ["discard_after_review", "migrationDiscard"],
-        ]) {
-          const option = document.createElement("option");
-          option.value = value;
-          option.textContent = this._t(label);
-          metadata.append(option);
-        }
-        metadata.value = choice.metadata_policy || "";
-        metadata.addEventListener("change", () => {
-          this._setMigrationChoice(entityId, "metadata_policy", metadata.value || null);
-        });
-        controls.append(metadata);
-      }
-
-      const addCheck = (key, text, enabled) => {
-        if (!enabled) return;
-        const label = document.createElement("label");
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.checked = choice[key] === true;
-        input.addEventListener("change", () => {
-          this._setMigrationChoice(entityId, key, input.checked);
-        });
-        const span = document.createElement("span");
-        span.textContent = text;
-        label.append(input, span);
-        controls.append(label);
-      };
-      addCheck("acknowledge_change", this._t("migrationAcknowledge"),
-        ["disable", "remove"].includes(choice.action) ||
-        choice.metadata_policy === "discard_after_review");
-      addCheck("acknowledge_sensitive_exposure", this._t("migrationSensitive"),
-        ["lock", "cover", "alarm_control_panel"].includes(entityId.split(".")[0]) &&
-        choice.action === "import");
-
-      controlCell.append(controls);
-      row.append(controlCell);
-      const reasonsCell = document.createElement("td");
-      const reasons = [
-        ...(proposal?.reasons || []),
-        ...(simulated?.reasons || []),
-        ...(impactRow?.reasons || []),
-      ];
-      reasonsCell.textContent = reasons.length
-        ? [...new Set(reasons)].join(", ")
-        : proposal?.status || entity.category || "unknown";
-      row.append(reasonsCell);
-      body.append(row);
-    }
-    table.append(body);
-    content.append(table);
-    more.hidden = max >= diag.entities.length;
-  }
-
   _activateTab(tab) {
     const panels = {
       summary: "#tab-summary",
@@ -10499,9 +8903,70 @@ entity_config: !include google_assistant_entities.yaml</pre>
     });
     // Read the live filesystem each time the Backups tab is opened.
     if (tab === "backups") this._loadBackups();
-    if (tab === "migration") this._loadMigrationRecovery();
     if (tab === "migration" && !this._migrationReport && !this._migrationLoading) {
       this._loadMigrationReview();
+    }
+  }
+
+  async _loadMigrationReview() {
+    if (!this._hass || this._migrationLoading) return;
+    this._migrationLoading = true;
+    const requestId = (this._migrationRequestId || 0) + 1;
+    this._migrationRequestId = requestId;
+    // A refreshed HA diagnostic invalidates any earlier standalone file check.
+    this._assistantFileRequestId = (this._assistantFileRequestId || 0) + 1;
+    this._assistantFileReport = null;
+    this._assistantFileError = null;
+    this._assistantFileChecking = false;
+    this._assistantProvenanceChoice = null;
+    this._invalidateHistoricalReview();
+    const button = this.querySelector("#migrationAnalyze");
+    if (button) button.disabled = true;
+    this._renderMigrationReview();
+    try {
+      // Admin-only and read-only: how Google Assistant is configured today.
+      const diagnostic = await this._hass.callWS({
+        type: "ha_voice_label_sync/get_migration_diagnostic",
+      });
+      if (requestId !== this._migrationRequestId) return;
+      this._migrationReport = {diagnostic};
+      this._migrationError = null;
+    } catch (_error) {
+      if (requestId !== this._migrationRequestId) return;
+      // Do not display arbitrary backend exception text in the admin UI.
+      this._migrationError = "migration_diagnostic_unavailable";
+      this._migrationReport = null;
+    } finally {
+      if (requestId === this._migrationRequestId) {
+        this._migrationLoading = false;
+        if (button) button.disabled = false;
+        this._renderMigrationReview();
+      }
+    }
+  }
+
+  _renderMigrationReview() {
+    this._renderMigrationGuide();
+    this._renderMigrationManagedNotice();
+    const status = this.querySelector("#migrationStatus");
+    if (!status) return;
+    status.textContent = this._migrationLoading
+      ? this._t("migrationLoading")
+      : this._migrationError
+        ? this._tf("migrationFailed", {error: this._migrationError})
+        : "";
+  }
+
+  _renderMigrationManagedNotice() {
+    // Once HVLS owns the YAML and no restore or recovery is pending, say so:
+    // the Preview is where changes are made.
+    const managed = this._ownershipManaged === true &&
+      this._recoveryPending === false &&
+      this._restoreReconcilePending !== true;
+    const notice = this.querySelector("#migrationManagedNotice");
+    if (notice) {
+      notice.hidden = !managed;
+      notice.textContent = managed ? this._t("migrationManagedNotice") : "";
     }
   }
 

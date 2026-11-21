@@ -2804,70 +2804,6 @@ test("Statistics production indicators are informational and do not apply or cha
 });
 
 
-test("Migration tab exposes a review-only action and no cutover button", () => {
-  assert.match(source, /data-tab="migration"/);
-  assert.match(source, /id="tab-migration"/);
-  assert.match(source, /id="migrationAnalyze"/);
-  assert.ok(source.includes("ha_voice_label_sync/get_migration_review"));
-  const tabStart = source.indexOf('<section id="tab-migration"');
-  const tabEnd = source.indexOf('<section id="tab-backups"', tabStart);
-  assert.ok(tabStart >= 0 && tabEnd > tabStart);
-  const markup = source.slice(tabStart, tabEnd);
-  assert.doesNotMatch(markup, /id="apply"|id="restoreBackup"/);
-  assert.doesNotMatch(markup, /set_entity_label|apply_preview/);
-});
-
-test("Migration review loads only diagnostic and never calls write APIs", async () => {
-  const requests = [];
-  const {panel} = makePanel(async request => {
-    requests.push(request);
-    return {
-      protected_baseline_status: "not_verified",
-      diagnostic: {review_status: "pending_review", entities: [
-        {entity_id: "light.good", disk_ha_sync_projection: "exposed",
-          category: "candidate_for_review", customization_fields_present: []},
-      ]},
-      preflight: {
-        entities: [
-          {entity_id: "light.good", status: "needs_review",
-            reasons: ["decision_required"]},
-        ],
-        summary: {needs_review: 1, proposed_label_additions: 0},
-      },
-      simulation: null,
-      read_only: true, apply_allowed: false, cutover_allowed: false,
-    };
-  });
-  const controls = {
-    migrationAnalyze: {disabled: false},
-    migrationStatus: {textContent: ""},
-    migrationSummary: {textContent: ""},
-    migrationRows: {
-      children: [], replaceChildren(...children) { this.children = children; },
-      append(child) { this.children.push(child); },
-    },
-    migrationMore: {hidden: false},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  await panel._loadMigrationReview();
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].type, "ha_voice_label_sync/get_migration_review");
-  assert.equal(Object.keys(requests[0].decisions).length, 0);
-  assert.match(controls.migrationSummary.textContent, /non vérifiée/);
-  assert.match(controls.migrationSummary.textContent, /apply_allowed=false/);
-  assert.match(controls.migrationStatus.textContent, /pending_review/);
-  assert.equal(controls.migrationAnalyze.disabled, false);
-  assert.equal(controls.migrationRows.children.length, 1);
-  panel._setMigrationChoice("light.good", "action", "import");
-  assert.equal(panel._migrationDecisions["light.good"].action, "import");
-  assert.equal(requests.length, 1, "changing a choice never sends a write");
-  assert.match(controls.migrationStatus.textContent, /relancez l’analyse/);
-  await panel._loadMigrationReview();
-  assert.equal(requests.length, 2);
-  assert.equal(requests[1].decisions["light.good"].action, "import");
-  assert.equal(requests[1].type, "ha_voice_label_sync/get_migration_review");
-});
-
 test("Migration backend failures show a sanitized message without writing", async () => {
   const requests = [];
   const {panel} = makePanel(async request => {
@@ -2892,906 +2828,11 @@ test("Migration backend failures show a sanitized message without writing", asyn
 });
 
 
-test("Protected baseline preparation alone never calls initialization", async () => {
-  const requests = [];
-  const {panel} = makePanel(async request => {
-    requests.push(request);
-    return {
-      status: "awaiting_explicit_confirmation",
-      confirmation_token: "one-use-secret",
-      source_files: 2,
-      explicit_entities: 3,
-      implicit_exposure_warning: false,
-    };
-  });
-  const controls = {
-    migrationPrepareBaseline: {disabled: false},
-    migrationConfirmBaseline: {disabled: true, hidden: true},
-    migrationBaselineStatus: {textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationReport = {diagnostic: {
-    mode: "assisted_migration",
-    review_status: "pending_review",
-    source: {status: "resolved"},
-    global_blockers: [],
-  }};
-  await panel._prepareMigrationBaseline();
-  assert.deepEqual(requests.map(r => r.type), [
-    "ha_voice_label_sync/prepare_migration_baseline",
-  ]);
-  assert.equal(panel._baselineChallenge, "one-use-secret");
-  assert.equal(controls.migrationConfirmBaseline.hidden, false);
-  assert.match(controls.migrationBaselineStatus.textContent, /2/);
-});
-
-test("Cancelled baseline confirmation makes no filesystem-write request", async () => {
-  const calls = [];
-  const {panel} = makePanel(async request => {
-    calls.push(request);
-    return {};
-  }, () => false);
-  panel._baselineChallenge = "secret";
-  panel._baselinePrepared = {source_files: 2, explicit_entities: 3};
-  panel.querySelector = () => null;
-  await panel._confirmMigrationBaseline();
-  assert.equal(calls.length, 0);
-  assert.equal(panel._baselineChallenge, "secret");
-});
-
-test("Confirmed baseline uses one-time token and refreshes review", async () => {
-  const calls = [];
-  const {panel} = makePanel(async request => {
-    calls.push(request);
-    return {
-      status: "baseline_and_journal_verified",
-      baseline_verified: true,
-      journal_phase: "baseline_ready",
-      journal_revision: 0,
-    };
-  });
-  let refreshes = 0;
-  panel._loadMigrationReview = async () => { refreshes++; };
-  const controls = {
-    migrationPrepareBaseline: {disabled: false},
-    migrationConfirmBaseline: {disabled: false, hidden: false},
-    migrationBaselineStatus: {textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._baselineChallenge = "reviewed-secret";
-  panel._baselinePrepared = {source_files: 2, explicit_entities: 3};
-  await panel._confirmMigrationBaseline();
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].type, "ha_voice_label_sync/initialize_migration_baseline");
-  assert.equal(calls[0].confirmation_token, "reviewed-secret");
-  assert.equal(calls[0].confirmed, true);
-  assert.equal(refreshes, 1);
-  assert.equal(panel._baselineChallenge, null);
-  assert.equal(controls.migrationConfirmBaseline.disabled, true);
-  assert.equal(controls.migrationConfirmBaseline.hidden, true);
-  assert.match(controls.migrationBaselineStatus.textContent, /Sauvegarde vérifiée/);
-  await panel._confirmMigrationBaseline();
-  assert.equal(calls.length, 1, "token cannot be reused by a second click");
-});
-
-test("Baseline initialization failure never exposes backend private error", async () => {
-  const calls = [];
-  const {panel} = makePanel(async request => {
-    calls.push(request);
-    throw new Error("PRIVATE_YAML_SECRET");
-  });
-  panel._baselineChallenge = "one-use";
-  panel._baselinePrepared = {source_files: 2, explicit_entities: 2};
-  const controls = {
-    migrationPrepareBaseline: {disabled: false},
-    migrationConfirmBaseline: {disabled: false, hidden: false},
-    migrationBaselineStatus: {textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  await panel._confirmMigrationBaseline();
-  assert.equal(calls.length, 1);
-  assert.match(controls.migrationBaselineStatus.textContent, /refusée/);
-  assert.doesNotMatch(controls.migrationBaselineStatus.textContent, /PRIVATE_YAML_SECRET/);
-  assert.equal(panel._baselineChallenge, null);
-});
-
-test("Migration tab contains no automatic confirmed initialization", () => {
-  const start = source.indexOf('if (tab === "migration"');
-  const tabEnd = source.indexOf("\n  }", start);
-  assert.ok(start > -1 && tabEnd > start);
-  const block = source.slice(start, tabEnd);
-  assert.match(block, /_loadMigrationReview\(\)/);
-  assert.doesNotMatch(block, /_prepareMigrationBaseline|_confirmMigrationBaseline/);
-  assert.match(source, /window\.confirm\(this\._tf\("migrationBaselineConfirm"/);
-  assert.doesNotMatch(source, /setTimeout\([^)]*initialize_migration_baseline/);
-});
 
 
-test("Saving migration choices never calls any label or YAML write", async () => {
-  const requests = [];
-  const {panel} = makePanel(async request => {
-    requests.push(request);
-    if (request.type === "ha_voice_label_sync/get_migration_decision_draft") {
-      return {
-        status: "not_saved", draft_revision: -1,
-        journal_revision: 0,
-        baseline_manifest_sha256: "b".repeat(64),
-        decisions: {},
-      };
-    }
-    if (request.type === "ha_voice_label_sync/save_migration_decision_draft") {
-      return {
-        status: "saved_unapproved_draft", draft_revision: 0,
-        saved_decision_count: 1, cutover_allowed: false,
-      };
-    }
-    throw new Error("Unexpected endpoint");
-  });
-  const controls = {
-    migrationSaveDraft: {disabled: false},
-    migrationRestoreDraft: {disabled: false},
-    migrationDraftStatus: {textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationReport = {
-    protected_baseline_status: "verified",
-    preflight: {review_token_sha256: "a".repeat(64)},
-  };
-  panel._migrationDecisions = {"light.safe": {action: "import"}};
-  panel._migrationDirty = false;
-  await panel._saveMigrationDecisionDraft();
-  assert.deepEqual(requests.map(r => r.type), [
-    "ha_voice_label_sync/get_migration_decision_draft",
-    "ha_voice_label_sync/save_migration_decision_draft",
-  ]);
-  assert.equal(requests[1].decisions["light.safe"].action, "import");
-  assert.equal(requests[1].draft_revision, -1);
-  assert.equal(requests[1].review_token_sha256, "a".repeat(64));
-  assert.equal(panel._draftExpectedRevision, 0);
-  assert.match(controls.migrationDraftStatus.textContent, /PAS une autorisation/);
-});
-
-test("Migration draft refuses silent overwrite of unseen administrator changes", async () => {
-  const requests = [];
-  const {panel} = makePanel(async request => {
-    requests.push(request);
-    return {
-      status: "saved_unapproved_draft", draft_revision: 2,
-      journal_revision: 0,
-      baseline_manifest_sha256: "b".repeat(64),
-      decisions: {"light.other": {action: "keep"}},
-    };
-  });
-  const controls = {
-    migrationSaveDraft: {disabled: false},
-    migrationRestoreDraft: {disabled: false},
-    migrationDraftStatus: {textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationReport = {
-    protected_baseline_status: "verified",
-    preflight: {review_token_sha256: "a".repeat(64)},
-  };
-  panel._migrationDecisions = {"light.safe": {action: "import"}};
-  panel._migrationDirty = false;
-  await panel._saveMigrationDecisionDraft();
-  assert.equal(requests.length, 1);
-  assert.match(controls.migrationDraftStatus.textContent, /Un brouillon existe/);
-  assert.equal(panel._draftExpectedRevision, undefined);
-});
-
-test("Restored migration draft survives UI reopening but needs fresh analysis", async () => {
-  const requests = [];
-  const {panel} = makePanel(async request => {
-    requests.push(request);
-    return {
-      stored_choices_unapproved: true,
-      status: "saved_unapproved_draft",
-      draft_revision: 4,
-      decisions: {
-        "light.safe": {action: "import"},
-        "light.bad": {action: "keep"},
-      },
-    };
-  });
-  const controls = {
-    migrationSaveDraft: {disabled: false},
-    migrationRestoreDraft: {disabled: false},
-    migrationDraftStatus: {textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  let refreshed = 0;
-  panel._loadMigrationReview = async () => { refreshed++; };
-  await panel._restoreMigrationDecisionDraft();
-  assert.equal(panel._draftExpectedRevision, 4);
-  assert.equal(panel._migrationDecisions["light.safe"].action, "import");
-  assert.equal(panel._migrationDecisions["light.bad"].action, "keep");
-  assert.equal(refreshed, 1);
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].type,
-    "ha_voice_label_sync/get_migration_decision_draft");
-});
-
-test("Draft choice edits do not autosave or mutate labels", async () => {
-  const requests = [];
-  const {panel} = makePanel(async request => {
-    requests.push(request.type);
-    return {};
-  });
-  panel.querySelector = () => null;
-  panel._setMigrationChoice("light.safe", "action", "keep");
-  panel._setMigrationChoice("light.safe", "metadata_policy",
-    "retain_manual_yaml");
-  assert.equal(requests.length, 0);
-  assert.equal(panel._migrationDirty, true);
-});
-
-test("Unsaved or stale migration analysis cannot persist decisions", async () => {
-  const requests = [];
-  const {panel} = makePanel(async request => {
-    requests.push(request);
-    return {};
-  });
-  const controls = {migrationDraftStatus: {textContent: ""}};
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationDirty = true;
-  panel._migrationReport = {
-    protected_baseline_status: "verified",
-    preflight: {review_token_sha256: "a".repeat(64)},
-  };
-  await panel._saveMigrationDecisionDraft();
-  assert.equal(requests.length, 0);
-  assert.match(controls.migrationDraftStatus.textContent,
-    /Actualisez d’abord/);
-});
-
-test("Cancel save migration selections sends no write", async () => {
-  const requests = [];
-  const {panel} = makePanel(async request => {
-    requests.push(request);
-    return {};
-  }, () => false);
-  panel._migrationDirty = false;
-  panel._migrationReport = {
-    protected_baseline_status: "verified",
-    preflight: {review_token_sha256: "a".repeat(64)},
-  };
-  panel.querySelector = () => null;
-  await panel._saveMigrationDecisionDraft();
-  assert.equal(requests.length, 0);
-});
 
 
-test("Read-only human attestation check never calls any write API", async () => {
-  const calls = [];
-  const {panel} = makePanel(async request => {
-    calls.push(request);
-    return {
-      status: "stale_review_attestation",
-      attestation_revision: 1,
-      review_is_not_execution_authorization: true,
-      cutover_allowed: false,
-    };
-  });
-  const controls = {
-    migrationReadAttestation: {disabled: false},
-    migrationAttestReview: {disabled: false},
-    migrationAttestationStatus: {textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  await panel._readMigrationAttestation();
-  assert.deepEqual(calls.map(r => r.type), [
-    "ha_voice_label_sync/get_migration_review_attestation",
-  ]);
-  assert.match(controls.migrationAttestationStatus.textContent, /stale_review_attestation/);
-  assert.match(controls.migrationAttestationStatus.textContent, /Aucun droit d’exécution/);
-});
 
-test("Explicit no-issue review attestation never stages a label", async () => {
-  const requests = [];
-  const sha = "a".repeat(64);
-  const fingerprint = "c".repeat(64);
-  const {panel} = makePanel(async request => {
-    requests.push(request);
-    if (request.type === "ha_voice_label_sync/get_migration_review_attestation") {
-      return {
-        status: "not_attested",
-        attestation_revision: -1,
-        cutover_allowed: false,
-        review_is_not_execution_authorization: true,
-        fresh_review_evidence: {
-          status: "reviewed_without_detected_issues",
-          review_evidence_sha256: fingerprint,
-          review_token_sha256: sha,
-          observed_issues: false,
-        },
-      };
-    }
-    if (request.type === "ha_voice_label_sync/get_migration_decision_draft") {
-      return {
-        status: "saved_unapproved_draft",
-        draft_revision: 2, journal_revision: 0,
-        baseline_manifest_sha256: "b".repeat(64),
-        review_token_sha256: sha,
-      };
-    }
-    if (request.type === "ha_voice_label_sync/attest_migration_review") {
-      return {
-        status: "reviewed_without_detected_issues",
-        attestation_revision: 0,
-        cutover_allowed: false,
-        observed_issues: false,
-        review_is_not_execution_authorization: true,
-      };
-    }
-    throw new Error("Unexpected operation: " + request.type);
-  });
-  const controls = {
-    migrationReadAttestation: {disabled: false},
-    migrationAttestReview: {disabled: false},
-    migrationAttestationStatus: {textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationDirty = false;
-  panel._migrationReport = {
-    protected_baseline_status: "verified",
-    preflight: {review_token_sha256: sha},
-  };
-  panel._draftExpectedRevision = 2;
-  await panel._attestMigrationReview();
-  assert.deepEqual(requests.map(r => r.type), [
-    "ha_voice_label_sync/get_migration_review_attestation",
-    "ha_voice_label_sync/get_migration_decision_draft",
-    "ha_voice_label_sync/attest_migration_review",
-  ]);
-  assert.equal(requests[2].confirmed, true);
-  assert.equal(requests[2].acknowledge_issues, false);
-  assert.equal(requests[2].attestation_revision, -1);
-  assert.equal(requests[2].draft_revision, 2);
-  assert.equal(requests[2].review_evidence_sha256, fingerprint);
-  assert.match(controls.migrationAttestationStatus.textContent, /PAS une autorisation/);
-});
-
-test("Attestation with unresolved issues carries explicit acknowledgment", async () => {
-  const sha = "a".repeat(64);
-  const calls = [];
-  let warningPrompt = "";
-  const {panel} = makePanel(async request => {
-    calls.push(request);
-    if (request.type === "ha_voice_label_sync/get_migration_review_attestation") {
-      return {
-        attestation_revision: -1,
-        cutover_allowed: false,
-        fresh_review_evidence: {
-          status: "reviewed_with_open_issues",
-          review_token_sha256: sha,
-          review_evidence_sha256: "c".repeat(64),
-          observed_issues: true,
-        },
-      };
-    }
-    if (request.type === "ha_voice_label_sync/get_migration_decision_draft") {
-      return {
-        status: "saved_unapproved_draft",
-        draft_revision: 0, journal_revision: 0,
-        review_token_sha256: sha,
-        baseline_manifest_sha256: "b".repeat(64),
-      };
-    }
-    return {
-      status: "reviewed_with_open_issues",
-      attestation_revision: 0,
-      observed_issues: true, cutover_allowed: false,
-      review_is_not_execution_authorization: true,
-    };
-  }, msg => {warningPrompt = msg; return true;});
-  const controls = {
-    migrationReadAttestation: {disabled: false},
-    migrationAttestReview: {disabled: false},
-    migrationAttestationStatus: {textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationReport = {
-    protected_baseline_status: "verified",
-    preflight: {review_token_sha256: sha},
-  };
-  panel._draftExpectedRevision = 0;
-  panel._migrationDirty = false;
-  await panel._attestMigrationReview();
-  assert.match(warningPrompt, /anomalies ou décisions non résolues/);
-  assert.equal(calls[2].acknowledge_issues, true);
-  assert.equal(calls[2].confirmed, true);
-  assert.match(controls.migrationAttestationStatus.textContent, /AVEC anomalies/);
-});
-
-test("Cancelling human review attestation never writes a record", async () => {
-  const sha = "a".repeat(64);
-  const calls = [];
-  const {panel} = makePanel(async request => {
-    calls.push(request.type);
-    if (request.type === "ha_voice_label_sync/get_migration_review_attestation") {
-      return {
-        attestation_revision: -1, cutover_allowed: false,
-        fresh_review_evidence: {
-          status: "reviewed_without_detected_issues",
-          review_token_sha256: sha,
-          review_evidence_sha256: "c".repeat(64),
-          observed_issues: false,
-        },
-      };
-    }
-    return {
-      status: "saved_unapproved_draft", draft_revision: 0,
-      journal_revision: 0, review_token_sha256: sha,
-      baseline_manifest_sha256: "b".repeat(64),
-    };
-  }, () => false);
-  const controls = {
-    migrationReadAttestation: {disabled: false},
-    migrationAttestReview: {disabled: false},
-    migrationAttestationStatus: {textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._draftExpectedRevision = 0;
-  panel._migrationDirty = false;
-  panel._migrationReport = {
-    protected_baseline_status: "verified",
-    preflight: {review_token_sha256: sha},
-  };
-  await panel._attestMigrationReview();
-  assert.deepEqual(calls, [
-    "ha_voice_label_sync/get_migration_review_attestation",
-    "ha_voice_label_sync/get_migration_decision_draft",
-  ]);
-});
-
-test("Unsaved choice change prevents review attestation requests", async () => {
-  const calls = [];
-  const {panel} = makePanel(async request => {
-    calls.push(request);
-    return {};
-  });
-  const controls = {
-    migrationReadAttestation: {disabled: false},
-    migrationAttestReview: {disabled: false},
-    migrationAttestationStatus: {textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationDirty = true;
-  panel._draftExpectedRevision = 1;
-  panel._migrationReport = {
-    protected_baseline_status: "verified",
-    preflight: {review_token_sha256: "a".repeat(64)},
-  };
-  await panel._attestMigrationReview();
-  assert.equal(calls.length, 0);
-  assert.match(controls.migrationAttestationStatus.textContent, /Enregistrez d’abord/);
-});
-
-test("Review evidence conflict cannot be silently acknowledged", async () => {
-  const sha = "a".repeat(64);
-  const calls = [];
-  const {panel} = makePanel(async request => {
-    calls.push(request.type);
-    return {
-      attestation_revision: 0, cutover_allowed: false,
-      fresh_review_evidence: {
-        status: "reviewed_without_detected_issues",
-        review_token_sha256: "b".repeat(64),
-        review_evidence_sha256: "c".repeat(64),
-      },
-    };
-  });
-  const controls = {
-    migrationReadAttestation: {disabled: false},
-    migrationAttestReview: {disabled: false},
-    migrationAttestationStatus: {textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._draftExpectedRevision = 1;
-  panel._migrationDirty = false;
-  panel._migrationReport = {
-    protected_baseline_status: "verified",
-    preflight: {review_token_sha256: sha},
-  };
-  await panel._attestMigrationReview();
-  assert.equal(calls.length, 1);
-  assert.match(controls.migrationAttestationStatus.textContent, /périmée/);
-});
-
-
-test("Loaded manual Google impact appears as an explicitly non-authorizing status", async () => {
-  const calls = [];
-  const {panel} = makePanel(async request => {
-    calls.push(request.type);
-    return {
-      protected_baseline_status: "not_verified",
-      diagnostic: {
-        entities: [
-          {entity_id: "light.good", disk_ha_sync_projection: "exposed"},
-          {entity_id: "light.uncertain", disk_ha_sync_projection: "unknown"},
-        ],
-        review_status: "pending_review",
-      },
-      preflight: {
-        summary: {needs_review: 1, proposed_label_additions: 2},
-        entities: [],
-      },
-      pre_stage_impact: {
-        status: "local_review_pending",
-        stage_allowed: false,
-        cutover_allowed: false,
-        entities: [
-          {entity_id: "light.good", reasons: [],
-            status: "no_manual_policy_delta_detected"},
-          {entity_id: "light.uncertain",
-            reasons: ["manual_google_runtime_rule_disagreement"],
-            status: "needs_review"},
-        ],
-      },
-      simulation: null,
-      read_only: true, apply_allowed: false, cutover_allowed: false,
-    };
-  });
-  const controls = {
-    migrationAnalyze: {disabled: false},
-    migrationStatus: {textContent: ""},
-    migrationSummary: {textContent: ""},
-    migrationRows: {
-      children: [], replaceChildren(...children) { this.children = children; },
-      append(child) { this.children.push(child); },
-    },
-    migrationMore: {hidden: false},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  await panel._loadMigrationReview();
-  assert.deepEqual(calls, ["ha_voice_label_sync/get_migration_review"]);
-  assert.match(controls.migrationSummary.textContent, /local_review_pending/);
-  assert.match(controls.migrationSummary.textContent, /Staging interdit/);
-  assert.match(controls.migrationSummary.textContent, /non vérifiés/);
-  assert.doesNotMatch(controls.migrationSummary.textContent, /stage_allowed=true/);
-  assert.equal(controls.migrationRows.children.length, 1);
-});
-
-test("Unknown Google staging impact is never rendered as permission to stage", () => {
-  const {panel} = makePanel(async () => ({}));
-  const controls = {
-    migrationStatus: {textContent: ""},
-    migrationSummary: {textContent: ""},
-    migrationRows: {replaceChildren() {}, append() {}},
-    migrationMore: {hidden: true},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationReport = {
-    protected_baseline_status: "not_verified",
-    preflight: {summary: {needs_review: 1}},
-    diagnostic: {entities: [{entity_id: "light.test"}]},
-    pre_stage_impact: {
-      status: "global_review_blocked",
-      stage_allowed: false,
-      entities: [],
-    },
-  };
-  panel._renderMigrationReview();
-  assert.match(controls.migrationSummary.textContent, /global_review_blocked/);
-  assert.match(controls.migrationSummary.textContent, /Staging interdit/);
-  assert.ok(!source.includes("ha_voice_label_sync/stage_one_approved_label"));
-});
-
-
-test("Indirect consumer audit warns even without references or Google delta", () => {
-  const {panel} = makePanel(async () => ({}));
-  const controls = {
-    migrationStatus: {textContent: ""},
-    migrationSummary: {textContent: ""},
-    migrationRows: {replaceChildren() {}, append() {}},
-    migrationMore: {hidden: true},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationReport = {
-    protected_baseline_status: "not_verified",
-    preflight: {summary: {needs_review: 0, proposed_label_additions: 1}},
-    diagnostic: {entities: [{entity_id: "light.test"}]},
-    pre_stage_impact: {
-      status: "no_manual_policy_delta_detected",
-      stage_allowed: false, entities: [],
-    },
-    indirect_consumer_audit: {
-      status: "indirect_effects_unverified",
-      observed_standard_yaml_files: 3,
-      original_google_source_overlap: false,
-      reference_counts: {
-        explicit_hvls_generate_references: 0,
-        registry_event_references: 0,
-        label_template_references: 0,
-      },
-      stage_allowed: false,
-    },
-  };
-  panel._renderMigrationReview();
-  assert.match(controls.migrationSummary.textContent, /3 fichiers YAML inspectés/);
-  assert.match(controls.migrationSummary.textContent, /Effets externes non certifiés/);
-  assert.match(controls.migrationSummary.textContent, /staging interdit/i);
-  assert.ok(!source.includes("ha_voice_label_sync/stage_one_approved_label"));
-});
-
-test("V1 output overlap produces persistent no-write warning", () => {
-  const {panel} = makePanel(async () => ({}));
-  const controls = {
-    migrationStatus: {textContent: ""},
-    migrationSummary: {textContent: ""},
-    migrationRows: {replaceChildren() {}, append() {}},
-    migrationMore: {hidden: true},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationReport = {
-    protected_baseline_status: "verified",
-    preflight: {summary: {}},
-    diagnostic: {entities: [{entity_id: "light.test"}]},
-    indirect_consumer_audit: {
-      status: "indirect_effects_unverified",
-      observed_standard_yaml_files: 3,
-      reference_counts: {
-        explicit_hvls_generate_references: 1,
-        registry_event_references: 1,
-        label_template_references: 1,
-      },
-      original_google_source_overlap: true,
-      stage_allowed: false,
-    },
-  };
-  panel._renderMigrationReview();
-  assert.match(controls.migrationSummary.textContent, /1 références à la génération/);
-  assert.match(controls.migrationSummary.textContent, /source Google manuelle protégée/);
-  assert.match(controls.migrationSummary.textContent, /staging interdit/i);
-});
-
-
-test("Recovery view is strictly read-only and displays pending intent", async () => {
-  const calls = [];
-  const {panel} = makePanel(async message => {
-    calls.push(message.type);
-    return {
-      read_only: true, automatic_recovery_allowed: false,
-      stage_allowed: false, cutover_allowed: false,
-      status: "review_required", needs_review: true,
-      phase: "labels_staging", journal_revision: 2,
-      source_integrity: "verified_unchanged",
-      summary: {total: 1, unconfirmed: 1, other_issues: 0},
-      operations: [{
-        entity_id: "light.test", operation_status: "intent",
-        observed_status: "unconfirmed_intent", membership: "present",
-        needs_review: true,
-      }],
-    };
-  });
-  const controls = {
-    migrationRecoveryRefresh: {disabled: false},
-    migrationRecoveryStatus: {textContent: ""},
-    migrationRecoveryRows: {
-      children: [], replaceChildren() {this.children = [];},
-      append(row) {this.children.push(row);},
-    },
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  await panel._loadMigrationRecovery();
-  assert.deepEqual(calls, [
-    "ha_voice_label_sync/get_migration_recovery_status",
-  ]);
-  assert.match(controls.migrationRecoveryStatus.textContent, /Examen manuel requis/);
-  assert.match(controls.migrationRecoveryStatus.textContent, /non acquittées : 1/);
-  assert.match(controls.migrationRecoveryStatus.textContent, /aucun droit de staging/);
-  assert.equal(controls.migrationRecoveryRows.children.length, 1);
-  assert.match(controls.migrationRecoveryRows.children[0].textContent, /unconfirmed_intent/);
-  assert.equal(controls.migrationRecoveryRefresh.disabled, false);
-  assert.ok(!calls.some(c => /apply|stage|resume|rollback|ack/.test(c)));
-});
-
-test("Missing migration journal is displayed without any initialization", async () => {
-  const calls = [];
-  const {panel} = makePanel(async message => {
-    calls.push(message.type);
-    return {
-      read_only: true, automatic_recovery_allowed: false,
-      stage_allowed: false, cutover_allowed: false,
-      status: "not_initialized", operations: [],
-    };
-  });
-  const controls = {
-    migrationRecoveryRefresh: {disabled: false},
-    migrationRecoveryStatus: {textContent: ""},
-    migrationRecoveryRows: {
-      replaceChildren() {}, append() { throw Error("unexpected rows"); },
-    },
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  await panel._loadMigrationRecovery();
-  assert.deepEqual(calls, ["ha_voice_label_sync/get_migration_recovery_status"]);
-  assert.match(controls.migrationRecoveryStatus.textContent, /Journal non initialisé/);
-});
-
-test("Corrupted or stale recovery status never becomes permission", async () => {
-  const {panel} = makePanel(async message => {
-    assert.equal(message.type, "ha_voice_label_sync/get_migration_recovery_status");
-    return {
-      read_only: true, automatic_recovery_allowed: false,
-      stage_allowed: false, cutover_allowed: false,
-      status: "unavailable", operations: [],
-      reason: "protected_journal_or_baseline_invalid",
-    };
-  });
-  const controls = {
-    migrationRecoveryRefresh: {disabled: false},
-    migrationRecoveryStatus: {textContent: ""},
-    migrationRecoveryRows: {replaceChildren() {}, append() {}},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  await panel._loadMigrationRecovery();
-  assert.match(controls.migrationRecoveryStatus.textContent, /indisponible/);
-});
-
-test("Any allegedly authorized recovery backend payload is rejected", async () => {
-  const calls = [];
-  const {panel} = makePanel(async message => {
-    calls.push(message.type);
-    return {
-      read_only: true,
-      automatic_recovery_allowed: true,
-      stage_allowed: true, cutover_allowed: false,
-      status: "observed_no_pending",
-    };
-  });
-  const controls = {
-    migrationRecoveryRefresh: {disabled: false},
-    migrationRecoveryStatus: {textContent: ""},
-    migrationRecoveryRows: {replaceChildren() {}, append() {}},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  await panel._loadMigrationRecovery();
-  assert.match(controls.migrationRecoveryStatus.textContent, /indisponible/);
-  assert.equal(panel._migrationRecoveryReport, null);
-  assert.deepEqual(calls, ["ha_voice_label_sync/get_migration_recovery_status"]);
-});
-
-test("A long recovery report is bounded to 100 visible rows", () => {
-  const {panel} = makePanel(async () => ({}));
-  const controls = {
-    migrationRecoveryStatus: {textContent: ""},
-    migrationRecoveryRows: {
-      children: [], replaceChildren() {this.children = [];},
-      append(row) {this.children.push(row);},
-    },
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationRecoveryReport = {
-    status: "review_required", phase: "labels_staging",
-    journal_revision: 201, needs_review: true,
-    source_integrity: "verified_unchanged",
-    summary: {total: 150, unconfirmed: 150, other_issues: 0},
-    operations: Array.from({length: 150}, (_, i) => ({
-      entity_id: "light.test_" + i, operation_status: "intent",
-      observed_status: "unconfirmed_intent",
-      membership: "unknown", needs_review: true,
-    })),
-  };
-  panel._renderMigrationRecovery();
-  assert.equal(controls.migrationRecoveryRows.children.length, 100);
-  assert.match(controls.migrationRecoveryStatus.textContent, /Opérations : 150/);
-});
-
-test("Opening migration tab always rechecks recovery independently of review", () => {
-  const {panel} = makePanel(async () => ({}));
-  const opened = [];
-  const panels = {};
-  for (const id of [
-    "tab-summary", "tab-exclusions", "entityManager", "tab-preview",
-    "tab-backups", "tab-migration",
-  ]) panels["#" + id] = {hidden: false};
-  panel.querySelector = selector => panels[selector] || null;
-  panel.querySelectorAll = () => [];
-  panel._migrationReport = {};
-  panel._loadMigrationRecovery = () => opened.push("recovery");
-  panel._loadMigrationReview = () => opened.push("review");
-  panel._activateTab("migration");
-  panel._activateTab("migration");
-  assert.deepEqual(opened, ["recovery", "recovery"]);
-});
-
-
-test("Recovery intent matching desired label remains a non-authorizing simulation", async () => {
-  const calls = [];
-  const {panel} = makePanel(async message => {
-    calls.push(message.type);
-    return {
-      status: "review_required", read_only: true,
-      automatic_recovery_allowed: false,
-      stage_allowed: false, cutover_allowed: false,
-      needs_review: true, phase: "labels_staging",
-      journal_revision: 2, source_integrity: "verified_unchanged",
-      summary: {total: 1, unconfirmed: 1, other_issues: 0},
-      operations: [{
-        entity_id: "light.test", operation_status: "intent",
-        observed_status: "unconfirmed_intent",
-        membership: "present", needs_review: true,
-      }],
-      resolution_scenarios: {
-        status: "investigation_required", read_only: true,
-        automatic_recovery_allowed: false, journal_ack_allowed: false,
-        retry_allowed: false, rollback_allowed: false,
-        stage_allowed: false, apply_allowed: false, cutover_allowed: false,
-        evidence_is_not_execution_authorization: true,
-        summary: {
-          unconfirmed: 1, requires_investigation: 1, quarantined: 0,
-        },
-        operations: [{
-          entity_id: "light.test", category: "investigation",
-          scenario: "intent_desired_membership_observed",
-          reason_codes: ["journal_intent_still_unconfirmed"],
-          resolution_authorized: false,
-        }],
-      },
-    };
-  });
-  const controls = {
-    migrationRecoveryRefresh: {disabled: false},
-    migrationRecoveryStatus: {textContent: ""},
-    migrationRecoveryRows: {
-      children: [], replaceChildren() {this.children = [];},
-      append(node) {this.children.push(node);},
-    },
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  await panel._loadMigrationRecovery();
-  assert.deepEqual(calls, ["ha_voice_label_sync/get_migration_recovery_status"]);
-  assert.match(controls.migrationRecoveryStatus.textContent, /simulation seulement/);
-  assert.match(controls.migrationRecoveryRows.children[0].textContent,
-    /intention NON acquittée/);
-  assert.match(controls.migrationRecoveryRows.children[0].textContent,
-    /journal_intent_still_unconfirmed/);
-  assert.equal(controls.migrationRecoveryRefresh.disabled, false);
-  assert.ok(!source.includes("ha_voice_label_sync/resolve_migration_intent"));
-});
-
-test("Untrusted recovery scenario claiming authorization is not rendered", async () => {
-  const {panel} = makePanel(async () => ({}));
-  const controls = {
-    migrationRecoveryStatus: {textContent: ""},
-    migrationRecoveryRows: {
-      children: [], replaceChildren() {this.children = [];},
-      append(node) {this.children.push(node);},
-    },
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationRecoveryReport = {
-    status: "review_required", needs_review: true,
-    phase: "labels_staging", journal_revision: 1,
-    source_integrity: "changed_or_unavailable",
-    summary: {total: 1, unconfirmed: 1, other_issues: 0},
-    operations: [{
-      entity_id: "light.test", operation_status: "intent",
-      observed_status: "unconfirmed_intent",
-      membership: "absent", needs_review: true,
-    }],
-    resolution_scenarios: {
-      status: "investigation_required", read_only: true,
-      automatic_recovery_allowed: false, journal_ack_allowed: true,
-      retry_allowed: true, rollback_allowed: true,
-      cutover_allowed: false, summary: {unconfirmed: 0},
-      operations: [{
-        entity_id: "light.test", category: "observation_only",
-        scenario: "applied_record_matches_observation",
-        resolution_authorized: true,
-      }],
-    },
-  };
-  panel._renderMigrationRecovery();
-  assert.doesNotMatch(controls.migrationRecoveryStatus.textContent,
-    /simulation seulement/);
-  assert.doesNotMatch(controls.migrationRecoveryRows.children[0].textContent,
-    /Hypothèse/);
-  assert.match(controls.migrationRecoveryStatus.textContent,
-    /Examen manuel requis/);
-});
 
 
 function recoverySimulationFixture() {
@@ -3827,317 +2868,6 @@ function recoverySimulationFixture() {
   };
 }
 
-test("Recovery simulation runs two admin-only steps without mutation requests", async () => {
-  const calls = [];
-  const {panel} = makePanel(async req => {
-    calls.push(req);
-    if (req.type === "ha_voice_label_sync/prepare_migration_recovery_decision") {
-      assert.equal(req.entity_id, "light.sandbox");
-      assert.equal(req.disposition, "inspect_external_effects");
-      return {
-        status: "awaiting_simulated_human_confirmation",
-        entity_id: req.entity_id, disposition: req.disposition,
-        confirmation_token: "single_use_challenge",
-        read_only: true, execution_authorized: false,
-        stage_allowed: false, cutover_allowed: false,
-      };
-    }
-    assert.equal(req.type,
-      "ha_voice_label_sync/confirm_migration_recovery_decision");
-    assert.equal(req.confirmation_token, "single_use_challenge");
-    assert.equal(req.confirmed, true);
-    assert.equal(req.acknowledge_external_uncertainty, true);
-    return {
-      status: "simulated_review_confirmation_no_execution",
-      entity_id: req.entity_id, read_only: true,
-      no_action_was_performed: true, execution_authorized: false,
-      journal_ack_allowed: false, retry_allowed: false,
-      rollback_allowed: false, stage_allowed: false,
-      apply_allowed: false, cutover_allowed: false,
-    };
-  });
-  const controls = {
-    migrationRecoveryStatus: {textContent: ""},
-    migrationRecoveryDecisionStatus: {textContent: ""},
-    migrationRecoveryRows: {
-      children: [], replaceChildren() {this.children = [];},
-      append(node) {this.children.push(node);},
-    },
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationRecoveryReport = recoverySimulationFixture();
-  panel._renderMigrationRecovery();
-  const first = controls.migrationRecoveryRows.children[0];
-  assert.equal(first.children.length, 3);
-  assert.equal(first.children[2].tag, "button");
-  assert.equal(first.children[0].tag, "select");
-  assert.equal(first.children[1].tag, "button");
-  assert.equal(first.children[0].value, "inspect_external_effects");
-  assert.equal(typeof first.children[1].on_click, "function");
-  await panel._simulateRecoveryDecision(
-    "light.sandbox", "inspect_external_effects"
-  );
-  assert.deepEqual(calls.map(x => x.type), [
-    "ha_voice_label_sync/prepare_migration_recovery_decision",
-    "ha_voice_label_sync/confirm_migration_recovery_decision",
-  ]);
-  assert.match(controls.migrationRecoveryDecisionStatus.textContent,
-    /Simulation confirmée/);
-  assert.match(controls.migrationRecoveryDecisionStatus.textContent,
-    /Aucun journal, label ou YAML modifié/);
-  assert.ok(!calls.some(c => /apply|stage|rollback|retry/.test(c.type)));
-});
-
-test("Canceled recovery simulation sends preparation only", async () => {
-  const calls = [];
-  const {panel} = makePanel(async req => {
-    calls.push(req.type);
-    return {
-      status: "awaiting_simulated_human_confirmation",
-      entity_id: "light.sandbox",
-      disposition: "defer_until_further_evidence",
-      confirmation_token: "unused",
-      read_only: true, execution_authorized: false,
-      stage_allowed: false, cutover_allowed: false,
-    };
-  }, () => false);
-  const controls = {
-    migrationRecoveryStatus: {textContent: ""},
-    migrationRecoveryDecisionStatus: {textContent: ""},
-    migrationRecoveryRows: {
-      replaceChildren() {}, append() {},
-    },
-  };
-  panel.querySelector = sel => controls[sel.slice(1)] || null;
-  panel._migrationRecoveryReport = recoverySimulationFixture();
-  await panel._simulateRecoveryDecision(
-    "light.sandbox", "defer_until_further_evidence"
-  );
-  assert.deepEqual(calls, [
-    "ha_voice_label_sync/prepare_migration_recovery_decision"
-  ]);
-  assert.match(controls.migrationRecoveryDecisionStatus.textContent,
-    /Simulation annulée/);
-});
-
-test("Unsafe recovery evidence hides simulation buttons", () => {
-  const {panel} = makePanel(async () => ({}));
-  const controls = {
-    migrationRecoveryStatus: {textContent: ""},
-    migrationRecoveryRows: {
-      children: [], replaceChildren() {this.children = [];},
-      append(node) {this.children.push(node);},
-    },
-  };
-  panel.querySelector = sel => controls[sel.slice(1)] || null;
-  const report = recoverySimulationFixture();
-  report.source_integrity = "changed_or_unavailable";
-  panel._migrationRecoveryReport = report;
-  panel._renderMigrationRecovery();
-  assert.equal(controls.migrationRecoveryRows.children[0].children.length, 0);
-  report.source_integrity = "verified_unchanged";
-  report.resolution_scenarios.operations[0].resolution_authorized = true;
-  panel._renderMigrationRecovery();
-  assert.equal(controls.migrationRecoveryRows.children[0].children.length, 0);
-});
-
-test("Forged recovery confirmation claiming writes is refused in UI", async () => {
-  const {panel} = makePanel(async req => {
-    if (req.type.includes("prepare")) return {
-      status: "awaiting_simulated_human_confirmation",
-      entity_id: "light.sandbox",
-      disposition: "inspect_external_effects",
-      confirmation_token: "challenge",
-      read_only: true, execution_authorized: false,
-      stage_allowed: false, cutover_allowed: false,
-    };
-    return {
-      status: "simulated_review_confirmation_no_execution",
-      entity_id: "light.sandbox", read_only: true,
-      no_action_was_performed: true, execution_authorized: true,
-      journal_ack_allowed: true, retry_allowed: true,
-      rollback_allowed: true, stage_allowed: true,
-      apply_allowed: true, cutover_allowed: true,
-    };
-  });
-  const controls = {
-    migrationRecoveryStatus: {textContent: ""},
-    migrationRecoveryDecisionStatus: {textContent: ""},
-    migrationRecoveryRows: {replaceChildren() {}, append() {}},
-  };
-  panel.querySelector = sel => controls[sel.slice(1)] || null;
-  panel._migrationRecoveryReport = recoverySimulationFixture();
-  await panel._simulateRecoveryDecision(
-    "light.sandbox", "inspect_external_effects"
-  );
-  assert.match(controls.migrationRecoveryDecisionStatus.textContent,
-    /Simulation refusée/);
-});
-
-
-test("Recording recovery investigation sends exactly two non-execution calls", async () => {
-  const calls = [];
-  const {panel} = makePanel(async req => {
-    calls.push(req);
-    if (req.type === "ha_voice_label_sync/prepare_migration_investigation_record") {
-      return {
-        status: "awaiting_durable_investigation_confirmation",
-        confirmation_token: "one_time",
-        entity_id: "light.sandbox", disposition: "inspect_external_effects",
-        journal_ack_allowed: false, execution_authorized: false,
-        stage_allowed: false, cutover_allowed: false,
-      };
-    }
-    if (req.type === "ha_voice_label_sync/confirm_migration_investigation_record") {
-      assert.equal(req.confirmed, true);
-      assert.equal(req.acknowledge_external_uncertainty, true);
-      assert.equal(req.confirmation_token, "one_time");
-      return {
-        status: "durable_investigation_recorded_no_execution",
-        record: {sequence: 1, entity_id: "light.sandbox",
-          disposition: "inspect_external_effects"},
-        execution_authorized: false, journal_ack_allowed: false,
-        retry_allowed: false, rollback_allowed: false,
-        stage_allowed: false, apply_allowed: false,
-        cutover_allowed: false, label_changed: false,
-        journal_changed: false, production_yaml_changed: false,
-      };
-    }
-    if (req.type === "ha_voice_label_sync/get_migration_investigation_history") {
-      return {
-        status: "verified_investigation_history",
-        history_read_only: true, record_count: 1,
-        execution_authorized: false, stage_allowed: false,
-        cutover_allowed: false, records: [{
-          sequence: 1, entity_id: "light.sandbox",
-          disposition: "inspect_external_effects",
-          evidence_relation: "matching_current_observation",
-        }],
-      };
-    }
-    throw Error("unexpected or mutating request: " + req.type);
-  });
-  const controls = {
-    migrationRecoveryStatus: {textContent: ""},
-    migrationRecoveryDecisionStatus: {textContent: ""},
-    migrationRecoveryRows: {
-      children: [], replaceChildren() {this.children = [];},
-      append(node) {this.children.push(node);},
-    },
-    migrationLedgerStatus: {textContent: ""},
-    migrationLedgerRefresh: {disabled: false},
-    migrationLedgerRows: {
-      children: [], replaceChildren() {this.children = [];},
-      append(node) {this.children.push(node);},
-    },
-  };
-  panel.querySelector = s => controls[s.slice(1)] || null;
-  panel._migrationRecoveryReport = recoverySimulationFixture();
-  panel._renderMigrationRecovery();
-  assert.equal(controls.migrationRecoveryRows.children[0].children.length, 3);
-  assert.equal(controls.migrationRecoveryRows.children[0].children[2].tag, "button");
-  await panel._recordRecoveryInvestigation(
-    "light.sandbox", "inspect_external_effects"
-  );
-  assert.deepEqual(calls.map(c => c.type), [
-    "ha_voice_label_sync/prepare_migration_investigation_record",
-    "ha_voice_label_sync/confirm_migration_investigation_record",
-    "ha_voice_label_sync/get_migration_investigation_history",
-  ]);
-  assert.match(controls.migrationRecoveryDecisionStatus.textContent,
-    /n°1 enregistrée/);
-  assert.match(controls.migrationLedgerStatus.textContent,
-    /1 décisions d’enquête/);
-  assert.equal(controls.migrationLedgerRows.children.length, 1);
-  assert.ok(!calls.some(c => /rollback|stage|ack|apply|retry/.test(c.type)));
-});
-
-test("Cancelled protected history prompt does not send confirm or create record", async () => {
-  const calls = [];
-  const {panel} = makePanel(async req => {
-    calls.push(req.type);
-    return {
-      status: "awaiting_durable_investigation_confirmation",
-      entity_id: "light.sandbox",
-      disposition: "quarantine_for_investigation",
-      confirmation_token: "not_used",
-      execution_authorized: false, journal_ack_allowed: false,
-      stage_allowed: false, cutover_allowed: false,
-    };
-  }, () => false);
-  const controls = {
-    migrationRecoveryStatus: {textContent: ""},
-    migrationRecoveryRows: {replaceChildren() {}, append() {}},
-    migrationRecoveryDecisionStatus: {textContent: ""},
-  };
-  panel.querySelector = s => controls[s.slice(1)] || null;
-  panel._migrationRecoveryReport = recoverySimulationFixture();
-  await panel._recordRecoveryInvestigation(
-    "light.sandbox", "quarantine_for_investigation"
-  );
-  assert.deepEqual(calls, [
-    "ha_voice_label_sync/prepare_migration_investigation_record"
-  ]);
-  assert.match(controls.migrationRecoveryDecisionStatus.textContent, /annulé/);
-});
-
-test("Forged durable history success is rejected without pretending anything saved", async () => {
-  const calls = [];
-  const {panel} = makePanel(async req => {
-    calls.push(req.type);
-    if (req.type.includes("prepare")) return {
-      status: "awaiting_durable_investigation_confirmation",
-      entity_id: "light.sandbox", disposition: "inspect_external_effects",
-      confirmation_token: "ephemeral", execution_authorized: false,
-      journal_ack_allowed: false, stage_allowed: false,
-      cutover_allowed: false,
-    };
-    return {
-      status: "durable_investigation_recorded_no_execution",
-      record: {sequence: 1, entity_id: "light.sandbox",
-        disposition: "inspect_external_effects"},
-      execution_authorized: true, journal_ack_allowed: true,
-      stage_allowed: true, apply_allowed: true,
-      cutover_allowed: true, label_changed: true,
-      journal_changed: true, production_yaml_changed: true,
-    };
-  });
-  const controls = {
-    migrationRecoveryDecisionStatus: {textContent: ""},
-    migrationRecoveryStatus: {textContent: ""},
-    migrationRecoveryRows: {replaceChildren() {}, append() {}},
-  };
-  panel.querySelector = s => controls[s.slice(1)] || null;
-  panel._migrationRecoveryReport = recoverySimulationFixture();
-  await panel._recordRecoveryInvestigation(
-    "light.sandbox", "inspect_external_effects"
-  );
-  assert.match(controls.migrationRecoveryDecisionStatus.textContent,
-    /Enregistrement refusé/);
-  assert.equal(calls.length, 2);
-});
-
-test("Invalid protected history response is never displayed as verified", async () => {
-  const {panel} = makePanel(async req => {
-    assert.equal(req.type,
-      "ha_voice_label_sync/get_migration_investigation_history");
-    return {
-      status: "verified_investigation_history", record_count: 1,
-      history_read_only: true, execution_authorized: true,
-      stage_allowed: true, cutover_allowed: true,
-      records: [{sequence: 1, entity_id: "light.sandbox"}],
-    };
-  });
-  const controls = {
-    migrationLedgerRefresh: {disabled: false},
-    migrationLedgerStatus: {textContent: ""},
-    migrationLedgerRows: {replaceChildren() {}, append() {}},
-  };
-  panel.querySelector = s => controls[s.slice(1)] || null;
-  await panel._loadMigrationInvestigationHistory();
-  assert.match(controls.migrationLedgerStatus.textContent, /indisponible/);
-  assert.equal(controls.migrationLedgerRefresh.disabled, false);
-});
 
 
 test("Unmanaged Apply displays its reason without enabling writes", async () => {
@@ -4566,35 +3296,6 @@ test("Guided setup handles absent candidate and unknown intent", () => {
   assert.equal(panel._migrationIntent, null);
 });
 
-test("Guided intent cannot bypass protected baseline preconditions", async () => {
-  const requests = [];
-  const {panel} = makePanel(async message => { requests.push(message); });
-  const controls = {
-    migrationPrepareBaseline: {disabled: false},
-    migrationConfirmBaseline: {disabled: false, hidden: false},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationReport = {diagnostic: {
-    mode: "new_configuration",
-    review_status: "not_applicable",
-    source: {status: "resolved", unreferenced_google_entity_file_present: true},
-    global_blockers: [],
-  }};
-  panel._migrationIntent = "existing";
-  panel._migrationBaselineControls();
-  assert.equal(controls.migrationPrepareBaseline.disabled, true);
-  await panel._prepareMigrationBaseline();
-  assert.deepEqual(requests, []);
-  panel._migrationReport = {diagnostic: {
-    mode: "assisted_migration", review_status: "blocked",
-    source: {status: "ambiguous"}, global_blockers: ["duplicate_mapping_key"],
-  }};
-  panel._migrationBaselineControls();
-  assert.equal(controls.migrationPrepareBaseline.disabled, true);
-  await panel._prepareMigrationBaseline();
-  assert.deepEqual(requests, []);
-});
-
 
 test("Assistant is the user-facing tab name in French and English", () => {
   assert.match(source, /tabMigration: "Assistant",/);
@@ -4606,117 +3307,6 @@ test("Assistant is the user-facing tab name in French and English", () => {
   assert.match(source, /id="tab-migration"/);
 });
 
-
-test("Assistant keeps advanced tools out of the initial new-setup path", () => {
-  const requests = [];
-  const {panel} = makePanel(async request => { requests.push(request); });
-  const controls = {
-    migrationAdvanced: {open: true},
-    migrationRecoveryAttention: {hidden: true, textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationReport = {diagnostic: {mode: "new_configuration",
-    source: {status: "resolved"}}};
-  panel._renderMigrationAdvanced();
-  assert.equal(controls.migrationAdvanced.open, false);
-  assert.equal(controls.migrationRecoveryAttention.hidden, true);
-  assert.deepEqual(requests, []);
-});
-
-test("Assistant leaves the migration tools reachable when migration is detected", () => {
-  const {panel} = makePanel(async () => {});
-  const controls = {
-    migrationAdvanced: {open: false},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationReport = {diagnostic: {mode: "assisted_migration"}};
-  panel._renderMigrationAdvanced();
-  assert.equal(controls.migrationAdvanced.open, true);
-  controls.migrationAdvanced.open = false; // User can close it manually.
-  panel._renderMigrationAdvanced();
-  assert.equal(controls.migrationAdvanced.open, false); // No forced reset.
-  panel._migrationReport.diagnostic.mode = "new_configuration";
-  panel._renderMigrationAdvanced();
-  assert.equal(controls.migrationAdvanced.open, false);
-});
-
-test("Assistant folds the legacy audit after an existing YAML recovery", () => {
-  const calls = [];
-  const {panel} = makePanel(async request => { calls.push(request); });
-  const controls = {
-    migrationAdvanced: {open: true},
-    migrationRecoveryAttention: {hidden: true, textContent: ""},
-    migrationManagedNotice: {hidden: true, textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationReport = {diagnostic: {
-    mode: "assisted_migration",
-    review_status: "pending_review",
-    entities: Array.from({length: 6408}, (_, i) => ({
-      entity_id: "sensor.test_" + i,
-    })),
-  }};
-  panel._ownershipManaged = true;
-  panel._recoveryPending = false;
-  panel._renderMigrationAdvanced();
-  assert.equal(controls.migrationAdvanced.open, false);
-  assert.equal(controls.migrationManagedNotice.hidden, false);
-  assert.match(controls.migrationManagedNotice.textContent, /pris en charge/);
-  assert.equal(controls.migrationRecoveryAttention.hidden, true);
-  // The expert can still expand the audit deliberately.
-  controls.migrationAdvanced.open = true;
-  panel._renderMigrationAdvanced();
-  assert.equal(controls.migrationAdvanced.open, true);
-  assert.deepEqual(calls, []);
-});
-
-test("Assistant never hides interrupted recovery despite managed ownership", () => {
-  const {panel} = makePanel(async () => {});
-  const controls = {
-    migrationAdvanced: {open: false},
-    migrationRecoveryAttention: {hidden: true, textContent: ""},
-    migrationManagedNotice: {hidden: true, textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationReport = {diagnostic: {mode: "assisted_migration"}};
-  panel._ownershipManaged = true;
-  panel._recoveryPending = false;
-  panel._renderMigrationAdvanced();
-  assert.equal(controls.migrationAdvanced.open, false);
-  panel._migrationRecoveryReport = {status: "review_required", needs_review: true};
-  panel._renderMigrationAdvanced();
-  assert.equal(controls.migrationAdvanced.open, true);
-  assert.equal(controls.migrationRecoveryAttention.hidden, false);
-  assert.equal(controls.migrationManagedNotice.hidden, true);
-  // A pending recovery and restore reconciliation are not completed.
-  panel._migrationRecoveryReport = null;
-  panel._recoveryPending = true;
-  panel._renderMigrationAdvanced();
-  assert.equal(controls.migrationAdvanced.open, true);
-  assert.equal(controls.migrationManagedNotice.hidden, true);
-  panel._recoveryPending = false;
-  panel._restoreReconcilePending = true;
-  panel._renderMigrationAdvanced();
-  assert.equal(controls.migrationAdvanced.open, true);
-  assert.equal(controls.migrationManagedNotice.hidden, true);
-});
-
-test("Assistant raises a visible alert and opens tools for interrupted recovery", () => {
-  const {panel} = makePanel(async () => {});
-  const controls = {
-    migrationAdvanced: {open: false},
-    migrationRecoveryAttention: {hidden: true, textContent: ""},
-  };
-  panel.querySelector = selector => controls[selector.slice(1)] || null;
-  panel._migrationReport = {diagnostic: {mode: "new_configuration"}};
-  panel._renderMigrationAdvanced();
-  assert.equal(controls.migrationAdvanced.open, false);
-  panel._migrationRecoveryReport = {status: "review_required", needs_review: true};
-  panel._renderMigrationAdvanced();
-  assert.equal(controls.migrationAdvanced.open, true);
-  assert.equal(controls.migrationRecoveryAttention.hidden, false);
-  assert.match(controls.migrationRecoveryAttention.textContent, /vérification/);
-});
 
 test("Assistant changes step text after local user choice, without writes", () => {
   const requests = [];
@@ -4737,21 +3327,6 @@ test("Assistant changes step text after local user choice, without writes", () =
   panel._chooseMigrationIntent("new");
   assert.match(controls.migrationGuideStep.textContent, /Étape 2 sur 2/);
   assert.deepEqual(requests, []);
-});
-
-test("Assistant markup keeps diagnostics behind a native accessible details panel", () => {
-  const assistant = source.slice(
-    source.indexOf('<section id="tab-migration"'),
-    source.indexOf('<section id="tab-backups"')
-  );
-  assert.match(assistant, /<details id="migrationAdvanced">\s*<summary>/);
-  assert.ok(assistant.indexOf('id="migrationGuide"') <
-    assistant.indexOf('id="migrationAdvanced"'));
-  assert.ok(assistant.indexOf('id="migrationAnalyze"') <
-    assistant.indexOf('id="migrationAdvanced"'));
-  assert.ok(assistant.indexOf('id="migrationStatus"') >
-    assistant.indexOf('id="migrationAdvanced"'));
-  assert.match(assistant, /<\/details>/);
 });
 
 
@@ -5037,7 +3612,6 @@ test("Assistant keeps packages as Other after standalone YAML parses", () => {
   assert.equal(conclusion.hidden, false);
   assert.match(conclusion.textContent, /Autre configuration/);
   assert.match(conclusion.textContent, /ne peuvent pas être migrés automatiquement/);
-  assert.equal(panel._migrationBaselineEligible(), false);
 });
 
 test("Assistant selected path labels follow the choice without changing eligibility", () => {
@@ -5066,7 +3640,6 @@ test("Assistant selected path labels follow the choice without changing eligibil
   panel._chooseMigrationIntent("new");
   assert.match(controls.migrationGuideQuestion.textContent, /nouvelle configuration/);
   assert.equal(controls.assistantFileSection.hidden, true);
-  assert.equal(panel._migrationBaselineEligible(), false);
 });
 
 test("Assistant metrics CSS and accessible labels remain responsive", () => {
@@ -5123,7 +3696,6 @@ test("Assistant origin guide appears only after safe independent inspection", ()
   assert.match(controls.assistantProvenanceSafety.textContent,
     /non enregistrée/);
   assert.equal(calls.length, 0);
-  assert.equal(panel._migrationBaselineEligible(), false);
 });
 
 test("Assistant anomalous entries remain inspectable and origin is only a recollection", () => {
@@ -5159,7 +3731,6 @@ test("Assistant anomalous entries remain inspectable and origin is only a recoll
   assert.match(controls.assistantProvenanceNext.textContent,
     /n'est pas une migration attestée/);
   assert.equal(panel._migrationIntent, "unsure");
-  assert.equal(panel._migrationBaselineEligible(), false);
 });
 
 test("Assistant origin cannot be selected before file review or in packages", () => {
@@ -5305,7 +3876,6 @@ test("Assistant backup guide appears only for old or unknown local provenance", 
   assert.equal(controls.assistantProvenanceHelp.open, false);
   assert.match(controls.assistantProvenanceNext.textContent, /nouvelle configuration/);
   assert.deepEqual(calls, []);
-  assert.equal(panel._migrationBaselineEligible(), false);
 });
 
 test("Assistant hides backup guide after file check becomes invalid", () => {
@@ -5334,7 +3904,6 @@ test("Assistant hides backup guide after file check becomes invalid", () => {
   panel._assistantFileReport = null;
   panel._renderAssistantProvenance();
   assert.equal(controls.assistantProvenance.hidden, true);
-  assert.equal(panel._migrationBaselineEligible(), false);
 });
 
 test("Assistant manual backup instructions work in English without private file access", () => {
@@ -5477,7 +4046,6 @@ test("Historical review makes one admin read-only request and shows bounded evid
   assert.match(message, /empreintes identiques/);
   assert.match(message, /52 entité/);
   assert.match(controls.assistantHistorySafety.textContent, /Aucune migration/);
-  assert.equal(panel._migrationBaselineEligible(), false);
 });
 
 test("Historical review displays missing staging folder without exposing backend errors", async () => {
@@ -5508,7 +4076,6 @@ test("Historical review displays missing staging folder without exposing backend
   await panel._inspectHistoricalYaml();
   assert.match(summary.children.map(x => x.textContent).join(" "),
     /dossier hvls-history-review est absent/);
-  assert.equal(panel._migrationBaselineEligible(), false);
 });
 
 test("Historical review rejects false authority and stale asynchronous responses", async () => {
@@ -6818,4 +5385,71 @@ test("Ineligible entities without the label show no checkbox", () => {
     /const ineligibleToAdd = entity\.eligible !== true && entity\.has_label !== true;/);
   const {panel} = makePanel(async () => ({}));
   assert.equal(panel._t("ineligibleState"), "Inéligible");
+});
+
+test("Assistant tab only reads the Google Assistant diagnostic", () => {
+  assert.match(source, /data-tab="migration"/);
+  assert.match(source, /id="migrationAnalyze"/);
+  const tabStart = source.indexOf('<section id="tab-migration"');
+  const tabEnd = source.indexOf('<section id="tab-backups"', tabStart);
+  const markup = source.slice(tabStart, tabEnd);
+  // The old migration audit (baseline, drafts, attestation, recovery
+  // journal, investigation history) is gone.
+  assert.doesNotMatch(markup, /migrationAdvanced|migrationPrepareBaseline/);
+  assert.doesNotMatch(markup, /migrationRecoveryRefresh|migrationLedgerRefresh/);
+  assert.doesNotMatch(markup, /id="apply"|id="restoreBackup"/);
+  for (const removed of [
+    "get_migration_review\"", "prepare_migration_baseline",
+    "initialize_migration_baseline", "save_migration_decision_draft",
+    "attest_migration_review", "get_migration_recovery_status",
+    "confirm_migration_investigation_record",
+  ]) {
+    assert.ok(!source.includes("ha_voice_label_sync/" + removed), removed);
+  }
+});
+
+test("Assistant diagnostic is one read-only request feeding the guide", async () => {
+  const requests = [];
+  const diagnostic = {mode: "new_configuration", review_status: "not_applicable"};
+  const {panel} = makePanel(async request => {
+    requests.push(request);
+    return diagnostic;
+  });
+  const controls = {
+    migrationAnalyze: {disabled: false},
+    migrationStatus: {textContent: ""},
+  };
+  panel.querySelector = selector => controls[selector.slice(1)] || null;
+  let guideRenders = 0;
+  panel._renderMigrationGuide = () => { guideRenders++; };
+  await panel._loadMigrationReview();
+  assert.equal(requests.length, 1);
+  assert.equal(JSON.stringify(requests[0]),
+    JSON.stringify({type: "ha_voice_label_sync/get_migration_diagnostic"}));
+  assert.equal(panel._migrationReport.diagnostic, diagnostic);
+  assert.equal(controls.migrationStatus.textContent, "");
+  assert.equal(controls.migrationAnalyze.disabled, false);
+  assert.ok(guideRenders >= 2);
+
+  const failing = makePanel(async () => { throw new Error("secret path"); }).panel;
+  failing.querySelector = selector => controls[selector.slice(1)] || null;
+  failing._renderMigrationGuide = () => {};
+  await failing._loadMigrationReview();
+  assert.equal(failing._migrationReport, null);
+  assert.match(controls.migrationStatus.textContent, /migration_diagnostic_unavailable/);
+  assert.doesNotMatch(controls.migrationStatus.textContent, /secret path/);
+});
+
+test("YAML example project id follows the panel language", () => {
+  assert.equal(
+    (source.match(/<span class="assistant-example-project">/g) || []).length, 2
+  );
+  assert.match(source,
+    /querySelectorAll\?\.\("\.assistant-example-project"\)\.forEach[\s\S]{0,120}?assistantExampleProjectId/);
+  const {panel} = makePanel(async () => ({}));
+  assert.equal(panel._t("assistantExampleProjectId"), "VOTRE_PROJECT_ID");
+  panel._language = "en";
+  assert.equal(panel._t("assistantExampleProjectId"), "YOUR_PROJECT_ID");
+  panel._language = "de";
+  assert.equal(panel._t("assistantExampleProjectId"), "IHRE_PROJEKT_ID");
 });

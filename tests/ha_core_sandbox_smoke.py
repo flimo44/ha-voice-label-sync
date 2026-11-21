@@ -1,4 +1,4 @@
-"""Isolated HA Core 2026.11 runtime contract for HVLS migration.
+"""Isolated HA Core 2026.11 runtime contract for HVLS label writes.
 
 RUN ONLY in an ephemeral Home Assistant container with an empty, temporary
 /config directory. This is intentionally *not* imported by the ordinary
@@ -111,7 +111,6 @@ async def exercise_ha_core_native_contract() -> dict[str, Any]:
 
         safe = entries["safe"].entity_id
         excluded = entries["excluded"].entity_id
-        auxiliary = entries["auxiliary"].entity_id
 
         manual_config = {
             CONF_EXPOSE_BY_DEFAULT: True,
@@ -122,7 +121,7 @@ async def exercise_ha_core_native_contract() -> dict[str, Any]:
             },
         }
         google = GoogleConfig(hass, manual_config)
-        # A controlled imported entry is enough for the PR #120 observer.
+        # A controlled imported entry stands for the manual integration.
         # No real Google login, OAuth token or network call is involved.
         hass.config_entries = SimpleNamespace(
             async_entries=lambda domain: (
@@ -138,20 +137,7 @@ async def exercise_ha_core_native_contract() -> dict[str, Any]:
         assert exposed_before["excluded"] is False, exposed_before
         # Native GoogleConfig.should_expose may legitimately return None
         # when an entity is implicitly excluded (falsy, not a bool).
-        # Our current migration observer must treat that as unknown,
-        # never silently convert it into permission for staging.
         assert exposed_before["auxiliary"] in (False, None), exposed_before
-
-        audit = load_component("migration_staging_impact")
-        initial = audit.capture_loaded_ga_label_impact(
-            hass, [safe, excluded, auxiliary]
-        )
-        assert initial["status"] == "captured", initial
-        assert initial["observations"][safe]["status"] == "captured"
-        assert initial["observations"][excluded]["status"] == "captured"
-        assert initial["observations"][auxiliary]["status"] in {
-            "captured", "native_google_exposure_not_bool"
-        }, initial
 
         events = []
         potential_external_calls = []
@@ -188,14 +174,6 @@ async def exercise_ha_core_native_contract() -> dict[str, Any]:
                 for key, entry in entries.items()
             }
             assert exposed_after == exposed_before
-            after = audit.capture_loaded_ga_label_impact(
-                hass, [safe, excluded, auxiliary]
-            )
-            assert after["status"] == "captured", after
-            # Compare the FULL sanitized observations, including the
-            # intentionally unknown native None case (which has no
-            # "native_before" key). Never hide or default unknown facts.
-            assert after["observations"] == initial["observations"]
 
             # Repeat the same desired operation with expected_enabled=True:
             # this is a no-op, so no extra registry event or callback.
@@ -218,29 +196,6 @@ async def exercise_ha_core_native_contract() -> dict[str, Any]:
             assert events == ["update"]
             assert config.read_bytes() == GOOGLE_SOURCE
 
-            # The independent PR #120 evaluator still never authorizes
-            # staging or claims Google Home is verified.
-            diag = {
-                "entities": [
-                    {"entity_id": item} for item in [safe, excluded, auxiliary]
-                ],
-                "loaded_policy": {"status": "match_compared_fields"},
-                "runtime_snapshot": {"status": "complete"},
-            }
-            plan = {
-                "label_additions_proposed": [
-                    {"entity_id": item} for item in [safe, excluded]
-                ],
-                "global_blockers": [],
-            }
-            assessment = audit.assess_label_staging_impact(
-                diag, plan, after
-            )
-            assert assessment["status"] == "no_manual_policy_delta_detected"
-            assert assessment["stage_allowed"] is False
-            assert assessment["cutover_allowed"] is False
-            assert assessment["google_home_state_verified"] is False
-
             # The V1 source must remain byte-identical throughout these
             # native operations.
             assert config.read_bytes() == GOOGLE_SOURCE
@@ -252,9 +207,6 @@ async def exercise_ha_core_native_contract() -> dict[str, Any]:
                 "manual_google_exposure_before_after_equal": True,
                 "source_yaml_unchanged": True,
                 "write_was_sandbox_only": True,
-                "stage_allowed": False,
-                "cutover_allowed": False,
-                "google_home_state_verified": False,
             }
         finally:
             unsubscribe()
