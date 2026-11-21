@@ -17,8 +17,17 @@ For the **manual Home Assistant Google Assistant integration** (without Home Ass
 >
 > HVLS complements the official Home Assistant [Google Assistant integration](https://www.home-assistant.io/integrations/google_assistant/#manual-setup). It does **not** create your Google Cloud project, service account, or Google Home connection. You can select entities, inspect a Preview and manage the YAML **without Google Assistant being connected**; configure Google Assistant separately only when you want to expose the selected entities to Google Home.
 
-**Latest published stable:** [`v1.3.0`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.3.0) (published on 2026-11-20). Download the release ZIP from [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases).  
+**Latest release:** [`v1.4.0`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.4.0) (release candidate; previous stable: [`v1.3.0`](https://github.com/flimo44/ha-voice-label-sync/releases/tag/v1.3.0)). Download the release ZIP from [GitHub Releases](https://github.com/flimo44/ha-voice-label-sync/releases).  
 **Python core dependency:** `ha-voice-label-sync==0.3.8` (published on PyPI and required by the Home Assistant integration's `manifest.json`).
+
+## 🧩 v1.4.0 — Every Google Assistant domain and a simpler Assistant
+
+- **25 domains:** HVLS now enables every domain supported by the Home Assistant Google Assistant integration, adding `alarm_control_panel`, `button`, `camera`, `event`, `group`, `humidifier`, `input_button`, `lawn_mower`, `media_player`, `valve` and `water_heater`. Like Google Assistant, only `event` entities with the `doorbell` device class are selected.
+- **Clearer Entity Management:** an ineligible entity without the HVLS label shows "Ineligible" and no checkbox; one that already has the label keeps its checkbox so the label can be removed.
+- **Secure devices:** the Assistant's YAML examples and the README show the optional `secure_devices_pin` (commented out, kept in `secrets.yaml`) for locks, alarms and door, garage or gate covers.
+- **Simpler Assistant:** the unfinished "Diagnostics and migration tools (advanced)" are removed; they could not apply anything. The guided Assistant, Backups and Preview cover adoption, reinstall recovery and restores. If `/config/.storage/hvls_migration` exists, nothing reads it any more and it can be deleted.
+- **Upgrade note:** entities of the new domains that already carry the HVLS label appear as additions in the next Preview: review them before Apply.
+- Requires the Python core `ha-voice-label-sync==0.3.9`, published on PyPI.
 
 ## 🌍 v1.3.0 — Six languages and clearer eligibility
 
@@ -329,7 +338,7 @@ An entity is also skipped when it:
 
 The Preview panel shows included-entity counts **by domain and room**. Under **Non-enabled domains**, it groups *labeled* entities excluded because their domain is not enabled; the **Excluded entities** diagnostic lists labeled exclusions and their reasons. Entities without the selected label are not included in these exclusion statistics.
 
-> **Note:** The current Home Assistant integration v1.3.0 requires the separately versioned Python core `ha-voice-label-sync==0.3.8`. Check `manifest.json` and `pyproject.toml` when changing core behavior or eligibility.
+> **Note:** The current Home Assistant integration v1.4.0 requires the separately versioned Python core `ha-voice-label-sync==0.3.9`. Check `manifest.json` and `pyproject.toml` when changing core behavior or eligibility.
 
 ## 🏠 Home Assistant integration features
 
@@ -391,6 +400,8 @@ Official Google Assistant integration
 Future backends may share the label-driven workflow. Only Google Assistant YAML generation is currently implemented.
 
 ## 🧪 Tests and releases
+
+For v1.4.0, the release checks passed Python, JavaScript, HACS validation, Hassfest, package checks and the Home Assistant sandbox; the new domains, the doorbell rule, the hidden checkbox and the removal of the migration tools were also checked on isolated and production Home Assistant VMs.
 
 For v1.3.0, the release checks passed Python, JavaScript, HACS validation, Hassfest, package checks and the Home Assistant sandbox; the translated panel and the ineligibility filter were also checked on an isolated Home Assistant VM.
 
