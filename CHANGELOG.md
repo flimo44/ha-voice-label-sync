@@ -6,6 +6,12 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixes
+- Google Assistant names now follow exactly the name Home Assistant displays (the entity's `friendly_name`). Renaming a device, or giving an entity a name in the UI, is now reflected as Home Assistant shows it (for example "Sonde Chambre Philippe Température", not "Température"), and entities without a name of their own (often `climate`) use their device name instead of a name derived from their entity ID. Entities without a state (disabled, not loaded yet) keep the previous registry-based name.
+
+### Upgrade notes
+- The next Preview may show name **modifications** for exposed entities whose Home Assistant name differs from the name used until now (typically thermostats, or entities with a technical name). Review them before Apply: rename the entity in Home Assistant if you prefer another name in Google.
+
 ## [1.4.0] - 2026-11-21
 
 Requires the Python core `ha-voice-label-sync==0.3.9` (published on PyPI on 2026-11-20).

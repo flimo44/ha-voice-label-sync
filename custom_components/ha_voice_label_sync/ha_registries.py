@@ -48,7 +48,7 @@ def _text(value: Any) -> str | None:
 
 
 def _display_name(entry: Any, device_entries: dict[str, Any]) -> str | None:
-    """Return the entity name written to the Google Assistant YAML.
+    """Guess the display name from the registries (entity without a state).
 
     Entities using ``has_entity_name`` store only their own part (for
     example "Temperature") in ``original_name``; Home Assistant prefixes the
@@ -71,6 +71,24 @@ def _display_name(entry: Any, device_entries: dict[str, Any]) -> str | None:
         if device_name and not original.startswith(device_name):
             return f"{device_name} {original}"
     return original
+
+
+def _effective_name(
+    hass: HomeAssistant, entry: Any, device_entries: dict[str, Any]
+) -> str | None:
+    """Return the name Home Assistant shows for the entity.
+
+    The current state's ``friendly_name`` is what Home Assistant itself
+    displays: it follows HA's own rules (device name + entity name, a name
+    set in the UI, a renamed device...). Only an entity without a state
+    (disabled, not loaded yet) falls back to the registry-based guess.
+    """
+    states = getattr(hass, "states", None)
+    state = states.get(entry.entity_id) if states is not None else None
+    if state is not None:
+        if friendly := _text(state.attributes.get("friendly_name")):
+            return friendly
+    return _display_name(entry, device_entries)
 
 
 def get_live_registries(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
@@ -98,8 +116,8 @@ def get_live_registries(hass: HomeAssistant) -> dict[str, dict[str, Any]]:
                 "entities": [
                     {
                         "entity_id": entry.entity_id,
-                        # Effective display name (see _display_name).
-                        "name": _display_name(entry, device_entries),
+                        # Name shown by Home Assistant (see _effective_name).
+                        "name": _effective_name(hass, entry, device_entries),
                         "original_name": entry.original_name,
                         "device_id": entry.device_id,
                         "area_id": entry.area_id,

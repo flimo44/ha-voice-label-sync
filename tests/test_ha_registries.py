@@ -210,8 +210,8 @@ def test_has_entity_name_is_prefixed_with_device_name(monkeypatch):
     }
 
 
-def test_existing_names_are_not_changed(monkeypatch):
-    """Do not break voice names already used by existing installations."""
+def test_registry_fallback_without_state(monkeypatch):
+    """Entities without a state (disabled, not loaded) use the registry guess."""
     device = SimpleNamespace(
         id="dev", area_id=None, name="Garage_Relai_double", name_by_user=None,
     )
@@ -241,13 +241,45 @@ def test_existing_names_are_not_changed(monkeypatch):
     }
 
 
-def test_live_friendly_name_is_not_used(monkeypatch):
-    """HA may prefix user names with technical device names: ignore it."""
+def test_live_friendly_name_is_used(monkeypatch):
+    """The exported name is the one Home Assistant itself displays."""
+    device = SimpleNamespace(
+        id="dev", area_id=None, name="Températeur chambre parents",
+        name_by_user="Sonde Chambre Philippe",
+    )
     states = {
-        "switch.p": SimpleNamespace(
-            attributes={"friendly_name": "Piscine_Chauffage"}
+        # Device renamed + entity name set in the UI: HA composes them.
+        "sensor.t": SimpleNamespace(
+            attributes={"friendly_name": "Sonde Chambre Philippe Température"}
         ),
+        # Main feature of a renamed device (no entity name of its own).
+        "climate.c": SimpleNamespace(
+            attributes={"friendly_name": "Thermostat Philippe (HA)"}
+        ),
+        "switch.p": SimpleNamespace(attributes={"friendly_name": "  Pac Piscine "}),
+        # A state without friendly_name falls back to the registries.
+        "light.l": SimpleNamespace(attributes={}),
     }
     hass = SimpleNamespace(states=SimpleNamespace(get=states.get))
-    names = _names(monkeypatch, [_entity("switch.p")], hass=hass)
-    assert names == {"switch.p": None}
+    names = _names(
+        monkeypatch,
+        [
+            _entity("sensor.t", name="Température", original_name="Temperature",
+                    has_entity_name=True, device_id="dev"),
+            _entity("climate.c", has_entity_name=True, device_id="dev"),
+            _entity("switch.p"),
+            _entity("light.l", original_name="Lampe"),
+            # Disabled entity: no state at all, registry guess kept.
+            _entity("sensor.off", original_name="Humidité",
+                    has_entity_name=True, device_id="dev"),
+        ],
+        hass=hass,
+        devices=[device],
+    )
+    assert names == {
+        "sensor.t": "Sonde Chambre Philippe Température",
+        "climate.c": "Thermostat Philippe (HA)",
+        "switch.p": "Pac Piscine",
+        "light.l": "Lampe",
+        "sensor.off": "Sonde Chambre Philippe Humidité",
+    }
