@@ -6,6 +6,8 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.4.0] - Release candidate (date set at publication)
+
 Requires the Python core `ha-voice-label-sync==0.3.9` (published on PyPI on 2026-11-20).
 
 ### Improvements
