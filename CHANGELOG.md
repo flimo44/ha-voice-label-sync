@@ -6,7 +6,7 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
-## [1.4.1] - Release candidate (date set at publication)
+## [1.4.1] - 2026-11-23
 
 Requires the Python core `ha-voice-label-sync==0.3.9` (unchanged).
 
