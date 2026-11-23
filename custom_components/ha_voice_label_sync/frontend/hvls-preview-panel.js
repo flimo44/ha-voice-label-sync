@@ -257,6 +257,7 @@ const HVLS_TRANSLATIONS = {
     manualLabelPending: "À valider",
     manualLabelPreparing: "Simulation des étiquettes et du YAML, sans écriture…",
     manualLabelPrepared: "{count} changement(s) d'étiquette prêt(s) dans le Preview. Aucun label ni YAML modifié.",
+    manualLabelRefreshed: "Proposition recalculée avec les données actuelles de Home Assistant : {count} modification(s) d'étiquette. Vérifie la Preview avant d'appliquer.",
     manualLabelHelp: "Proposition enregistrée dans ce navigateur pour votre compte Home Assistant. Au retour, le Preview sera revérifié. Aucun label ni YAML modifié avant Apply.",
     savedDraftRestored: "{count} modification(s) provisoire(s) retrouvée(s) et revérifiée(s). Vérifiez le Preview avant Appliquer.",
     savedDraftRestoredDetail: "Proposition retrouvée et revérifiée : {count} changement(s) ({added} ajout(s), {removed} suppression(s), {modified} modification(s)). Vérifiez le Preview avant Appliquer.",
@@ -791,6 +792,7 @@ const HVLS_TRANSLATIONS = {
     manualLabelPending: "Prüfung ausstehend",
     manualLabelPreparing: "Labels und YAML werden ohne Schreibvorgang simuliert…",
     manualLabelPrepared: "{count} Label-Änderung(en) in der Preview vorbereitet. Labels und YAML unverändert.",
+    manualLabelRefreshed: "Vorschlag mit den aktuellen Home-Assistant-Daten neu berechnet: {count} Label-Änderung(en). Prüfe die Preview vor dem Anwenden.",
     manualLabelHelp: "Vorschlag lokal in diesem Browser für Ihr Home-Assistant-Konto gespeichert. Er wird bei der Rückkehr erneut geprüft; vor „Anwenden“ werden weder Labels noch YAML geändert.",
     savedDraftRestored: "{count} ausstehende Änderung(en) gefunden und erneut geprüft. Prüfen Sie die Preview vor dem Anwenden.",
     savedDraftRestoredDetail: "Gespeicherter Vorschlag gefunden und erneut geprüft: {count} Änderung(en) ({added} hinzugefügt, {removed} entfernt, {modified} geändert). Prüfen Sie die Preview vor dem Anwenden.",
@@ -1325,6 +1327,7 @@ const HVLS_TRANSLATIONS = {
     manualLabelPending: "Pendiente de revisión",
     manualLabelPreparing: "Simulando etiquetas y YAML sin escribir…",
     manualLabelPrepared: "{count} cambio(s) de etiqueta preparado(s) en la Preview. Etiquetas y YAML sin cambios.",
+    manualLabelRefreshed: "Propuesta recalculada con los datos actuales de Home Assistant: {count} cambio(s) de etiqueta. Revisa la Preview antes de aplicar.",
     manualLabelHelp: "Propuesta guardada localmente en este navegador para tu cuenta de Home Assistant. Se volverá a comprobar al regresar; no se cambia ninguna etiqueta ni el YAML antes de «Aplicar».",
     savedDraftRestored: "{count} cambio(s) pendiente(s) encontrado(s) y comprobado(s) de nuevo. Revisa la Preview antes de aplicar.",
     savedDraftRestoredDetail: "Propuesta guardada encontrada y comprobada de nuevo: {count} cambio(s) ({added} añadidas, {removed} eliminadas, {modified} modificadas). Revisa la Preview antes de aplicar.",
@@ -1859,6 +1862,7 @@ const HVLS_TRANSLATIONS = {
     manualLabelPending: "In attesa di verifica",
     manualLabelPreparing: "Simulazione di etichette e YAML senza scrittura…",
     manualLabelPrepared: "{count} modifica/e di etichetta preparata/e nella Preview. Etichette e YAML invariati.",
+    manualLabelRefreshed: "Proposta ricalcolata con i dati attuali di Home Assistant: {count} modifica/e di etichetta. Verifica la Preview prima di applicare.",
     manualLabelHelp: "Proposta salvata localmente in questo browser per il tuo account Home Assistant. Verrà ricontrollata al ritorno; nessuna etichetta né YAML cambia prima di «Applica».",
     savedDraftRestored: "{count} modifica/e in sospeso trovata/e e ricontrollata/e. Verifica la Preview prima di applicare.",
     savedDraftRestoredDetail: "Proposta salvata trovata e ricontrollata: {count} modifica/e ({added} aggiunte, {removed} rimosse, {modified} modificate). Verifica la Preview prima di applicare.",
@@ -2393,6 +2397,7 @@ const HVLS_TRANSLATIONS = {
     manualLabelPending: "Wacht op controle",
     manualLabelPreparing: "Labels en YAML simuleren zonder te schrijven…",
     manualLabelPrepared: "{count} labelwijziging(en) voorbereid in de Preview. Labels en YAML ongewijzigd.",
+    manualLabelRefreshed: "Voorstel herberekend met de huidige Home Assistant-gegevens: {count} labelwijziging(en). Controleer de Preview voordat je toepast.",
     manualLabelHelp: "Voorstel lokaal opgeslagen in deze browser voor je Home Assistant-account. Het wordt opnieuw gecontroleerd wanneer je terugkomt; er veranderen geen labels of YAML vóór 'Toepassen'.",
     savedDraftRestored: "{count} openstaande wijziging(en) gevonden en opnieuw gecontroleerd. Controleer de Preview voordat je toepast.",
     savedDraftRestoredDetail: "Opgeslagen voorstel gevonden en opnieuw gecontroleerd: {count} wijziging(en) ({added} toegevoegd, {removed} verwijderd, {modified} gewijzigd). Controleer de Preview voordat je toepast.",
@@ -2928,6 +2933,7 @@ const HVLS_TRANSLATIONS = {
     manualLabelPending: "Pending review",
     manualLabelPreparing: "Simulating labels and YAML without writing…",
     manualLabelPrepared: "{count} label change(s) prepared in Preview. No labels or YAML modified.",
+    manualLabelRefreshed: "Proposal recalculated with the current Home Assistant data: {count} label change(s). Review the Preview before applying.",
     manualLabelHelp: "Proposal saved locally in this browser for your Home Assistant account. It will be rechecked on return; no label or YAML is changed before Apply.",
     savedDraftRestored: "{count} pending change(s) found and revalidated. Review the Preview before Apply.",
     savedDraftRestoredDetail: "Saved proposal found and revalidated: {count} change(s) ({added} added, {removed} removed, {modified} modified). Review the Preview before Apply.",
@@ -4210,6 +4216,13 @@ class HVLSPreviewPanel extends HTMLElement {
   async _refreshAll() {
     if (!this._hass || this._refreshing || this._generating ||
         this._applying || this._restoring || this._entityWritePending || this._entityLoading) return;
+    // A pending label proposal is recalculated with the current HA data
+    // (renamed entities, areas...) instead of being kept stale or dropped.
+    if (this._stagedRestore?.mode === "label_preview" &&
+        this._manualLabelChanges?.size) {
+      await this._refreshManualLabelProposal();
+      return;
+    }
     if (this._protectPendingDraft()) return;
 
     this._refreshing = true;
@@ -4230,6 +4243,64 @@ class HVLSPreviewPanel extends HTMLElement {
       // Regenerates the Preview, then fetches the updated statistics,
       // exclusions and production diff. This does NOT apply to production.
       await this._generatePreview(true);
+    } finally {
+      this._refreshing = false;
+      this._updateApplyButton();
+    }
+  }
+
+  async _refreshManualLabelProposal() {
+    const choices = new Map(this._manualLabelChanges);
+    const previousStage = this._stagedRestore;
+    this._refreshing = true;
+    const loadId = (this._loadId || 0) + 1;
+    this._loadId = loadId;
+    this._review = null;
+    this._updateApplyButton();
+    this._setStatusKey("manualLabelPreparing");
+    try {
+      const entitiesLoaded = await this._loadEntities();
+      if (!entitiesLoaded) {
+        this._setStatusKey("entitiesLoadFailed", {
+          error: this._entityLoadError || this._t("inconsistentRegistry")
+        });
+        return;
+      }
+      const changes = [...choices.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([entity_id, enabled]) => ({entity_id, enabled}));
+      // Same server call as a checkbox change: nothing is written, the YAML,
+      // label plan and fingerprints are recalculated from current HA data.
+      const result = await this._hass.callWS({
+        type: "ha_voice_label_sync/prepare_manual_label_preview",
+        changes,
+      });
+      if (loadId !== this._loadId) return;
+      if (result?.mode !== "label_preview" ||
+          result.projection?.ready !== true ||
+          !Array.isArray(result.changes) ||
+          !/^[0-9a-f]{64}$/.test(result.label_plan_sha256 || "")) {
+        throw new Error("Invalid manual-label Preview");
+      }
+      this._manualLabelChanges = choices;
+      this._stagedRestore = result;
+      this._previewContent = result.content;
+      this._previewPath = result.path;
+      this._applyBlockReason = this._t("manualLabelHelp");
+      this._applyBlockReasonCode = null;
+      this._renderAnalysis(result);
+      this._setContent(result.content);
+      if (this._entityCatalog) this._renderEntities();
+      this._savePendingLabelDraft(choices, result);
+      this._setStatusKey("manualLabelRefreshed", {count: choices.size});
+    } catch (error) {
+      if (loadId !== this._loadId) return;
+      // Keep the user's proposal: it stays visible and can be cancelled.
+      this._manualLabelChanges = choices;
+      this._stagedRestore = previousStage;
+      this._setStatusKey("manualLabelFailed", {
+        error: error?.message || String(error),
+      });
     } finally {
       this._refreshing = false;
       this._updateApplyButton();
