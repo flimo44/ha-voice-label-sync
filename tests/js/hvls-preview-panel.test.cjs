@@ -5453,3 +5453,67 @@ test("YAML example project id follows the panel language", () => {
   panel._language = "de";
   assert.equal(panel._t("assistantExampleProjectId"), "IHRE_PROJEKT_ID");
 });
+
+test("Refresh recalculates a pending label proposal instead of ignoring it", async () => {
+  const requests = [];
+  const sha = "a".repeat(64);
+  const {panel} = makePanel(async request => {
+    requests.push(request);
+    return {
+      mode: "label_preview", projection: {ready: true}, label_plan_sha256: sha,
+      changes: [{entity_id: "light.salon", enabled: true}],
+      content: "light.salon:\n  name: Salon renommé\n", path: "/config/x.yaml",
+    };
+  });
+  let entitiesLoaded = 0;
+  panel._loadEntities = async () => { entitiesLoaded++; return true; };
+  panel._renderAnalysis = () => {};
+  panel._setContent = () => {};
+  panel._savePendingLabelDraft = () => true;
+  const statuses = [];
+  panel._setStatusKey = (key, values) => statuses.push([key, values]);
+  panel._manualLabelChanges = new Map([["light.salon", true]]);
+  panel._stagedRestore = {mode: "label_preview", content: "old"};
+
+  await panel._refreshAll();
+
+  assert.equal(entitiesLoaded, 1);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].type, "ha_voice_label_sync/prepare_manual_label_preview");
+  assert.equal(JSON.stringify(requests[0].changes),
+    JSON.stringify([{entity_id: "light.salon", enabled: true}]));
+  assert.equal(panel._stagedRestore.label_plan_sha256, sha);
+  assert.equal(panel._manualLabelChanges.get("light.salon"), true);
+  assert.equal(panel._refreshing, false);
+  assert.deepEqual(statuses.at(-1)[0], "manualLabelRefreshed");
+  assert.equal(panel._t("manualLabelRefreshed").startsWith("Proposition recalculée"), true);
+});
+
+test("Refresh keeps the label proposal when recalculation fails", async () => {
+  const {panel} = makePanel(async () => { throw new Error("label gone"); });
+  panel._loadEntities = async () => true;
+  const statuses = [];
+  panel._setStatusKey = key => statuses.push(key);
+  const previous = {mode: "label_preview", content: "old"};
+  panel._manualLabelChanges = new Map([["light.salon", true]]);
+  panel._stagedRestore = previous;
+  await panel._refreshAll();
+  assert.equal(panel._stagedRestore, previous);
+  assert.equal(panel._manualLabelChanges.get("light.salon"), true);
+  assert.equal(statuses.at(-1), "manualLabelFailed");
+});
+
+test("Refresh still protects a staged backup restore", async () => {
+  const requests = [];
+  const {panel} = makePanel(async request => { requests.push(request); return {}; });
+  let entitiesLoaded = 0;
+  panel._loadEntities = async () => { entitiesLoaded++; return true; };
+  const statuses = [];
+  panel._setStatusKey = key => statuses.push(key);
+  panel._activateTab = () => {};
+  panel._stagedRestore = {mode: "backup_restore"};
+  await panel._refreshAll();
+  assert.equal(entitiesLoaded, 0);
+  assert.equal(requests.length, 0);
+  assert.equal(statuses.at(-1), "pendingDraftProtect");
+});

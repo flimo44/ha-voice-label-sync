@@ -6,6 +6,9 @@ The format is inspired by Keep a Changelog.
 
 ## [Unreleased]
 
+### Improvements
+- The refresh button no longer does nothing while a label proposal is pending: it recalculates the same proposal with the current Home Assistant data (for example after renaming an entity), keeping your selection. A pending backup restore is still protected and must be applied or cancelled first.
+
 ## [1.4.1] - 2026-11-23
 
 Requires the Python core `ha-voice-label-sync==0.3.9` (unchanged).
